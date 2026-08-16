@@ -2510,8 +2510,12 @@
     const main = $("#main"), ptr = $("#ptr");
     if (!main || !ptr) return;
     const ring = ptr.querySelector(".ptr__ring");
-    const TRIGGER = 72, WHEEL_TRIGGER = 150, MAX = 110;
+    const TRIGGER = 72, WHEEL_TRIGGER = 110, MAX = 110;
     let startY = 0, pulling = false, dist = 0, refreshing = false, wheelIdle = null;
+    // Mouse wheels report deltas in lines (deltaMode 1) or pages (2), not pixels,
+    // so normalize to pixels or the threshold is never reached on a mouse.
+    const wheelPx = (e) => e.deltaMode === 1 ? e.deltaY * 16
+      : e.deltaMode === 2 ? e.deltaY * (main.clientHeight || 800) : e.deltaY;
 
     function gateUp() { return !!(window.WispDB && WispDB.enabled && !WispDB.signedIn && !guestBrowsing); }
     function canPull() {
@@ -2548,11 +2552,12 @@
 
     main.addEventListener("wheel", (e) => {
       if (!canPull()) return;
-      if (e.deltaY < 0) {
-        setPull(dist + (-e.deltaY) * 0.5);
+      const dy = wheelPx(e);
+      if (dy < 0) {                                    // scrolling up while already at the top
+        setPull(dist + (-dy) * 0.6);
         clearTimeout(wheelIdle);
         if (dist >= WHEEL_TRIGGER) { refresh(); return; }
-        wheelIdle = setTimeout(reset, 200);
+        wheelIdle = setTimeout(reset, 600);            // let a burst of scrolls accumulate
       }
     }, { passive: true });
   }
