@@ -25,8 +25,11 @@ Supabase's free tier.
 3. Repeat with [`supabase/storage.sql`](supabase/storage.sql) (image upload
    buckets) and, optionally, [`supabase/seed.sql`](supabase/seed.sql) (the
    starter tag list).
+4. Run [`supabase/migrations/002_features.sql`](supabase/migrations/002_features.sql)
+   to add the tables for following tags, saved highlights, chapter notes, and
+   per-work settings. Run this whenever new migration files are added.
 
-All three are safe to re-run if you ever need to.
+All of these are safe to re-run if you ever need to.
 
 ## 3. Point the site at your project
 

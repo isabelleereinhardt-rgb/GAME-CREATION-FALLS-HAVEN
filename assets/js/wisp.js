@@ -22,6 +22,7 @@
 
   /* ---- small view helpers ------------------------------------------------ */
   const RATE = { G:"General", T:"Teen", M:"Mature", E:"Explicit" };
+  const WARNINGS = ["Graphic violence", "Major character death", "Underage", "Noncon", "Choose not to warn"];
 
   // Reader actions that persist for the session (a stand-in for the server), so
   // a work you hearted or subscribed to still reads that way when you come back.
@@ -1113,6 +1114,7 @@
     pendingSeries = null;
     const st = work ? WSTATUS[work._dbStatus || work.status] : null;
     const tagsValue = editingLive ? (work.tags || []).join(", ") : "";
+    const workWarnings = work ? (work.warnings || []) : [];
     const coverIsImage = editingLive && work.cover && /^https?:/.test(work.cover);
     editorCover = coverIsImage ? work.cover : null;
     coverCleared = false;
@@ -1203,9 +1205,7 @@
               <h4>Rating</h4>
               <div class="rate-choice">${["G","T","M","E"].map(r => `<button data-wrate="${r}" class="${r === rating ? "is-on" : ""}" aria-pressed="${r === rating}">${r}</button>`).join("")}</div>
               <div class="field" style="margin-top:12px"><label>Warnings</label>
-                <label class="check"><input type="checkbox"> Graphic violence</label>
-                <label class="check"><input type="checkbox"> Major character death</label>
-                <label class="check"><input type="checkbox" checked> Choose not to warn</label>
+                ${WARNINGS.map(w => `<label class="check"><input type="checkbox" data-warn="${esc(w)}" ${workWarnings.includes(w) ? "checked" : ""}> ${esc(w)}</label>`).join("")}
               </div>
             </div>
 
@@ -2327,6 +2327,7 @@
     const typeBtn = $("#screen-write [data-wtype].is-on"); const type = typeBtn ? typeBtn.dataset.wtype : "original";
     const rateBtn = $("#screen-write [data-wrate].is-on"); const rating = rateBtn ? rateBtn.dataset.wrate : "G";
     const tags = val("#we-tags").split(",").map(s => s.trim()).filter(Boolean);
+    const warnings = $$("#screen-write [data-warn]:checked").map(el => el.dataset.warn);
     const source = val("#we-source");
     const seriesName = val("#we-series");
     // "Save draft" on an already-published work saves changes without pulling it
@@ -2345,7 +2346,7 @@
       if (liveEditor && liveEditor.work) {
         // Editing an existing work: update its fields, its first chapter, and tags.
         const id = liveEditor.work.id;
-        const fields = { title, type, source, rating, status, series_id };
+        const fields = { title, type, source, rating, status, series_id, warnings };
         if (editorCover) fields.cover_image_url = editorCover;
         else if (coverCleared) fields.cover_image_url = null;   // revert to the letter cover
         await WispDB.updateWork(id, fields);
@@ -2361,7 +2362,7 @@
         // New work.
         let book_number;
         if (series_id) book_number = (await WispDB.countInSeries(series_id).catch(() => 0)) + 1;
-        await WispDB.createWork({ title, type, source, rating, tags, chapterBody: body, status,
+        await WispDB.createWork({ title, type, source, rating, tags, warnings, chapterBody: body, status,
           cover_image_url: editorCover, series_id, book_number });
         toast(kind === "draft" ? "Draft saved to your account." : "Published. It is now in your works.");
       }
