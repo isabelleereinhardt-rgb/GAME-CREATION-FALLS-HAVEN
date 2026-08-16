@@ -84,7 +84,10 @@
     return m ? m[0].toUpperCase() : "";
   }
   function cover(key, title) {
-    const bg = W.COVERS[key] || "#6d5566";
+    if (key && /^https?:/.test(key)) {                        // an uploaded cover image
+      return `<span class="cv"><img src="${esc(key)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover"></span>`;
+    }
+    const bg = (key && key[0] === "#") ? key : (W.COVERS[key] || "#6d5566");
     const letter = coverLetter(title);
     return `<span class="cv" style="background:${bg}">${letter ? `<span class="cv__letter">${esc(letter)}</span>` : ""}</span>`;
   }
@@ -924,9 +927,9 @@
       : `<p class="muted" style="font-size:13px;margin:0">No chapters yet. Your first one starts in the editor.</p>`;
 
     const typeFields = type === "fan"
-      ? `<div class="field"><label>Fandom</label><input type="text" value="${esc(source)}"></div>
+      ? `<div class="field"><label>Fandom</label><input type="text" id="we-source" value="${esc(source)}"></div>
          <div class="field"><label>Relationship</label><input type="text" placeholder="Character A / Character B"></div>`
-      : `<div class="field"><label>Setting or genre</label><input type="text" value="${esc(source)}"></div>
+      : `<div class="field"><label>Setting or genre</label><input type="text" id="we-source" value="${esc(source)}"></div>
          <div class="field"><label>Characters</label><input type="text" placeholder="Registered against your series"></div>`;
 
     $("#screen-write").innerHTML = `
@@ -945,7 +948,7 @@
 
         <div class="writer">
           <div>
-            <input class="title-input" placeholder="Title your work" value="${esc(title)}">
+            <input class="title-input" id="we-title" placeholder="Title your work" value="${esc(title)}">
             <div class="toolbar" role="toolbar" aria-label="Formatting">
               <button title="Heading">H</button>
               <button title="Bold"><b>B</b></button>
@@ -960,14 +963,14 @@
               <button title="Horizontal rule"><span style="display:inline-block;width:16px;height:2px;background:currentColor;border-radius:2px"></span></button>
               <span style="margin-left:auto;font-size:12px;color:var(--ink3);padding:0 8px">Markdown shortcuts on</span>
             </div>
-            <div class="editor" contenteditable="true" spellcheck="true" aria-label="Chapter body">
+            <div class="editor" id="we-body" contenteditable="true" spellcheck="true" aria-label="Chapter body">
               <h2>Chapter ${chapters + 1}${isNew ? ": Untitled" : ""}</h2>
               <p>${isNew ? "Start typing, or paste from another editor." : "Pick up where you left off. Your writing saves automatically."}</p>
               <p>Format with the toolbar above, or use Markdown shortcuts.</p>
             </div>
             <div class="write-actions" style="margin-top:16px">
-              <button class="btn btn--primary" data-toast="Chapter published. Subscribers will see it in their activity.">Publish chapter</button>
-              <button class="btn btn--quiet" data-toast="Saved as a draft.">Save draft</button>
+              <button class="btn btn--primary" data-publish="publish">Publish chapter</button>
+              <button class="btn btn--quiet" data-publish="draft">Save draft</button>
               <button class="btn btn--quiet" data-toast="Scheduled to post on the date you set.">Schedule &hellip;</button>
               <button class="btn btn--link">Preview</button>
             </div>
@@ -985,18 +988,18 @@
               <div class="field"><label>Series</label><input type="text" value="${esc(seriesName)}" placeholder="Standalone, or start a series"></div>
               <div class="field"><label>Work type</label>
                 <div class="seg" role="group" aria-label="Work type">
-                  <button class="${type === "fan" ? "is-on" : ""}" aria-pressed="${type === "fan"}">Fanwork</button>
-                  <button class="${type === "original" ? "is-on" : ""}" aria-pressed="${type === "original"}">Original</button>
+                  <button data-wtype="fan" class="${type === "fan" ? "is-on" : ""}" aria-pressed="${type === "fan"}">Fanwork</button>
+                  <button data-wtype="original" class="${type === "original" ? "is-on" : ""}" aria-pressed="${type === "original"}">Original</button>
                 </div>
               </div>
               ${typeFields}
-              <div class="field"><label>Additional tags</label><input type="text" placeholder="Slow burn, found family, ..."></div>
+              <div class="field"><label>Additional tags</label><input type="text" id="we-tags" placeholder="Slow burn, found family, ..."></div>
               <p class="muted" style="font-size:11.5px;margin-top:2px">Up to 50 tags. Common tags have short descriptions; the rest are freeform.</p>
             </div>
 
             <div class="panel">
               <h4>Rating</h4>
-              <div class="rate-choice">${["G","T","M","E"].map(r => `<button class="${r === rating ? "is-on" : ""}" aria-pressed="${r === rating}">${r}</button>`).join("")}</div>
+              <div class="rate-choice">${["G","T","M","E"].map(r => `<button data-wrate="${r}" class="${r === rating ? "is-on" : ""}" aria-pressed="${r === rating}">${r}</button>`).join("")}</div>
               <div class="field" style="margin-top:12px"><label>Warnings</label>
                 <label class="check"><input type="checkbox"> Graphic violence</label>
                 <label class="check"><input type="checkbox"> Major character death</label>
@@ -1424,7 +1427,17 @@
   // Event delegation for the whole app.
   document.addEventListener("click", (e) => {
     const nav = e.target.closest("[data-nav]");
-    if (nav) { navigate(nav.dataset.nav); return; }
+    if (nav) {
+      if (nav.dataset.nav === "profile" && window.WispDB && WispDB.enabled && !WispDB.signedIn) { openAuth("in"); return; }
+      navigate(nav.dataset.nav); return;
+    }
+
+    const wt = e.target.closest("#screen-write [data-wtype]");
+    if (wt) { $$("#screen-write [data-wtype]").forEach(b => { const on = b === wt; b.classList.toggle("is-on", on); b.setAttribute("aria-pressed", String(on)); }); return; }
+    const wr = e.target.closest("#screen-write [data-wrate]");
+    if (wr) { $$("#screen-write [data-wrate]").forEach(b => { const on = b === wr; b.classList.toggle("is-on", on); b.setAttribute("aria-pressed", String(on)); }); return; }
+    const pub = e.target.closest("[data-publish]");
+    if (pub) { handlePublish(pub.dataset.publish); return; }
 
     const read = e.target.closest("[data-read]");
     if (read) { navigate("read/" + read.dataset.read); return; }
@@ -1529,6 +1542,83 @@
     if (e.target.closest("#saveSearch")) { toast("Search saved. It won't send notifications."); return; }
   });
 
+  /* ======================================================================= */
+  /*  ACCOUNTS  ·  sign in / sign up (real when Supabase is connected)        */
+  /* ======================================================================= */
+  function syncAuthHeader() {
+    const link = $("#signOutBtn"); const avatar = $(".avatar-btn");
+    if (!window.WispDB || !WispDB.enabled) return;             // demo mode: leave the header as-is
+    if (WispDB.signedIn) {
+      const name = (WispDB.profile && WispDB.profile.display_name) || "You";
+      if (link) link.textContent = "Sign out";
+      if (avatar) { avatar.textContent = name[0].toUpperCase(); avatar.title = name; }
+    } else {
+      if (link) link.textContent = "Sign in";
+      if (avatar) { avatar.textContent = "?"; avatar.title = "Sign in"; }
+    }
+  }
+
+  function openAuth(mode) {
+    const isUp = mode === "up";
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <h2 style="font-size:22px">${isUp ? "Create your account" : "Sign in"}</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <p class="muted" style="font-size:13px;margin-bottom:16px">${isUp ? "Join Wisp to post works, comment, and keep a library." : "Welcome back."}</p>
+      <form id="authForm">
+        ${isUp ? '<div class="field"><label>Display name</label><input type="text" id="authName" autocomplete="name" required></div>' : ""}
+        <div class="field"><label>Email</label><input type="email" id="authEmail" autocomplete="email" required></div>
+        <div class="field"><label>Password</label><input type="password" id="authPw" autocomplete="${isUp ? "new-password" : "current-password"}" minlength="6" required></div>
+        <div id="authError" style="display:none;color:#a2444f;font-size:13px;margin:4px 0 10px"></div>
+        <button class="btn btn--primary btn--full" type="submit" id="authSubmit" style="margin-top:6px">${isUp ? "Create account" : "Sign in"}</button>
+      </form>
+      <p class="muted" style="font-size:13px;text-align:center;margin-top:14px">
+        ${isUp ? "Already have an account?" : "New to Wisp?"}
+        <button class="btn--link" id="authSwitch">${isUp ? "Sign in" : "Create one"}</button>
+      </p>`, isUp ? "Create account" : "Sign in");
+    const err = $("#authError");
+    $("#authSwitch").addEventListener("click", () => openAuth(isUp ? "in" : "up"));
+    $("#authForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = $("#authEmail").value.trim(), pw = $("#authPw").value;
+      const name = isUp ? $("#authName").value.trim() : "";
+      const btn = $("#authSubmit"); btn.disabled = true; btn.textContent = isUp ? "Creating..." : "Signing in...";
+      err.style.display = "none";
+      try {
+        if (isUp) {
+          const r = await WispDB.signUp(email, pw, name);
+          if (!r.session) { closeModal(); toast("Account created. Confirm your email, then sign in."); return; }
+        } else {
+          await WispDB.signIn(email, pw);
+        }
+        closeModal(); toast(isUp ? "Welcome to Wisp." : "Signed in.");
+      } catch (ex) {
+        err.textContent = (ex && ex.message) || "Something went wrong."; err.style.display = "block";
+        btn.disabled = false; btn.textContent = isUp ? "Create account" : "Sign in";
+      }
+    });
+  }
+
+  async function handlePublish(kind) {
+    if (!window.WispDB || !WispDB.enabled) {
+      toast(kind === "draft" ? "Saved as a draft. Connect Supabase to save it for real." : "Chapter published. Connect Supabase to save it for real.");
+      return;
+    }
+    if (!WispDB.signedIn) { openAuth("in"); return; }
+    const val = (id) => { const e = $(id); return e ? e.value.trim() : ""; };
+    const title = val("#we-title") || "Untitled";
+    const bodyEl = $("#we-body"); const body = bodyEl ? bodyEl.innerText.trim() : "";
+    const typeBtn = $("#screen-write [data-wtype].is-on"); const type = typeBtn ? typeBtn.dataset.wtype : "original";
+    const rateBtn = $("#screen-write [data-wrate].is-on"); const rating = rateBtn ? rateBtn.dataset.wrate : "G";
+    const tags = val("#we-tags").split(",").map(s => s.trim()).filter(Boolean);
+    try {
+      await WispDB.createWork({ title, type, source: val("#we-source"), rating, tags, chapterBody: body, status: kind === "draft" ? "draft" : "ongoing" });
+      toast(kind === "draft" ? "Draft saved to your account." : "Published. It is now in your works.");
+      navigate("write");
+    } catch (e) { toast((e && e.message) || "Could not save."); }
+  }
+
   function boot() {
     buildDrawer();
     applySettings();
@@ -1539,7 +1629,11 @@
     $("#themeBtn").addEventListener("click", openTheme);
     $("#themeClose").addEventListener("click", closeTheme);
     $("#themeScrim").addEventListener("click", (e) => { if (e.target.id === "themeScrim") closeTheme(); });
-    $("#signOutBtn").addEventListener("click", () => toast("Sign out isn't wired up in this demo. You can read without an account."));
+    $("#signOutBtn").addEventListener("click", () => {
+      if (!window.WispDB || !WispDB.enabled) { toast("Sign out isn't wired up in demo mode. Connect Supabase to enable accounts."); return; }
+      if (WispDB.signedIn) WispDB.signOut().then(() => toast("Signed out."));
+      else openAuth("in");
+    });
     $("#notifBtn").addEventListener("click", () => {
       if (window.matchMedia("(max-width:1040px)").matches) openRailSheet("activity");
       else toast("Notifications show up in your activity feed. Most are off by default.");
@@ -1565,6 +1659,12 @@
     window.addEventListener("hashchange", route);
     if (!location.hash) location.replace("#/home");
     route();
+
+    // Connect the backend if config.js has credentials; otherwise stay in demo.
+    if (window.WispDB) {
+      WispDB.onChange(syncAuthHeader);
+      WispDB.init().then(() => syncAuthHeader());
+    }
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
