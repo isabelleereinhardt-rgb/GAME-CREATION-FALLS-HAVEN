@@ -768,6 +768,25 @@ mark.hl { background: color-mix(in srgb, var(--amber) 34%, transparent); border-
 .authgate__panel form, .authgate__panel .field { text-align: left; }
 .authgate__panel [data-af="error"] { text-align: left; }
 .authgate__guest { margin-top: 18px; }
+
+/* Pull-to-refresh: a ring that appears and rotates as you pull down at the top. */
+.ptr {
+  position: fixed; top: 0; left: 50%; z-index: 65;
+  display: flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; border-radius: 50%;
+  background: var(--surface); border: 1px solid var(--line); box-shadow: 0 6px 18px var(--shadow);
+  transform: translate(-50%, -60px); opacity: 0; pointer-events: none;
+  transition: opacity .15s ease;
+}
+.ptr.is-visible { opacity: 1; }
+.ptr.is-refreshing { transition: transform .2s ease, opacity .15s ease; }
+.ptr__ring {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 2px solid var(--line2); border-top-color: var(--rose); transform: rotate(0deg);
+}
+.ptr.is-refreshing .ptr__ring { animation: ptr-spin .7s linear infinite; }
+@keyframes ptr-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ptr.is-refreshing .ptr__ring { animation-duration: 1.4s; } }
 .authgate__panel--loading { background: none; border: 0; box-shadow: none; }
 .authgate__panel--loading .authgate__brand { margin: 0; animation: authgate-pulse 1.3s ease-in-out infinite; }
 @keyframes authgate-pulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }

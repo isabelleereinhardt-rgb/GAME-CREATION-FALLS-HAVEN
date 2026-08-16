@@ -2370,6 +2370,60 @@
     } catch (e) { toast((e && e.message) || "Could not save."); }
   }
 
+  // Pull-to-refresh: pull down at the top of the page (touch) or overscroll up
+  // on a trackpad to reload, so readers never have to close the tab. Disabled in
+  // the reader (its own scrolling comes first) and while the sign-in wall is up.
+  function wirePullToRefresh() {
+    const main = $("#main"), ptr = $("#ptr");
+    if (!main || !ptr) return;
+    const ring = ptr.querySelector(".ptr__ring");
+    const TRIGGER = 72, WHEEL_TRIGGER = 150, MAX = 110;
+    let startY = 0, pulling = false, dist = 0, refreshing = false, wheelIdle = null;
+
+    function gateUp() { return !!(window.WispDB && WispDB.enabled && !WispDB.signedIn && !guestBrowsing); }
+    function canPull() {
+      const modal = $("#modal");
+      return !refreshing && main.scrollTop <= 0 && currentScreen !== "reading"
+        && !gateUp() && !(modal && modal.classList.contains("is-open"));
+    }
+    function setPull(px) {
+      dist = Math.max(0, px);                         // raw pull amount (drives the trigger)
+      const vis = Math.min(dist, MAX);                // clamped for the visual travel
+      ptr.classList.toggle("is-visible", vis > 6);
+      ptr.style.transform = `translate(-50%, ${-60 + Math.min(vis * 0.62, 74)}px)`;
+      if (ring) ring.style.transform = `rotate(${Math.min(dist / TRIGGER, 1) * 300}deg)`;
+    }
+    function reset() { ptr.classList.remove("is-visible"); ptr.style.transform = ""; dist = 0; pulling = false; }
+    function refresh() {
+      refreshing = true;
+      ptr.classList.add("is-visible", "is-refreshing");
+      ptr.style.transform = "translate(-50%, 16px)";
+      setTimeout(() => location.reload(), 420);
+    }
+
+    main.addEventListener("touchstart", (e) => {
+      pulling = canPull() && e.touches.length === 1;
+      if (pulling) startY = e.touches[0].clientY;
+    }, { passive: true });
+    main.addEventListener("touchmove", (e) => {
+      if (!pulling) return;
+      const dy = e.touches[0].clientY - startY;
+      if (dy > 0 && main.scrollTop <= 0) { setPull(dy * 0.5); if (dist > 6) e.preventDefault(); }
+      else { reset(); }
+    }, { passive: false });
+    main.addEventListener("touchend", () => { if (pulling && dist >= TRIGGER) refresh(); else reset(); });
+
+    main.addEventListener("wheel", (e) => {
+      if (!canPull()) return;
+      if (e.deltaY < 0) {
+        setPull(dist + (-e.deltaY) * 0.5);
+        clearTimeout(wheelIdle);
+        if (dist >= WHEEL_TRIGGER) { refresh(); return; }
+        wheelIdle = setTimeout(reset, 200);
+      }
+    }, { passive: true });
+  }
+
   function boot() {
     buildDrawer();
     applySettings();
@@ -2408,6 +2462,7 @@
     $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
 
     window.addEventListener("hashchange", route);
+    wirePullToRefresh();
     if (!location.hash) location.replace("#/home");
     route();
 
