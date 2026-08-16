@@ -27,7 +27,11 @@ Supabase's free tier.
    starter tag list).
 4. Run [`supabase/migrations/002_features.sql`](supabase/migrations/002_features.sql)
    to add the tables for following tags, saved highlights, chapter notes, and
-   per-work settings. Run this whenever new migration files are added.
+   per-work settings.
+5. Run [`supabase/migrations/003_scheduling.sql`](supabase/migrations/003_scheduling.sql)
+   to add scheduled chapter releases (a locked chapter with a live countdown
+   that releases itself when its time comes). Run new migration files in order
+   as they are added.
 
 All of these are safe to re-run if you ever need to.
 

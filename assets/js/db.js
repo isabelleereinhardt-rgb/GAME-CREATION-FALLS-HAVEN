@@ -132,7 +132,7 @@ window.WispDB = (function () {
 
   async function listWorks(opts = {}) {
     let q = client.from("works_with_author").select("*");
-    q = opts.mine ? q.eq("author_id", user && user.id) : q.in("status", ["ongoing", "complete"]);
+    q = opts.mine ? q.eq("author_id", user && user.id) : q.in("status", ["ongoing", "complete", "scheduled"]);
     if (opts.type && opts.type !== "all") q = q.eq("type", opts.type);
     const sort = opts.sort || "hearts";
     if (sort === "reads") q = q.order("reads_count", { ascending: false });
@@ -181,10 +181,12 @@ window.WispDB = (function () {
     const { data, error } = await client.from("works").insert(row).select().single();
     if (error) throw error;
     if (f.chapterBody != null) {
-      const published = (f.status || "draft") !== "draft";
+      const scheduled = !!f.scheduled_for;
+      const published = !scheduled && (f.status || "draft") !== "draft";
       await client.from("chapters").insert({
         work_id: data.id, number: 1, title: f.chapterTitle || "", body: f.chapterBody,
-        published, published_at: published ? new Date().toISOString() : null
+        published, published_at: published ? new Date().toISOString() : null,
+        scheduled_for: scheduled ? f.scheduled_for : null
       });
     }
     if (f.tags && f.tags.length) await addTags(data.id, f.tags);
@@ -220,9 +222,11 @@ window.WispDB = (function () {
   // Insert a new chapter or update an existing one (pass f.id to update).
   async function saveChapter(workId, f) {
     if (!user) throw new Error("Sign in first.");
-    const published = !!f.published;
+    const scheduled = !!f.scheduled_for;
+    const published = !scheduled && !!f.published;
     if (f.id) {
-      const patch = { title: f.title || "", body: f.body || "", updated_at: new Date().toISOString(), published };
+      const patch = { title: f.title || "", body: f.body || "", updated_at: new Date().toISOString(),
+                      published, scheduled_for: scheduled ? f.scheduled_for : null };
       if (published) patch.published_at = new Date().toISOString();
       const { error } = await client.from("chapters").update(patch).eq("id", f.id);
       if (error) throw error;
@@ -230,10 +234,19 @@ window.WispDB = (function () {
     }
     const { data, error } = await client.from("chapters").insert({
       work_id: workId, number: f.number || 1, title: f.title || "", body: f.body || "",
-      published, published_at: published ? new Date().toISOString() : null
+      published, published_at: published ? new Date().toISOString() : null,
+      scheduled_for: scheduled ? f.scheduled_for : null
     }).select("id").single();
     if (error) throw error;
     return data.id;
+  }
+
+  // Upcoming (still-locked) scheduled chapters for a work: number + release time
+  // only, never the body or title.
+  async function getUpcoming(workId) {
+    const { data, error } = await client.from("upcoming_chapters").select("number, scheduled_for").eq("work_id", workId).order("number");
+    if (error) return [];
+    return data || [];
   }
 
   // Replace a work's tags with exactly the given set.
@@ -397,7 +410,7 @@ window.WispDB = (function () {
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     init, signUp, signIn, signOut,
     listWorks, getWork, getChapters, myWorks,
-    createWork, updateWork, deleteWork, firstChapter, saveChapter, setTags,
+    createWork, updateWork, deleteWork, firstChapter, saveChapter, getUpcoming, setTags,
     mySeries, findOrCreateSeries, updateSeries, deleteSeries, countInSeries,
     toggle, myRelations, getComments, postComment, getReactions, toggleReaction, uploadCover,
     toggleFollow, amFollowing, followCounts, myFollowingIds,

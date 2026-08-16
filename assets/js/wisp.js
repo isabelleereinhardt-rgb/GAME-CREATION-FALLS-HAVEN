@@ -37,7 +37,7 @@
      which the loaders below fill from the database. In demo mode they stay
      empty and every accessor falls back to the bundled demo dataset, so the
      demo behaves exactly as before. */
-  const LIVE = { works: [], byId: {}, chapters: {}, comments: {}, reactions: {}, series: [] };
+  const LIVE = { works: [], byId: {}, chapters: {}, comments: {}, reactions: {}, upcoming: {}, series: [] };
   let liveEditor = null;   // { work, chapter } when editing a real work, else null
   let editorCover = null;  // uploaded cover URL for the current editor session
   let coverCleared = false; // true when the author removed an existing cover
@@ -411,15 +411,21 @@
     const w = activeById(id) || W.byId.amber;
     markVisited(w.id);
     let rows;
-    const liveChapters = w._db ? (LIVE.chapters[w.id] || []).filter(c => c.published) : null;
-    if (liveChapters) {
-      rows = liveChapters.length
-        ? liveChapters.map(c => `<button class="chapter-row" data-read="${w.id}">
-            <span class="chapter-row__n">${c.number}</span>
-            <span class="chapter-row__title">Chapter ${c.number}${c.title ? ": " + esc(c.title) : ""}</span>
-            <span class="chapter-row__when">posted ${WispDB.relTime(c.published_at || c.created_at)}</span>
-          </button>`).join("")
-        : `<p class="muted" style="padding:14px 4px">No chapters published yet.</p>`;
+    if (w._db) {
+      const now = Date.now();
+      const isReleased = (c) => c.published || (c.scheduled_for && new Date(c.scheduled_for).getTime() <= now);
+      const released = (LIVE.chapters[w.id] || []).filter(isReleased).sort((a, b) => a.number - b.number);
+      const upcoming = (LIVE.upcoming[w.id] || []).slice().sort((a, b) => a.number - b.number);
+      const releasedRows = released.map(c => `<button class="chapter-row" data-read="${w.id}">
+          <span class="chapter-row__n">${c.number}</span>
+          <span class="chapter-row__title">Chapter ${c.number}${c.title ? ": " + esc(c.title) : ""} <span class="ch-lock ch-lock--open" title="Released">${icon("unlock",13)}</span></span>
+          <span class="chapter-row__when">posted ${WispDB.relTime(c.published_at || c.scheduled_for || c.created_at)}</span>
+        </button>`).join("");
+      const lockedRows = upcoming.map(u => `<div class="chapter-row chapter-row--locked" aria-label="Chapter ${u.number}, scheduled">
+          <span class="chapter-row__n">${u.number}</span>
+          <span class="chapter-row__title">Chapter ${u.number} <span class="ch-lock" title="Scheduled">${icon("lock",13)}</span> <span class="ch-countdown" data-countdown="${esc(u.scheduled_for)}">Time till release: &hellip;</span></span>
+        </div>`).join("");
+      rows = (releasedRows + lockedRows) || `<p class="muted" style="padding:14px 4px">No chapters published yet.</p>`;
     } else {
       const chapters = Math.min(w.chapters, 8);
       rows = Array.from({ length: chapters }, (_, i) => {
@@ -476,6 +482,34 @@
           <p class="soft" style="font-size:14px;margin:0;line-height:1.7">Comments are on, and anyone can read this work. You can mute a tag, block a user, or turn off the author's skin. Your settings always win over the author's.</p>
         </div>
       </div>`;
+    startCountdowns();
+  }
+
+  /* ---- live release countdowns ------------------------------------------- */
+  let countdownTimer = null;
+  function fmtCountdown(ms) {
+    if (ms <= 0) return "Releasing now";
+    const s = Math.floor(ms / 1000);
+    const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    const pad = (n) => String(n).padStart(2, "0");
+    return "Time till release: " + (d ? d + (d === 1 ? " day, " : " days, ") : "") +
+      pad(h) + " hours, " + pad(m) + " minutes, " + pad(sec) + " seconds";
+  }
+  function startCountdowns() {
+    if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+    const tick = () => {
+      const els = $$("[data-countdown]");
+      if (!els.length) { clearInterval(countdownTimer); countdownTimer = null; return; }
+      const now = Date.now();
+      els.forEach(el => {
+        const t = new Date(el.dataset.countdown).getTime();
+        const left = t - now;
+        el.textContent = fmtCountdown(left);
+        if (left <= 0) el.classList.add("is-due");
+      });
+    };
+    tick();
+    countdownTimer = setInterval(tick, 1000);
   }
 
   /* ======================================================================= */
@@ -1203,7 +1237,7 @@
             <div class="write-actions" style="margin-top:16px">
               <button class="btn btn--primary" data-publish="publish">Publish chapter</button>
               <button class="btn btn--quiet" data-publish="draft">Save draft</button>
-              <button class="btn btn--quiet" data-toast="Scheduled to post on the date you set.">Schedule &hellip;</button>
+              <button class="btn btn--quiet" data-schedule>Schedule &hellip;</button>
               <button class="btn btn--link">Preview</button>
             </div>
           </div>
@@ -1746,6 +1780,7 @@
       const w = await WispDB.getWork(id);
       LIVE.byId[id] = w;
       LIVE.chapters[id] = await WispDB.getChapters(id).catch(() => []);
+      LIVE.upcoming[id] = await WispDB.getUpcoming(id).catch(() => []);
       await seedRelations(id);
       renderWork(id);
     } catch (e) {
@@ -2098,6 +2133,8 @@
     if (wr) { $$("#screen-write [data-wrate]").forEach(b => { const on = b === wr; b.classList.toggle("is-on", on); b.setAttribute("aria-pressed", String(on)); }); return; }
     const pub = e.target.closest("[data-publish]");
     if (pub) { handlePublish(pub.dataset.publish); return; }
+    const sched = e.target.closest("[data-schedule]");
+    if (sched) { openScheduleDialog(); return; }
 
     const read = e.target.closest("[data-read]");
     if (read) { navigate("read/" + read.dataset.read); return; }
@@ -2345,9 +2382,11 @@
       () => closeModal());
   }
 
-  async function handlePublish(kind) {
+  async function handlePublish(kind, scheduleTime) {
     if (!window.WispDB || !WispDB.enabled) {
-      toast(kind === "draft" ? "Saved as a draft. Connect Supabase to save it for real." : "Chapter published. Connect Supabase to save it for real.");
+      toast(kind === "schedule" ? "Scheduling needs the backend. Connect Supabase to schedule releases."
+        : kind === "draft" ? "Saved as a draft. Connect Supabase to save it for real."
+        : "Chapter published. Connect Supabase to save it for real.");
       return;
     }
     if (!WispDB.signedIn) { openAuth("in"); return; }
@@ -2360,11 +2399,14 @@
     const warnings = $$("#screen-write [data-warn]:checked").map(el => el.dataset.warn);
     const source = val("#we-source");
     const seriesName = val("#we-series");
+    const scheduled_for = kind === "schedule" ? scheduleTime : null;
     // "Save draft" on an already-published work saves changes without pulling it
     // back to draft; only new works and existing drafts actually become drafts.
     const wasPublished = liveEditor && liveEditor.work &&
       (liveEditor.work._dbStatus === "ongoing" || liveEditor.work._dbStatus === "complete");
-    const status = kind === "draft" ? (wasPublished ? liveEditor.work._dbStatus : "draft") : "ongoing";
+    const status = kind === "schedule" ? "scheduled"
+      : kind === "draft" ? (wasPublished ? liveEditor.work._dbStatus : "draft")
+      : "ongoing";
     try {
       // Resolve the series field to an id (find-or-create), or standalone.
       let series_id = null;
@@ -2384,21 +2426,51 @@
           id: liveEditor.chapter ? liveEditor.chapter.id : null,
           number: liveEditor.chapter ? liveEditor.chapter.number : 1,
           title: liveEditor.chapter ? liveEditor.chapter.title : "",
-          body, published: status !== "draft"
+          body, published: status === "ongoing" || status === "complete", scheduled_for
         });
         await WispDB.setTags(id, tags);
-        toast(kind === "draft" ? (wasPublished ? "Changes saved." : "Draft saved.") : "Changes published.");
+        toast(kind === "schedule" ? "Scheduled. It releases at the time you set."
+          : kind === "draft" ? (wasPublished ? "Changes saved." : "Draft saved.") : "Changes published.");
       } else {
         // New work.
         let book_number;
         if (series_id) book_number = (await WispDB.countInSeries(series_id).catch(() => 0)) + 1;
         await WispDB.createWork({ title, type, source, rating, tags, warnings, chapterBody: body, status,
-          cover_image_url: editorCover, series_id, book_number });
-        toast(kind === "draft" ? "Draft saved to your account." : "Published. It is now in your works.");
+          cover_image_url: editorCover, series_id, book_number, scheduled_for });
+        toast(kind === "schedule" ? "Scheduled. It releases at the time you set."
+          : kind === "draft" ? "Draft saved to your account." : "Published. It is now in your works.");
       }
       liveEditor = null; editorCover = null;
       navigate("write");
     } catch (e) { toast((e && e.message) || "Could not save."); }
+  }
+
+  // Ask for a release time, then schedule the chapter for it.
+  function openScheduleDialog() {
+    if (isLive() && !WispDB.signedIn) { openAuth("in"); return; }
+    // Default suggestion: tomorrow, same time (local), formatted for datetime-local.
+    const dt = new Date(Date.now() + 86400000);
+    const pad = (n) => String(n).padStart(2, "0");
+    const localVal = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <h2 style="font-size:20px">Schedule this chapter</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <p class="muted" style="font-size:13px;margin-bottom:14px">Readers see the chapter as locked with a live countdown until this time; then it releases on its own.</p>
+      <div class="field"><label>Release date and time</label><input type="datetime-local" id="sched-when" value="${localVal}"></div>
+      <div class="modal-actions">
+        <button class="btn btn--quiet" data-modal-cancel>Cancel</button>
+        <button class="btn btn--primary" data-sched-go>Schedule release</button>
+      </div>`, "Schedule this chapter");
+    $("#modalCard [data-sched-go]").addEventListener("click", () => {
+      const raw = $("#sched-when").value;
+      if (!raw) { toast("Pick a date and time."); return; }
+      const when = new Date(raw);
+      if (isNaN(when.getTime()) || when.getTime() <= Date.now()) { toast("Pick a time in the future."); return; }
+      closeModal();
+      handlePublish("schedule", when.toISOString());
+    });
   }
 
   // Pull-to-refresh: pull down at the top of the page (touch) or overscroll up

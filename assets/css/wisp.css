@@ -787,6 +787,15 @@ mark.hl { background: color-mix(in srgb, var(--amber) 34%, transparent); border-
 .ptr.is-refreshing .ptr__ring { animation: ptr-spin .7s linear infinite; }
 @keyframes ptr-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .ptr.is-refreshing .ptr__ring { animation-duration: 1.4s; } }
+
+/* Chapter release locks + live countdown. */
+.ch-lock { display: inline-flex; vertical-align: -2px; color: var(--ink3); margin-left: 4px; }
+.ch-lock--open { color: var(--sage, #6f7d63); }
+.chapter-row--locked { cursor: default; }
+.chapter-row--locked .chapter-row__n { opacity: .55; }
+.ch-countdown { color: var(--rose-ink); font-size: 13px; font-weight: 600; margin-left: 8px; white-space: nowrap; }
+.ch-countdown.is-due { color: var(--sage, #6f7d63); }
+@media (max-width: 560px) { .ch-countdown { display: block; margin: 4px 0 0 0; } }
 .authgate__panel--loading { background: none; border: 0; box-shadow: none; }
 .authgate__panel--loading .authgate__brand { margin: 0; animation: authgate-pulse 1.3s ease-in-out infinite; }
 @keyframes authgate-pulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
