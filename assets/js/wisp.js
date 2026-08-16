@@ -185,7 +185,7 @@
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start">
           <button class="btn btn--primary btn--sm" data-toast="Sign up is instant. You can read without an account.">Create an account</button>
-          <div class="muted" style="font-size:11.5px;line-height:1.5">No ads. Your data is never sold.</div>
+          <div class="muted" style="font-size:11.5px;line-height:1.5">Your data is never sold.</div>
           <button class="btn--link" id="introDismiss">Dismiss</button>
         </div>
       </div>`;
@@ -883,7 +883,7 @@
           <div><b>${scheduled}</b><span>scheduled</span></div>
           <div><b>${W.WRITER.totals.hearts}</b><span>hearts</span></div>
         </div>
-        <p class="muted" style="font-size:12px;margin:10px 2px 26px">Your stats: hearts, comments, reads, and bookmarks. No rankings.</p>
+        <p class="muted" style="font-size:12px;margin:10px 2px 26px">Your stats: hearts, comments, reads, and bookmarks.</p>
 
         ${seriesHTML}
         ${standaloneHTML}
@@ -1197,7 +1197,6 @@
       <div class="widget">
         <div class="widget__label">This week</div>
         <div style="font:17px/1.35 var(--font-display);color:var(--ink)">You read ${wd.week.works} works,<br>${wd.week.words} words.</div>
-        <p class="muted" style="font-size:12.5px;margin:9px 0 0">No streaks or rankings.</p>
       </div>`;
   }
   function renderWidgets() { $("#widgetMount").innerHTML = widgetHTML(); }

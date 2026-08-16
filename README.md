@@ -13,15 +13,20 @@ open `index.html` and it runs.
 
 ## Live site
 
-The whole site, bundled into one file with the Playfair Display and Newsreader
-faces embedded so it renders exactly as designed:
+Deployed with GitHub Pages:
 
-**[View the live site](https://claude.ai/code/artifact/dc38a943-f41c-4855-a5f6-6a324d787816)**
+**https://isabelleereinhardt-rgb.github.io/GAME-CREATION-FALLS-HAVEN/**
 
-The same single-file build ships in this repo as `wisp-standalone.html`; you can
-open it directly in a browser with nothing to install.
+Deployment runs automatically from `.github/workflows/deploy.yml` on every push.
+It needs to be turned on once: open **Settings > Pages**, and under **Build and
+deployment** set **Source** to **GitHub Actions**. The next push (or a manual run
+of the "Deploy to GitHub Pages" workflow) publishes the site at the URL above.
 
-## Running it
+A single-file build of the same site also ships as `wisp-standalone.html`, with
+the fonts embedded, so you can open it directly in a browser with nothing to
+install.
+
+## Running it locally
 
 Because the app fetches its own scripts, open it through a static server rather
 than the `file://` protocol for the cleanest result:
@@ -32,8 +37,7 @@ python3 -m http.server 8000
 ```
 
 Opening `index.html` (or the bundled `wisp-standalone.html`) directly in a
-browser also works. To host it on GitHub Pages, point Pages at this branch in
-the repository settings; the site serves straight from the repository root.
+browser also works.
 
 ## What is here
 
