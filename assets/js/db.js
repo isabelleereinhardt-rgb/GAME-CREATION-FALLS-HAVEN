@@ -325,6 +325,30 @@ window.WispDB = (function () {
     return data;
   }
 
+  // Per-line emoji reactions, grouped by paragraph index for a chapter.
+  async function getReactions(chapterId) {
+    const { data, error } = await client.from("reactions").select("paragraph_index, emoji, user_id").eq("chapter_id", chapterId);
+    if (error || !data) return {};
+    const map = {};
+    for (const r of data) {
+      const m = (map[r.paragraph_index] = map[r.paragraph_index] || { counts: {}, mine: new Set() });
+      m.counts[r.emoji] = (m.counts[r.emoji] || 0) + 1;
+      if (user && r.user_id === user.id) m.mine.add(r.emoji);
+    }
+    return map;
+  }
+  async function toggleReaction(chapterId, paragraphIndex, emoji, on) {
+    if (!user) throw new Error("Sign in to react.");
+    if (on) {
+      const { error } = await client.from("reactions").insert({ chapter_id: chapterId, paragraph_index: paragraphIndex, user_id: user.id, emoji });
+      if (error && error.code !== "23505") throw error;    // ignore "already reacted"
+    } else {
+      const { error } = await client.from("reactions").delete()
+        .eq("chapter_id", chapterId).eq("paragraph_index", paragraphIndex).eq("user_id", user.id).eq("emoji", emoji);
+      if (error) throw error;
+    }
+  }
+
   async function uploadCover(file) {
     if (!user) throw new Error("Sign in to upload.");
     const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
@@ -346,7 +370,7 @@ window.WispDB = (function () {
     listWorks, getWork, getChapters, myWorks,
     createWork, updateWork, deleteWork, firstChapter, saveChapter, setTags,
     mySeries, findOrCreateSeries, updateSeries, deleteSeries, countInSeries,
-    toggle, myRelations, getComments, postComment, uploadCover,
+    toggle, myRelations, getComments, postComment, getReactions, toggleReaction, uploadCover,
     toCard: toUi, fmtCount, relTime
   };
 })();

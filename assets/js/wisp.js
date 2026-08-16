@@ -35,7 +35,7 @@
      which the loaders below fill from the database. In demo mode they stay
      empty and every accessor falls back to the bundled demo dataset, so the
      demo behaves exactly as before. */
-  const LIVE = { works: [], byId: {}, chapters: {}, comments: {}, series: [] };
+  const LIVE = { works: [], byId: {}, chapters: {}, comments: {}, reactions: {}, series: [] };
   let liveEditor = null;   // { work, chapter } when editing a real work, else null
   let editorCover = null;  // uploaded cover URL for the current editor session
   let coverCleared = false; // true when the author removed an existing cover
@@ -673,8 +673,28 @@
   // Render the thread for line i into its slot and bind the composer. Called
   // again after each post so the new comment shows immediately.
   function openLiveThread(w, ch, i, slot) {
-    slot.innerHTML = liveThreadHTML(w, i);
+    slot.innerHTML = liveThreadHTML(w, ch, i);
     const ta = slot.querySelector("textarea"); if (ta) ta.focus();
+    // Reaction chips: toggle the reader's own emoji on this line.
+    slot.querySelectorAll("[data-lreact]").forEach(chip => chip.addEventListener("click", async () => {
+      if (!ch) return;
+      if (!WispDB.signedIn) { openAuth("in"); return; }
+      const [, emoji] = chip.dataset.lreact.split(":");
+      const store = (LIVE.reactions[ch.id] = LIVE.reactions[ch.id] || {});
+      const cell = (store[i] = store[i] || { counts: {}, mine: new Set() });
+      const on = !cell.mine.has(emoji);
+      // optimistic update
+      cell.mine[on ? "add" : "delete"](emoji);
+      cell.counts[emoji] = Math.max(0, (cell.counts[emoji] || 0) + (on ? 1 : -1));
+      openLiveThread(w, ch, i, slot);
+      try { await WispDB.toggleReaction(ch.id, i, emoji, on); }
+      catch (e) {
+        cell.mine[on ? "delete" : "add"](emoji);                 // revert on failure
+        cell.counts[emoji] = Math.max(0, (cell.counts[emoji] || 0) + (on ? -1 : 1));
+        openLiveThread(w, ch, i, slot);
+        toast((e && e.message) || "Could not react.");
+      }
+    }));
     const post = slot.querySelector("[data-lpost]");
     if (!post) return;
     post.addEventListener("click", async () => {
@@ -702,7 +722,12 @@
     if (badge) badge.textContent = n ? String(n) : (badge.remove(), "");
   }
 
-  function liveThreadHTML(w, i) {
+  function liveThreadHTML(w, ch, i) {
+    const rx = (ch && LIVE.reactions[ch.id] && LIVE.reactions[ch.id][i]) || { counts: {}, mine: new Set() };
+    const chips = REACTS.map(e => {
+      const n = rx.counts[e] || 0; const on = rx.mine && rx.mine.has(e);
+      return `<button class="react ${on ? "is-on" : ""}" data-lreact="${i}:${e}" aria-pressed="${!!on}">${e}${n ? `<small>${n}</small>` : ""}</button>`;
+    }).join("");
     const comments = (LIVE.comments[w.id] && LIVE.comments[w.id][i]) || [];
     const who = (c) => (c.profiles && c.profiles.display_name) || "Reader";
     const rows = comments.map(c => `
@@ -714,6 +739,7 @@
         </div>
       </div>`).join("");
     return `<div class="thread">
+      <div class="thread__reactions">${chips}</div>
       ${rows || '<p class="muted" style="font-size:13px;margin:2px 0 10px">No comments on this line yet.</p>'}
       <div class="thread__compose">
         <textarea placeholder="Reply on this line"></textarea>
@@ -1739,6 +1765,8 @@
         (grouped[k] = grouped[k] || []).push(r);
       });
       LIVE.comments[id] = grouped;
+      const shownCh = (LIVE.chapters[id].filter(c => c.published)[0]) || LIVE.chapters[id][0];
+      if (shownCh) LIVE.reactions[shownCh.id] = await WispDB.getReactions(shownCh.id).catch(() => ({}));
     } catch (e) {
       const dw = W.byId[id];                                // fall back to a demo/sample chapter
       if (needsGate(dw)) { showGate(dw, () => renderReading(id)); return; }
