@@ -9,6 +9,8 @@
   const $  = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+  // Real database ids are UUIDs; the bundled sample works use short string ids.
+  const isUuid = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s || "");
 
   /* ---- settings and persistence (stands in for server-side sync) --------- */
   const DEFAULTS = { theme:"cream", accent:"default", face:"humanist", size:19, measure:66,
@@ -2148,7 +2150,7 @@
       const wid = (location.hash.match(/#\/(?:work|read)\/([^/]+)/) || [])[1];
       const set = userState[kind === "heart" ? "hearted" : kind === "subscribe" ? "subscribed" : "bookmarked"];
       const on = tog.getAttribute("aria-pressed") !== "true";
-      if (isLive() && wid) {
+      if (isLive() && isUuid(wid)) {          // only persist real works; samples toggle visually only
         const table = kind === "heart" ? "hearts" : kind === "subscribe" ? "subscriptions" : "bookmarks";
         WispDB.toggle(table, wid, on).catch(err => toast((err && err.message) || "Could not save that."));
       }

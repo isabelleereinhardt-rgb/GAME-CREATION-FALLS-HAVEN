@@ -325,6 +325,35 @@ window.WispDB = (function () {
     return data;
   }
 
+  /* ---- following -------------------------------------------------------- */
+  async function toggleFollow(authorId, on) {
+    if (!user) throw new Error("Sign in to follow.");
+    if (!authorId || authorId === user.id) return;
+    if (on) {
+      const { error } = await client.from("follows").insert({ follower_id: user.id, following_id: authorId });
+      if (error && error.code !== "23505") throw error;
+    } else {
+      const { error } = await client.from("follows").delete().eq("follower_id", user.id).eq("following_id", authorId);
+      if (error) throw error;
+    }
+  }
+  async function amFollowing(authorId) {
+    if (!user || !authorId) return false;
+    const { data } = await client.from("follows").select("following_id").eq("follower_id", user.id).eq("following_id", authorId).maybeSingle();
+    return !!data;
+  }
+  async function followCounts(authorId) {
+    if (!authorId) return { followers: 0, following: 0 };
+    const f1 = await client.from("follows").select("follower_id", { count: "exact", head: true }).eq("following_id", authorId);
+    const f2 = await client.from("follows").select("following_id", { count: "exact", head: true }).eq("follower_id", authorId);
+    return { followers: f1.count || 0, following: f2.count || 0 };
+  }
+  async function myFollowingIds() {
+    if (!user) return [];
+    const { data } = await client.from("follows").select("following_id").eq("follower_id", user.id);
+    return (data || []).map(r => r.following_id);
+  }
+
   // Per-line emoji reactions, grouped by paragraph index for a chapter.
   async function getReactions(chapterId) {
     const { data, error } = await client.from("reactions").select("paragraph_index, emoji, user_id").eq("chapter_id", chapterId);
@@ -371,6 +400,7 @@ window.WispDB = (function () {
     createWork, updateWork, deleteWork, firstChapter, saveChapter, setTags,
     mySeries, findOrCreateSeries, updateSeries, deleteSeries, countInSeries,
     toggle, myRelations, getComments, postComment, getReactions, toggleReaction, uploadCover,
+    toggleFollow, amFollowing, followCounts, myFollowingIds,
     toCard: toUi, fmtCount, relTime
   };
 })();
