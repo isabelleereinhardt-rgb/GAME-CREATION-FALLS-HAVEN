@@ -700,6 +700,129 @@
     return parts.length ? parts : [text];
   }
 
+  // ---- Markdown (a small, safe subset) -------------------------------------
+  // Chapter bodies are stored as Markdown. We never inject raw user HTML: every
+  // value passes through esc() before any of our own tags are added, so the
+  // reader stays XSS-safe. Supported: # headings, > quotes, - / 1. lists,
+  // --- rules, and inline **bold**, *italic*, `code`, and [links](https://...).
+  const MD_CA = String.fromCharCode(0xE000), MD_CB = String.fromCharCode(0xE001);
+
+  function mdInline(text) {
+    let s = esc(String(text == null ? "" : text));
+    const codes = [];
+    s = s.replace(/`([^`]+)`/g, (_, c) => { codes.push(c); return MD_CA + (codes.length - 1) + MD_CB; });
+    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, t, u) =>
+      /^(https?:|mailto:)/i.test(u) ? `<a href="${esc(u)}" target="_blank" rel="noopener nofollow">${t}</a>` : m);
+    s = s.replace(/\*\*([^*]+?)\*\*/g, "<strong>$1</strong>")
+         .replace(/__([^_]+?)__/g, "<strong>$1</strong>");
+    s = s.replace(/(^|[^*\w])\*(?!\s)([^*]+?)\*(?!\*)/g, "$1<em>$2</em>")
+         .replace(/(^|[^_\w])_(?!\s)([^_]+?)_(?!_)/g, "$1<em>$2</em>");
+    s = s.replace(new RegExp(MD_CA + "(\\d+)" + MD_CB, "g"), (_, i) => `<code>${codes[+i]}</code>`);
+    return s;
+  }
+
+  function splitBlocks(body) {
+    const text = String(body == null ? "" : body).replace(/\r\n/g, "\n").trim();
+    if (!text) return [];
+    let parts = text.split(/\n{2,}/).map(s => s.replace(/^\n+|\n+$/g, "")).filter(s => s.trim());
+    if (parts.length <= 1 && /\n/.test(text)) {
+      parts = [];
+      let buf = [];
+      const flush = () => { if (buf.length) { parts.push(buf.join("\n")); buf = []; } };
+      for (const line of text.split(/\n/)) {
+        if (!line.trim()) { flush(); continue; }
+        buf.push(line);
+        if (!/^\s*([-*]\s+|\d+\.\s+|>\s?)/.test(line)) flush();
+      }
+      flush();
+    }
+    return parts.length ? parts : [text];
+  }
+
+  function renderBlock(block) {
+    const lines = String(block).split(/\n/);
+    const first = lines[0].trim();
+    if (lines.length === 1 && /^(-{3,}|\*{3,}|_{3,})$/.test(first)) return "<hr>";
+    const h = lines.length === 1 && first.match(/^(#{1,3})\s+(.*)$/);
+    if (h) { const tag = ["h2", "h3", "h4"][h[1].length - 1]; return `<${tag}>${mdInline(h[2])}</${tag}>`; }
+    if (lines.every(l => /^>\s?/.test(l)))
+      return `<blockquote>${lines.map(l => mdInline(l.replace(/^>\s?/, ""))).join("<br>")}</blockquote>`;
+    if (lines.every(l => /^[-*]\s+/.test(l.trim())))
+      return "<ul>" + lines.map(l => `<li>${mdInline(l.trim().replace(/^[-*]\s+/, ""))}</li>`).join("") + "</ul>";
+    if (lines.every(l => /^\d+\.\s+/.test(l.trim())))
+      return "<ol>" + lines.map(l => `<li>${mdInline(l.trim().replace(/^\d+\.\s+/, ""))}</li>`).join("") + "</ol>";
+    return `<p>${lines.map(l => mdInline(l)).join("<br>")}</p>`;
+  }
+
+  function mdToHtmlBlocks(body) { return splitBlocks(body).map(renderBlock); }
+
+  // ---- Editor DOM -> Markdown (for saving) ---------------------------------
+  // Walks the contenteditable and serializes it back to Markdown. Handles what
+  // execCommand and typing produce: <p>/<div> paragraphs, <h2>-<h6>, <blockquote>,
+  // <ul>/<ol>, <hr>, and inline <strong>/<b>, <em>/<i>, <a>, <code>, <br>.
+  function inlineToMd(node) {
+    let out = "";
+    node.childNodes.forEach(n => {
+      if (n.nodeType === 3) { out += n.nodeValue; return; }
+      if (n.nodeType !== 1) return;
+      const tag = n.nodeName.toLowerCase();
+      if (tag === "br") { out += "\n"; return; }
+      const inner = inlineToMd(n);
+      if (tag === "strong" || tag === "b") out += inner.trim() ? `**${inner}**` : inner;
+      else if (tag === "em" || tag === "i") out += inner.trim() ? `*${inner}*` : inner;
+      else if (tag === "code") out += "`" + inner + "`";
+      else if (tag === "a") { const href = n.getAttribute("href") || ""; out += /^(https?:|mailto:)/i.test(href) ? `[${inner}](${href})` : inner; }
+      else out += inner;
+    });
+    return out;
+  }
+
+  function serializeBlock(node, tag) {
+    if (tag === "hr") return "---";
+    if (tag === "ul")
+      return Array.from(node.children).filter(c => c.nodeName.toLowerCase() === "li")
+        .map(li => "- " + inlineToMd(li).replace(/\s+/g, " ").trim()).filter(s => s !== "-").join("\n");
+    if (tag === "ol")
+      return Array.from(node.children).filter(c => c.nodeName.toLowerCase() === "li")
+        .map((li, i) => (i + 1) + ". " + inlineToMd(li).replace(/\s+/g, " ").trim()).filter(s => !/^\d+\.$/.test(s)).join("\n");
+    if (tag === "blockquote")
+      return inlineToMd(node).replace(/^\n+|\n+$/g, "").split("\n").map(l => "> " + l).join("\n");
+    if (tag === "h1" || tag === "h2") return "# " + inlineToMd(node).replace(/\s+/g, " ").trim();
+    if (tag === "h3") return "## " + inlineToMd(node).replace(/\s+/g, " ").trim();
+    if (/^h[4-6]$/.test(tag)) return "### " + inlineToMd(node).replace(/\s+/g, " ").trim();
+    return inlineToMd(node).replace(/\n{2,}/g, "\n").replace(/^\n+|\n+$/g, "");
+  }
+
+  function editorHtmlToMd(el) {
+    if (!el) return "";
+    const BLOCK = new Set(["p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "ul", "ol", "hr", "pre"]);
+    const blocks = [];
+    let inlineBuf = "";
+    const NBSP = new RegExp(String.fromCharCode(0xA0), "g");
+    const flushInline = () => {
+      const md = inlineBuf.replace(NBSP, " ").replace(/^\n+|\n+$/g, "");
+      if (md.trim()) blocks.push(md);
+      inlineBuf = "";
+    };
+    Array.from(el.childNodes).forEach(node => {
+      const tag = node.nodeType === 1 ? node.nodeName.toLowerCase() : "";
+      if (node.nodeType === 1 && BLOCK.has(tag)) {
+        flushInline();
+        const b = serializeBlock(node, tag);
+        if (b && b.trim()) blocks.push(b);
+      } else if (node.nodeType === 3) {
+        inlineBuf += node.nodeValue;
+      } else if (node.nodeType === 1) {
+        inlineBuf += tag === "br" ? "\n" : inlineToMd(node);
+      }
+    });
+    flushInline();
+    return blocks.join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
+
+  // A small handle so the markdown pipeline can be exercised by tests.
+  window.WispMD = { inline: mdInline, blocks: mdToHtmlBlocks, toMd: editorHtmlToMd };
+
   // Reader for a real, database-backed work. Full reading chrome and per-line
   // comments; the seeded reaction demo stays on the sample chapter.
   function renderLiveReading(w, chapters, chapterNum) {
@@ -718,15 +841,15 @@
     const idx = ch ? readable.findIndex(c => c.number === ch.number) : -1;
     const prev = idx > 0 ? readable[idx - 1] : null;
     const next = idx >= 0 && idx < readable.length - 1 ? readable[idx + 1] : null;
-    const paras = ch ? splitParagraphs(ch.body) : [];
+    const paras = ch ? mdToHtmlBlocks(ch.body) : [];
     const byPara = (ch && LIVE.comments[ch.id]) || {};
 
     const proseHTML = paras.length
-      ? paras.map((t, i) => {
+      ? paras.map((html, i) => {
           const n = (byPara[i] || []).length;
           return `<div class="para" data-lpara="${i}">
             ${commentsOn ? `<button class="para__marker" data-lmark="${i}" aria-label="Open the conversation on this line">${icon("comment",15)}${n ? `<span class="para__count">${n}</span>` : ""}</button>` : ""}
-            <p>${esc(t)}</p>
+            ${html}
             <div class="thread-slot" data-lslot="${i}"></div>
           </div>`;
         }).join("")
@@ -1279,8 +1402,8 @@
 
   // Turn a plain-text chapter body into editor paragraphs.
   function bodyToEditorHTML(body) {
-    const parts = splitParagraphs(body);
-    return parts.length ? parts.map(p => `<p>${esc(p)}</p>`).join("") : "<p></p>";
+    const blocks = mdToHtmlBlocks(body);
+    return blocks.length ? blocks.join("") : "<p></p>";
   }
 
   function renderWriteEditor(work) {
@@ -1347,17 +1470,16 @@
           <div>
             <input class="title-input" id="we-title" placeholder="Title your work" value="${esc(title)}">
             <div class="toolbar" role="toolbar" aria-label="Formatting">
-              <button title="Heading">H</button>
-              <button title="Bold"><b>B</b></button>
-              <button title="Italic"><i>I</i></button>
-              <button title="Quote">&ldquo;</button>
+              <button type="button" title="Heading" data-fmt="h2">H</button>
+              <button type="button" title="Bold" data-fmt="bold"><b>B</b></button>
+              <button type="button" title="Italic" data-fmt="italic"><i>I</i></button>
+              <button type="button" title="Quote" data-fmt="quote">&ldquo;</button>
               <span class="sep"></span>
-              <button title="Bulleted list">&bull;</button>
-              <button title="Numbered list">1.</button>
-              <button title="Link">${icon("tag",15)}</button>
-              <button title="Image">${icon("book",15)}</button>
+              <button type="button" title="Bulleted list" data-fmt="ul">&bull;</button>
+              <button type="button" title="Numbered list" data-fmt="ol">1.</button>
+              <button type="button" title="Link" data-fmt="link">${icon("tag",15)}</button>
               <span class="sep"></span>
-              <button title="Horizontal rule"><span style="display:inline-block;width:16px;height:2px;background:currentColor;border-radius:2px"></span></button>
+              <button type="button" title="Horizontal rule" data-fmt="hr"><span style="display:inline-block;width:16px;height:2px;background:currentColor;border-radius:2px"></span></button>
               <span style="margin-left:auto;font-size:12px;color:var(--ink3);padding:0 8px">Markdown shortcuts on</span>
             </div>
             <div class="editor" id="we-body" contenteditable="true" spellcheck="true" aria-label="Chapter body">${bodyHTML}</div>
@@ -1365,7 +1487,7 @@
               <button class="btn btn--primary" data-publish="publish">Publish chapter</button>
               <button class="btn btn--quiet" data-publish="draft">Save draft</button>
               <button class="btn btn--quiet" data-schedule>Schedule &hellip;</button>
-              <button class="btn btn--link">Preview</button>
+              <button class="btn btn--link" data-preview>Preview</button>
             </div>
           </div>
 
@@ -2499,6 +2621,13 @@
     openOverlay($("#railSheet"));
   }
 
+  // Keep the caret in the editor when a formatting button is pressed: without
+  // this, mousedown on the toolbar button blurs the contenteditable and
+  // execCommand has no selection to act on.
+  document.addEventListener("mousedown", (e) => {
+    if (e.target.closest("#screen-write [data-fmt]")) e.preventDefault();
+  });
+
   // Event delegation for the whole app.
   document.addEventListener("click", (e) => {
     const nav = e.target.closest("[data-nav]");
@@ -2519,6 +2648,11 @@
     if (editCh) { if (liveEditor && liveEditor.work) navigate("write/" + liveEditor.work.id + "/" + editCh.dataset.editChapter); return; }
     const newCh = e.target.closest("[data-new-chapter]");
     if (newCh) { addNewChapter(); return; }
+
+    const fmt = e.target.closest("#screen-write [data-fmt]");
+    if (fmt) { applyFormat(fmt.dataset.fmt); return; }
+    const pv = e.target.closest("#screen-write [data-preview]");
+    if (pv) { openPreview(); return; }
 
     const read = e.target.closest("[data-read]");
     if (read) { navigate("read/" + read.dataset.read); return; }
@@ -2813,6 +2947,56 @@
       () => closeModal());
   }
 
+  // Toolbar: apply formatting to the current selection in the editor. Uses the
+  // browser's built-in rich-text editing; the DOM it produces is serialized
+  // back to Markdown on save (editorHtmlToMd).
+  function applyFormat(kind) {
+    const ed = $("#we-body");
+    if (!ed) return;
+    ed.focus();
+    const exec = (cmd, val) => { try { document.execCommand(cmd, false, val); } catch (e) {} };
+    if (kind === "bold") exec("bold");
+    else if (kind === "italic") exec("italic");
+    else if (kind === "h2") toggleBlock("h2");
+    else if (kind === "quote") toggleBlock("blockquote");
+    else if (kind === "ul") exec("insertUnorderedList");
+    else if (kind === "ol") exec("insertOrderedList");
+    else if (kind === "hr") exec("insertHorizontalRule");
+    else if (kind === "link") {
+      const url = (window.prompt("Link address", "https://") || "").trim();
+      if (!url || url === "https://") return;
+      if (/^(https?:|mailto:)/i.test(url)) exec("createLink", url);
+      else toast("Links need to start with https:// or mailto:");
+    }
+  }
+
+  // formatBlock toggles a block between the given tag and a plain paragraph.
+  function toggleBlock(tag) {
+    let cur = "";
+    try { cur = (document.queryCommandValue("formatBlock") || "").toLowerCase().replace(/[<>]/g, ""); } catch (e) {}
+    try { document.execCommand("formatBlock", false, cur === tag ? "p" : tag); } catch (e) {}
+  }
+
+  // Preview: render the editor's current content exactly as the reader will see it.
+  function openPreview() {
+    const ed = $("#we-body");
+    const titleEl = $("#we-title");
+    const title = (titleEl && titleEl.value.trim()) || "Untitled";
+    const blocks = ed ? mdToHtmlBlocks(editorHtmlToMd(ed)) : [];
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <h2 style="font-size:20px">Preview</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <div class="prose prose--preview">
+        <h1 class="reader__title" style="margin:0 0 18px">${esc(title)}</h1>
+        ${blocks.length ? blocks.join("") : `<p class="muted">Nothing to preview yet. Write something first.</p>`}
+      </div>
+      <div class="modal-actions" style="margin-top:16px">
+        <button class="btn btn--primary" data-modal-cancel>Back to writing</button>
+      </div>`, "Preview");
+  }
+
   async function handlePublish(kind, scheduleTime) {
     if (!window.WispDB || !WispDB.enabled) {
       toast(kind === "schedule" ? "Scheduling needs the backend. Connect Supabase to schedule releases."
@@ -2823,7 +3007,7 @@
     if (!WispDB.signedIn) { openAuth("in"); return; }
     const val = (id) => { const e = $(id); return e ? e.value.trim() : ""; };
     const title = val("#we-title") || "Untitled";
-    const bodyEl = $("#we-body"); const body = bodyEl ? bodyEl.innerText.trim() : "";
+    const bodyEl = $("#we-body"); const body = bodyEl ? editorHtmlToMd(bodyEl) : "";
     const typeBtn = $("#screen-write [data-wtype].is-on"); const type = typeBtn ? typeBtn.dataset.wtype : "original";
     const rateBtn = $("#screen-write [data-wrate].is-on"); const rating = rateBtn ? rateBtn.dataset.wrate : "G";
     const tags = val("#we-tags").split(",").map(s => s.trim()).filter(Boolean);

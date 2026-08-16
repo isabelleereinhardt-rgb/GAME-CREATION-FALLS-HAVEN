@@ -650,6 +650,30 @@ a.card__title:hover { color: var(--rose-ink); }
 .prose[data-justify="on"] p { text-align: justify; }
 .prose[data-hyphen="on"] p  { hyphens: auto; }
 
+/* Rich formatting inside reader prose (Markdown-rendered). */
+.prose h2, .prose h3, .prose h4 {
+  font-family: var(--font-display); color: var(--ink);
+  line-height: 1.25; margin: 1.3em 0 .5em;
+}
+.prose h2 { font-size: 1.4em; }
+.prose h3 { font-size: 1.2em; }
+.prose h4 { font-size: 1.05em; }
+.prose blockquote {
+  margin: 0 0 var(--read-gap, 1.15em); padding: 2px 0 2px 18px;
+  border-left: 3px solid var(--rose); color: var(--ink2); font-style: italic;
+}
+.prose ul, .prose ol { margin: 0 0 var(--read-gap, 1.15em); padding-left: 1.5em; line-height: var(--read-leading, 1.75); }
+.prose li { margin: 0 0 .3em; }
+.prose hr { border: 0; height: 1px; background: var(--line); margin: 2em auto; width: 60%; }
+.prose a { color: var(--rose); text-decoration: underline; text-underline-offset: 2px; }
+.prose code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .9em;
+  background: var(--paper2); border-radius: 4px; padding: .1em .35em;
+}
+.prose strong { font-weight: 700; }
+.prose em { font-style: italic; }
+.prose--preview { max-height: 62vh; overflow-y: auto; }
+
 .para { position: relative; }
 .para__marker {
   position: absolute; left: -34px; top: .32em; width: 26px;
@@ -864,8 +888,19 @@ mark.hl { background: color-mix(in srgb, var(--amber) 34%, transparent); border-
   outline: none;
 }
 .editor:focus { border-color: var(--rose); }
-.editor h2 { font-family: var(--font-display); margin: .4em 0; }
+.editor h2, .editor h3, .editor h4 { font-family: var(--font-display); margin: .6em 0 .3em; line-height: 1.25; }
+.editor h2 { font-size: 1.4em; }
+.editor h3 { font-size: 1.2em; }
+.editor h4 { font-size: 1.05em; }
 .editor p { margin: 0 0 1em; }
+.editor blockquote { margin: 0 0 1em; padding-left: 16px; border-left: 3px solid var(--rose); color: var(--ink2); font-style: italic; }
+.editor ul, .editor ol { margin: 0 0 1em; padding-left: 1.5em; }
+.editor li { margin: 0 0 .25em; }
+.editor hr { border: 0; height: 1px; background: var(--line); margin: 1.4em 0; }
+.editor a { color: var(--rose); text-decoration: underline; }
+.editor code { font-family: ui-monospace, Menlo, monospace; font-size: .9em; background: var(--paper2); border-radius: 4px; padding: .1em .35em; }
+.editor strong { font-weight: 700; }
+.editor em { font-style: italic; }
 
 .title-input {
   width: 100%; border: 0; border-bottom: 1px solid var(--line); background: none; outline: none;
