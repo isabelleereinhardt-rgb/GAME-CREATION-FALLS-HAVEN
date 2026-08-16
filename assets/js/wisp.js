@@ -12,7 +12,7 @@
 
   /* ---- settings and persistence (stands in for server-side sync) --------- */
   const DEFAULTS = { theme:"cream", accent:"default", face:"humanist", size:19, measure:66,
-                     dyslexia:false, motion:false, justify:false, margins:true, view:"gallery", adultOK:false };
+                     dyslexia:false, motion:false, justify:false, margins:true, view:"gallery", adultOK:false, introSeen:false };
   let settings = load();
   function load() {
     try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem("wisp.settings") || "{}")); }
@@ -127,8 +127,26 @@
         </div>`).join("")}
     </div>`;
 
+    const intro = settings.introSeen ? "" : `
+      <div class="explainer" id="introBar">
+        <div style="flex:1;min-width:230px">
+          <div class="eyebrow rose" style="margin-bottom:6px">New here</div>
+          <div class="display" style="font-size:20px">Read stories together instead of alone.</div>
+        </div>
+        <div class="explainer__steps">
+          <div class="explainer__step"><span class="explainer__n">1</span><span class="soft" style="font-size:13px">Find something to fall into. Picks come from what you read, never from an advertiser.</span></div>
+          <div class="explainer__step"><span class="explainer__n">2</span><span class="soft" style="font-size:13px">Talk in the margins. Comment and react on the exact line that got you.</span></div>
+          <div class="explainer__step"><span class="explainer__n">3</span><span class="soft" style="font-size:13px">Keep control. Filter and warn; adult content stays off until you say so.</span></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start">
+          <button class="btn btn--primary btn--sm" data-toast="Signup is instant: no invite queue. Reading stays open logged out.">Create an account</button>
+          <button class="btn--link" id="introDismiss">No ads, ever. Never sold. Dismiss</button>
+        </div>
+      </div>`;
+
     $("#screen-home").innerHTML = `
       <div class="page">
+        ${intro}
         <div class="home-tabs">
           <button class="home-tab ${homeTab === "foryou" ? "is-active" : ""}" data-hometab="foryou">For You</button>
           <button class="home-tab ${homeTab === "following" ? "is-active" : ""}" data-hometab="following">Following</button>
@@ -1014,6 +1032,8 @@
 
     const back = e.target.closest("[data-back]");
     if (back) { history.length > 1 ? history.back() : navigate("home"); return; }
+
+    if (e.target.closest("#introDismiss")) { settings.introSeen = true; save(); const bar = $("#introBar"); if (bar) bar.remove(); return; }
 
     const tst = e.target.closest("[data-toast]");
     if (tst) { toast(tst.dataset.toast); return; }
