@@ -456,7 +456,7 @@
       const isReleased = (c) => c.published || (c.scheduled_for && new Date(c.scheduled_for).getTime() <= now);
       const released = (LIVE.chapters[w.id] || []).filter(isReleased).sort((a, b) => a.number - b.number);
       const upcoming = (LIVE.upcoming[w.id] || []).slice().sort((a, b) => a.number - b.number);
-      const releasedRows = released.map(c => `<button class="chapter-row" data-read="${w.id}">
+      const releasedRows = released.map(c => `<button class="chapter-row" data-read="${w.id}/${c.number}">
           <span class="chapter-row__n">${c.number}</span>
           <span class="chapter-row__title">Chapter ${c.number}${c.title ? ": " + esc(c.title) : ""} <span class="ch-lock ch-lock--open" title="Released">${icon("unlock",13)}</span></span>
           <span class="chapter-row__when">posted ${WispDB.relTime(c.published_at || c.scheduled_for || c.created_at)}</span>
@@ -595,10 +595,10 @@
     </div>`;
   }
 
-  function renderReading(reqId) {
+  function renderReading(reqId, chapterNum) {
     openThreads.clear();               // the DOM is rebuilt below; open-state must reset
     const liveWork = LIVE.byId[reqId];
-    if (liveWork && liveWork._db) { renderLiveReading(liveWork, LIVE.chapters[reqId] || []); return; }
+    if (liveWork && liveWork._db) { renderLiveReading(liveWork, LIVE.chapters[reqId] || [], chapterNum); return; }
     const c = W.CHAPTER;
     const flagship = (!reqId || reqId === "amber");
     const w = W.byId[reqId] || W.byId.amber;
@@ -695,12 +695,15 @@
 
   // Reader for a real, database-backed work. Full reading chrome and per-line
   // comments; the seeded reaction demo stays on the sample chapter.
-  function renderLiveReading(w, chapters) {
+  function renderLiveReading(w, chapters, chapterNum) {
     markVisited(w.id);
-    const published = chapters.filter(c => c.published);
-    const ch = published[0] || chapters[0] || null;
+    const readable = releasedChapters(chapters);
+    const ch = (chapterNum && readable.find(c => c.number === +chapterNum)) || readable[0] || chapters[0] || null;
+    const idx = ch ? readable.findIndex(c => c.number === ch.number) : -1;
+    const prev = idx > 0 ? readable[idx - 1] : null;
+    const next = idx >= 0 && idx < readable.length - 1 ? readable[idx + 1] : null;
     const paras = ch ? splitParagraphs(ch.body) : [];
-    const byPara = LIVE.comments[w.id] || {};
+    const byPara = (ch && LIVE.comments[ch.id]) || {};
 
     const proseHTML = paras.length
       ? paras.map((t, i) => {
@@ -717,14 +720,18 @@
       <div class="reader">
         <div class="reader__progress" id="readProgress"><i></i></div>
         <div class="reader__wrap" id="readerWrap">
-          <div class="reader__crumbs"><a href="#/work/${w.id}">${esc(w.title)}</a> ${icon("chev",12)} <span>Chapter ${ch ? ch.number : 1}</span></div>
+          <div class="reader__crumbs"><a href="#/work/${w.id}">${esc(w.title)}</a> ${icon("chev",12)} <span>Chapter ${ch ? ch.number : 1}${readable.length > 1 ? " of " + readable.length : ""}</span></div>
           <h1 class="reader__title">${esc(w.title)}</h1>
           <div class="reader__by">by <a href="#/work/${w.id}">${esc(w.author)}</a></div>
           ${ch ? `<div class="reader__chapter">Chapter ${ch.number}</div>${ch.title ? `<div class="reader__chapter-title">${esc(ch.title)}</div>` : ""}` : ""}
           <div class="prose" id="prose" data-justify="${settings.justify ? "on" : "off"}" data-hyphen="${settings.justify ? "on" : "off"}">
             ${proseHTML}
           </div>
-          ${published.length > 1 ? `<div class="chapter-nav"><button class="btn--link" data-work="${w.id}">Chapter index</button></div>` : ""}
+          ${readable.length > 1 ? `<div class="chapter-nav">
+            ${prev ? `<button class="btn btn--quiet btn--sm" data-read="${w.id}/${prev.number}">&lsaquo; Previous</button>` : "<span></span>"}
+            <button class="btn--link" data-work="${w.id}">Chapter index</button>
+            ${next ? `<button class="btn btn--primary btn--sm" data-read="${w.id}/${next.number}">Next chapter &rsaquo;</button>` : "<span></span>"}
+          </div>` : ""}
         </div>
         <div class="hl-pop" id="hlPopLive">
           <button data-lhl="mark">Highlight</button>
@@ -834,20 +841,20 @@
       post.disabled = true;
       try {
         await WispDB.postComment(w.id, body, ch.id, i);
-        const list = (LIVE.comments[w.id] = LIVE.comments[w.id] || {});
+        const list = (LIVE.comments[ch.id] = LIVE.comments[ch.id] || {});
         (list[i] = list[i] || []).push({
           body, created_at: new Date().toISOString(),
           profiles: { display_name: (WispDB.profile && WispDB.profile.display_name) || "You" }
         });
         openLiveThread(w, ch, i, slot);       // re-render with the new comment
-        refreshLiveCount(w, i);
+        refreshLiveCount(ch, i);
       } catch (e) { toast((e && e.message) || "Could not post."); post.disabled = false; }
     });
   }
 
-  function refreshLiveCount(w, i) {
+  function refreshLiveCount(ch, i) {
     const mark = $(`#screen-reading [data-lmark="${i}"]`); if (!mark) return;
-    const n = ((LIVE.comments[w.id] || {})[i] || []).length;
+    const n = ((LIVE.comments[ch.id] || {})[i] || []).length;
     let badge = mark.querySelector(".para__count");
     if (n && !badge) { badge = document.createElement("span"); badge.className = "para__count"; mark.appendChild(badge); }
     if (badge) badge.textContent = n ? String(n) : (badge.remove(), "");
@@ -859,7 +866,7 @@
       const n = rx.counts[e] || 0; const on = rx.mine && rx.mine.has(e);
       return `<button class="react ${on ? "is-on" : ""}" data-lreact="${i}:${e}" aria-pressed="${!!on}">${e}${n ? `<small>${n}</small>` : ""}</button>`;
     }).join("");
-    const comments = (LIVE.comments[w.id] && LIVE.comments[w.id][i]) || [];
+    const comments = (ch && LIVE.comments[ch.id] && LIVE.comments[ch.id][i]) || [];
     const who = (c) => (c.profiles && c.profiles.display_name) || "Reader";
     const rows = comments.map(c => `
       <div class="comment">
@@ -1287,12 +1294,18 @@
          <p>${isNew ? "Start typing, or paste from another editor." : "Pick up where you left off. Your writing saves automatically."}</p>
          <p>Format with the toolbar above, or use Markdown shortcuts.</p>`;
 
-    const partsHTML = chapters > 0
-      ? Array.from({ length: chapters }, (_, i) => `
-          <button class="part-row ${i === chapters - 1 ? "is-current" : ""}" data-toast="Open this chapter in the editor.">
-            <span class="part-n">${i + 1}</span><span class="part-title">Chapter ${i + 1}</span>
+    const liveChs = editingLive && liveEditor && liveEditor.allChapters ? liveEditor.allChapters : null;
+    const partsHTML = liveChs
+      ? liveChs.map(c => `
+          <button class="part-row ${liveEditor.chapter && c.id === liveEditor.chapter.id ? "is-current" : ""}" data-edit-chapter="${c.number}">
+            <span class="part-n">${c.number}</span><span class="part-title">${c.title ? esc(c.title) : "Chapter " + c.number}${c.published ? "" : " &middot; draft"}</span>
           </button>`).join("")
-      : `<p class="muted" style="font-size:13px;margin:0">No chapters yet. Your first one starts in the editor.</p>`;
+      : (chapters > 0
+        ? Array.from({ length: chapters }, (_, i) => `
+            <button class="part-row ${i === chapters - 1 ? "is-current" : ""}" data-toast="Open this chapter in the editor.">
+              <span class="part-n">${i + 1}</span><span class="part-title">Chapter ${i + 1}</span>
+            </button>`).join("")
+        : `<p class="muted" style="font-size:13px;margin:0">No chapters yet. Your first one starts in the editor.</p>`);
 
     const typeFields = type === "fan"
       ? `<div class="field"><label>Fandom</label><input type="text" id="we-source" value="${esc(source)}"></div>
@@ -1344,7 +1357,7 @@
             <div class="panel">
               <h4>Chapters</h4>
               <div class="parts">${partsHTML}</div>
-              <button class="btn--link" style="margin-top:10px" data-toast="A new chapter is added to this work.">${icon("plus",13)} New chapter</button>
+              <button class="btn--link" style="margin-top:10px" ${editingLive ? "data-new-chapter" : `data-toast="Publish this work first, then you can add chapters."`}>${icon("plus",13)} New chapter</button>
             </div>
 
             <div class="panel">
@@ -2052,28 +2065,36 @@
     }
   }
 
-  async function loadReading(id) {
+  function releasedChapters(chapters) {
+    const now = Date.now();
+    return (chapters || []).filter(c => c.published || (c.scheduled_for && new Date(c.scheduled_for).getTime() <= now))
+      .sort((a, b) => a.number - b.number);
+  }
+  async function loadReading(id, chapterNum) {
     loadingScreen("#screen-reading");
     let w = null;
     try {
       w = await WispDB.getWork(id);
       LIVE.byId[id] = w;
-      LIVE.chapters[id] = await WispDB.getChapters(id).catch(() => []);
-      const grouped = {};
+      const chs = await WispDB.getChapters(id).catch(() => []);
+      LIVE.chapters[id] = chs;
+      // Comments grouped per chapter, then per paragraph (chapters must not mix).
+      chs.forEach(c => { delete LIVE.comments[c.id]; });
       (await WispDB.getComments(id).catch(() => [])).forEach(r => {
-        const k = r.paragraph_index == null ? -1 : r.paragraph_index;
-        (grouped[k] = grouped[k] || []).push(r);
+        const cid = r.chapter_id || "_"; const k = r.paragraph_index == null ? -1 : r.paragraph_index;
+        const byCh = (LIVE.comments[cid] = LIVE.comments[cid] || {});
+        (byCh[k] = byCh[k] || []).push(r);
       });
-      LIVE.comments[id] = grouped;
-      const shownCh = (LIVE.chapters[id].filter(c => c.published)[0]) || LIVE.chapters[id][0];
-      if (shownCh) LIVE.reactions[shownCh.id] = await WispDB.getReactions(shownCh.id).catch(() => ({}));
+      const readable = releasedChapters(chs);
+      const target = (chapterNum && readable.find(c => c.number === +chapterNum)) || readable[0];
+      if (target) LIVE.reactions[target.id] = await WispDB.getReactions(target.id).catch(() => ({}));
     } catch (e) {
       const dw = W.byId[id];                                // fall back to a demo/sample chapter
       if (needsGate(dw)) { showGate(dw, () => renderReading(id)); return; }
       renderReading(id || "amber"); return;
     }
-    if (needsGate(w)) { showGate(w, () => renderReading(id)); return; }
-    renderReading(id);
+    if (needsGate(w)) { showGate(w, () => renderReading(id, chapterNum)); return; }
+    renderReading(id, chapterNum);
   }
 
   /* ---- writing desk (live) ----------------------------------------------- */
@@ -2207,20 +2228,33 @@
     } catch (e) { console.error("[wisp] my-works load failed:", e); renderLiveDashboard([], []); }
   }
 
-  async function loadWriteEditor(id) {
+  async function loadWriteEditor(id, chapterNum) {
     if (!WispDB.signedIn) { renderWriteSignedOut(); return; }
     loadingScreen("#screen-write");
     try {
-      const [work, chapter, series] = await Promise.all([
+      const [work, chapters, series] = await Promise.all([
         WispDB.getWork(id),
-        WispDB.firstChapter(id).catch(() => null),
+        WispDB.getChapters(id).catch(() => []),
         WispDB.mySeries().catch(() => [])
       ]);
       LIVE.series = series;
+      const ordered = chapters.slice().sort((a, b) => a.number - b.number);
+      const chapter = (chapterNum && ordered.find(c => c.number === +chapterNum)) || ordered[0] || null;
       const s = work.seriesId ? series.find(x => x.id === work.seriesId) : null;
-      liveEditor = { work, chapter, seriesName: s ? s.name : "" };
+      liveEditor = { work, chapter, allChapters: ordered, seriesName: s ? s.name : "" };
       renderWriteEditor(work);
     } catch (e) { liveEditor = null; toast("Could not open that work."); loadWriteDashboard(); }
+  }
+  async function addNewChapter() {
+    if (!liveEditor || !liveEditor.work) return;
+    const id = liveEditor.work.id;
+    const nums = (liveEditor.allChapters || []).map(c => c.number);
+    const next = (nums.length ? Math.max.apply(null, nums) : 0) + 1;
+    try {
+      await WispDB.saveChapter(id, { number: next, title: "", body: "", published: false });
+      toast("New chapter added.");
+      navigate("write/" + id + "/" + next);
+    } catch (e) { toast((e && e.message) || "Could not add a chapter."); }
   }
   function liveWorkMenu(id) {
     const b = (LIVE.desk || []).find(x => x.id === id) || LIVE.byId[id] || {};
@@ -2333,7 +2367,8 @@
 
   function route() {
     const hash = location.hash.replace(/^#\/?/, "");
-    const [seg, arg] = hash.split("/");
+    const parts = hash.split("/");
+    const seg = parts[0], arg = parts[1], arg2 = parts[2];
     let screen = SCREENS.includes(seg) ? seg : "home";
     if (seg === "read") screen = "reading";
 
@@ -2343,7 +2378,7 @@
 
     const live = isLive();
     if (screen === "reading") {
-      if (live) { loadReading(arg || ""); return; }
+      if (live) { loadReading(arg || "", arg2); return; }
       const id = arg || "amber"; const w = W.byId[id];
       if (needsGate(w)) { showGate(w, () => renderReading(id)); return; }
       renderReading(id);
@@ -2355,7 +2390,7 @@
       if (!live) renderWrite(arg);
       else if (!arg) loadWriteDashboard();
       else if (arg === "new") { liveEditor = null; editorCover = null; renderWriteEditor(null); }
-      else loadWriteEditor(arg);
+      else loadWriteEditor(arg, arg2);
     }
     else if (screen === "library") { LIVE.viewingList = null; renderLibrary(); }
     else if (screen === "community") { live ? loadCommunity() : renderCommunity(); }
@@ -2398,6 +2433,10 @@
     if (pub) { handlePublish(pub.dataset.publish); return; }
     const sched = e.target.closest("[data-schedule]");
     if (sched) { openScheduleDialog(); return; }
+    const editCh = e.target.closest("[data-edit-chapter]");
+    if (editCh) { if (liveEditor && liveEditor.work) navigate("write/" + liveEditor.work.id + "/" + editCh.dataset.editChapter); return; }
+    const newCh = e.target.closest("[data-new-chapter]");
+    if (newCh) { addNewChapter(); return; }
 
     const read = e.target.closest("[data-read]");
     if (read) { navigate("read/" + read.dataset.read); return; }
@@ -2731,7 +2770,7 @@
           id: liveEditor.chapter ? liveEditor.chapter.id : null,
           number: liveEditor.chapter ? liveEditor.chapter.number : 1,
           title: liveEditor.chapter ? liveEditor.chapter.title : "",
-          body, published: status === "ongoing" || status === "complete", scheduled_for
+          body, published: kind === "publish", scheduled_for      // this chapter's own state
         });
         await WispDB.setTags(id, tags);
         toast(kind === "schedule" ? "Scheduled. It releases at the time you set."
