@@ -67,8 +67,14 @@ window.WispDB = (function () {
   async function init() {
     if (!configured) return { enabled: false };
     try {
-      const mod = await import("https://esm.sh/@supabase/supabase-js@2");
-      client = mod.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+      // Prefer the client bundled with the site (assets/js/vendor/supabase.js);
+      // fall back to a CDN import only if that script did not load.
+      let createClient = (window.supabase && window.supabase.createClient) || null;
+      if (!createClient) {
+        const mod = await import("https://esm.sh/@supabase/supabase-js@2");
+        createClient = mod.createClient;
+      }
+      client = createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
       client.auth.onAuthStateChange((_event, session) => { refreshUser(session); });
       const { data } = await client.auth.getSession();
       await refreshUser(data ? data.session : null);
