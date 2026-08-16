@@ -514,7 +514,7 @@
               <button class="btn btn--quiet ${userState.subscribed.has(w.id) ? "is-on-quiet" : ""}" data-toggle="subscribe" aria-pressed="${userState.subscribed.has(w.id)}">${icon("bell",16)}<span class="toggle-label">${userState.subscribed.has(w.id) ? "Subscribed" : "Subscribe"}</span></button>
               <button class="btn btn--quiet ${userState.bookmarked.has(w.id) ? "is-on-quiet" : ""}" data-toggle="bookmark" aria-pressed="${userState.bookmarked.has(w.id)}">${icon("bookmark",16)}<span class="toggle-label">${userState.bookmarked.has(w.id) ? "Bookmarked" : "Bookmark"}</span></button>
               <button class="btn btn--quiet" data-share="${w.id}">${icon("share",16)} Share</button>
-              <button class="btn btn--quiet" data-toast="Download as EPUB, PDF, or HTML. Downloads are free.">${icon("download",16)} Download</button>
+              <button class="btn btn--quiet" data-download="${w.id}">${icon("download",16)} Download</button>
               <button class="btn btn--quiet" data-work-overflow="${w.id}" aria-label="More options">${icon("more",16)}</button>
             </div>
             ${w.hideStats ? "" : `<div class="card__stats" style="border:0;max-width:420px;padding:0">
@@ -822,6 +822,189 @@
 
   // A small handle so the markdown pipeline can be exercised by tests.
   window.WispMD = { inline: mdInline, blocks: mdToHtmlBlocks, toMd: editorHtmlToMd };
+
+  // ---- Download / export ---------------------------------------------------
+  // Readers can keep any work as EPUB (for e-readers), a single HTML page,
+  // plain text, or print it to PDF. All built in the browser, no server.
+  function mdToPlainText(body) {
+    return String(body || "").replace(/\r\n/g, "\n")
+      .replace(/^#{1,6}\s+/gm, "")
+      .replace(/^>\s?/gm, "")
+      .replace(/^[-*]\s+/gm, "• ")
+      .replace(/^(-{3,}|\*{3,}|_{3,})$/gm, "———")
+      .replace(/\*\*([^*]+?)\*\*/g, "$1").replace(/__([^_]+?)__/g, "$1")
+      .replace(/(^|[^*\w])\*(?!\s)([^*]+?)\*(?!\*)/g, "$1$2")
+      .replace(/(^|[^_\w])_(?!\s)([^_]+?)_(?!_)/g, "$1$2")
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, "$1 ($2)")
+      .trim();
+  }
+
+  const CRC_TABLE = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; }
+    return t;
+  })();
+  function crc32(bytes) {
+    let crc = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) crc = CRC_TABLE[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  // Minimal ZIP writer, store method (no compression) so it needs no library.
+  function zipStore(files) {
+    const enc = new TextEncoder();
+    const u16 = n => [n & 0xFF, (n >>> 8) & 0xFF];
+    const u32 = n => [n & 0xFF, (n >>> 8) & 0xFF, (n >>> 16) & 0xFF, (n >>> 24) & 0xFF];
+    const parts = [], central = [];
+    let offset = 0;
+    for (const f of files) {
+      const name = enc.encode(f.name);
+      const data = f.data instanceof Uint8Array ? f.data : enc.encode(f.data);
+      const crc = crc32(data);
+      const header = [...u32(0x04034b50), ...u16(20), ...u16(0), ...u16(0), ...u16(0), ...u16(0),
+        ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(name.length), ...u16(0)];
+      parts.push(new Uint8Array(header), name, data);
+      central.push({ name, crc, len: data.length, offset });
+      offset += header.length + name.length + data.length;
+    }
+    const centralStart = offset;
+    for (const c of central) {
+      const cd = [...u32(0x02014b50), ...u16(20), ...u16(20), ...u16(0), ...u16(0), ...u16(0), ...u16(0),
+        ...u32(c.crc), ...u32(c.len), ...u32(c.len), ...u16(c.name.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(c.offset)];
+      parts.push(new Uint8Array(cd), c.name);
+      offset += cd.length + c.name.length;
+    }
+    const centralSize = offset - centralStart;
+    const end = [...u32(0x06054b50), ...u16(0), ...u16(0), ...u16(central.length), ...u16(central.length),
+      ...u32(centralSize), ...u32(centralStart), ...u16(0)];
+    parts.push(new Uint8Array(end));
+    let total = 0; parts.forEach(p => total += p.length);
+    const out = new Uint8Array(total);
+    let pos = 0; parts.forEach(p => { out.set(p, pos); pos += p.length; });
+    return out;
+  }
+
+  const EXPORT_CSS = "html{font-family:Georgia,'Iowan Old Style',serif;color:#2b2622;background:#fbf9f5;line-height:1.7}" +
+    "body{max-width:40em;margin:0 auto;padding:48px 22px 80px}" +
+    "h1{font-size:1.9em;line-height:1.2;margin:0 0 .2em}.by{color:#8a7f74;margin:0 0 2.4em;font-style:italic}" +
+    ".summary{color:#5b5147;font-style:italic;border-left:3px solid #d9a7a0;padding-left:14px;margin:0 0 2.4em}" +
+    ".ch{margin:0 0 3em}.ch h2{font-size:1.35em;margin:2em 0 .8em}" +
+    "blockquote{border-left:3px solid #d9a7a0;padding-left:16px;color:#5b5147;font-style:italic;margin:0 0 1.2em}" +
+    "hr{border:0;height:1px;background:#e4ddd2;width:60%;margin:2.4em auto}a{color:#b06a60}" +
+    "code{font-family:ui-monospace,Menlo,monospace;font-size:.9em;background:#f0ebe2;border-radius:4px;padding:.1em .35em}" +
+    "footer{margin-top:4em;color:#a89e92;font-size:.85em;text-align:center}@media print{body{padding:0}a{color:inherit}}";
+
+  function buildWorkHtml(work, chapters) {
+    const chHtml = chapters.map(c =>
+      `<section class="ch"><h2>Chapter ${c.number}${c.title ? ": " + esc(c.title) : ""}</h2>\n${mdToHtmlBlocks(c.body).join("\n")}</section>`
+    ).join("\n");
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
+      `<meta name="viewport" content="width=device-width,initial-scale=1">` +
+      `<title>${esc(work.title)}</title><style>${EXPORT_CSS}</style></head><body>` +
+      `<h1>${esc(work.title)}</h1><p class="by">by ${esc(work.author)}</p>` +
+      (work.summary ? `<p class="summary">${esc(work.summary)}</p>` : "") +
+      chHtml +
+      `<footer>Saved from Wisp.</footer></body></html>`;
+  }
+
+  function buildPlainText(work, chapters) {
+    const header = `${work.title}\nby ${work.author}\n`;
+    const body = chapters.map(c => `\n\nChapter ${c.number}${c.title ? ": " + c.title : ""}\n\n${mdToPlainText(c.body)}`).join("");
+    return header + body.trim() + "\n\nSaved from Wisp.\n";
+  }
+
+  function xhtmlBlocks(body) {
+    return mdToHtmlBlocks(body).join("\n").replace(/<hr>/g, "<hr/>").replace(/<br>/g, "<br/>");
+  }
+
+  function buildEpub(work, chapters) {
+    const enc = new TextEncoder();
+    const files = [{ name: "mimetype", data: enc.encode("application/epub+zip") }];
+    files.push({ name: "META-INF/container.xml", data:
+      `<?xml version="1.0" encoding="UTF-8"?>\n<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">\n <rootfiles>\n  <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>\n </rootfiles>\n</container>` });
+    const chFiles = chapters.map(c => ({
+      id: `ch${c.number}`, href: `chapter-${c.number}.xhtml`,
+      title: `Chapter ${c.number}${c.title ? ": " + c.title : ""}`,
+      xhtml: `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en"><head><meta charset="utf-8"/><title>${esc(c.title || ("Chapter " + c.number))}</title></head><body><h2>Chapter ${c.number}${c.title ? ": " + esc(c.title) : ""}</h2>\n${xhtmlBlocks(c.body)}</body></html>`
+    }));
+    chFiles.forEach(cf => files.push({ name: `OEBPS/${cf.href}`, data: cf.xhtml }));
+    const uid = "urn:wisp:" + String(work.id || work.title).replace(/[^a-z0-9]/gi, "");
+    const manifest = chFiles.map(cf => `<item id="${cf.id}" href="${cf.href}" media-type="application/xhtml+xml"/>`).join("\n    ");
+    const spine = chFiles.map(cf => `<itemref idref="${cf.id}"/>`).join("\n    ");
+    files.push({ name: "OEBPS/content.opf", data:
+      `<?xml version="1.0" encoding="UTF-8"?>\n<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="pub-id">${esc(uid)}</dc:identifier><dc:title>${esc(work.title)}</dc:title><dc:creator>${esc(work.author)}</dc:creator><dc:language>en</dc:language><meta property="dcterms:modified">2026-01-01T00:00:00Z</meta></metadata><manifest>\n    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>\n    ${manifest}\n  </manifest><spine>\n    ${spine}\n  </spine></package>` });
+    const navItems = chFiles.map(cf => `<li><a href="${cf.href}">${esc(cf.title)}</a></li>`).join("\n     ");
+    files.push({ name: "OEBPS/nav.xhtml", data:
+      `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="en"><head><meta charset="utf-8"/><title>Contents</title></head><body><nav epub:type="toc" id="toc"><h1>Contents</h1><ol>\n     ${navItems}\n    </ol></nav></body></html>` });
+    return zipStore(files);
+  }
+
+  function downloadBlob(filename, mime, data) {
+    const blob = new Blob([data], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1500);
+  }
+
+  function printWork(work, chapters) {
+    const win = window.open("", "_blank");
+    if (!win) { toast("Allow pop-ups to print or save as PDF."); return; }
+    win.document.open();
+    win.document.write(buildWorkHtml(work, chapters));
+    win.document.close();
+    win.focus();
+    setTimeout(() => { try { win.print(); } catch (e) {} }, 350);
+  }
+
+  // Collect a work's released chapters (real text) for export; fall back to the
+  // summary for sample works that have no readable body yet.
+  function gatherExport(id) {
+    const w = activeById(id);
+    if (!w) return null;
+    const raw = releasedChapters((LIVE.chapters[id] || []).slice());
+    let chapters = raw.map(c => ({ number: c.number, title: c.title || "", body: c.body || "" }))
+      .filter(c => c.body && c.body.trim());
+    if (!chapters.length) chapters = [{ number: 1, title: "", body: w.summary || "This work has no readable chapters yet." }];
+    return { work: w, chapters };
+  }
+
+  function slugify(s) {
+    return (String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60)) || "wisp-work";
+  }
+
+  function openDownload(id) {
+    const data = gatherExport(id);
+    if (!data) { toast("Could not prepare this work for download."); return; }
+    const slug = slugify(data.work.title);
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <h2 style="font-size:20px">Download</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <p class="soft" style="font-size:14px;margin:0 0 16px">&ldquo;${esc(data.work.title)}&rdquo; · ${data.chapters.length} chapter${data.chapters.length === 1 ? "" : "s"}. Yours to keep, free.</p>
+      <div class="dl-grid">
+        <button class="btn btn--quiet" data-dl="epub">${icon("book",16)} EPUB</button>
+        <button class="btn btn--quiet" data-dl="html">${icon("download",16)} HTML page</button>
+        <button class="btn btn--quiet" data-dl="text">${icon("download",16)} Plain text</button>
+        <button class="btn btn--quiet" data-dl="pdf">${icon("download",16)} Print or PDF</button>
+      </div>`, "Download");
+    $("#modalCard").querySelectorAll("[data-dl]").forEach(b => b.addEventListener("click", () => {
+      const kind = b.dataset.dl;
+      try {
+        if (kind === "epub") downloadBlob(slug + ".epub", "application/epub+zip", buildEpub(data.work, data.chapters));
+        else if (kind === "html") downloadBlob(slug + ".html", "text/html;charset=utf-8", buildWorkHtml(data.work, data.chapters));
+        else if (kind === "text") downloadBlob(slug + ".txt", "text/plain;charset=utf-8", buildPlainText(data.work, data.chapters));
+        else if (kind === "pdf") { printWork(data.work, data.chapters); return; }
+        closeModal();
+        toast("Saved to your device.");
+      } catch (e) { toast((e && e.message) || "Could not build that file."); }
+    }));
+  }
+
+  window.WispExport = { epub: buildEpub, html: buildWorkHtml, text: buildPlainText, plain: mdToPlainText, crc32, zip: zipStore };
 
   // Reader for a real, database-backed work. Full reading chrome and per-line
   // comments; the seeded reaction demo stays on the sample chapter.
@@ -2724,6 +2907,8 @@
     if (wo) { workOverflow(wo.dataset.workOverflow); return; }
     const shr = e.target.closest("[data-share]");
     if (shr) { copyLink(shr.dataset.share); return; }
+    const dl = e.target.closest("[data-download]");
+    if (dl) { openDownload(dl.dataset.download); return; }
 
     const edit = e.target.closest("[data-edit]");
     if (edit) { navigate("write/" + edit.dataset.edit); return; }

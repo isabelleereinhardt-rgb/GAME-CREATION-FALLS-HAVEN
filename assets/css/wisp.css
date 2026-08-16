@@ -674,6 +674,11 @@ a.card__title:hover { color: var(--rose-ink); }
 .prose em { font-style: italic; }
 .prose--preview { max-height: 62vh; overflow-y: auto; }
 
+/* Download picker grid. */
+.dl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dl-grid .btn { justify-content: flex-start; gap: 8px; }
+@media (max-width: 480px) { .dl-grid { grid-template-columns: 1fr; } }
+
 .para { position: relative; }
 .para__marker {
   position: absolute; left: -34px; top: .32em; width: 26px;
