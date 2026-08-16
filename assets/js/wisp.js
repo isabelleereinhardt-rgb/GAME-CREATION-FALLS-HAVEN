@@ -517,11 +517,11 @@
               <button class="btn btn--quiet" data-toast="Download as EPUB, PDF, or HTML. Downloads are free.">${icon("download",16)} Download</button>
               <button class="btn btn--quiet" data-work-overflow="${w.id}" aria-label="More options">${icon("more",16)}</button>
             </div>
-            <div class="card__stats" style="border:0;max-width:420px;padding:0">
+            ${w.hideStats ? "" : `<div class="card__stats" style="border:0;max-width:420px;padding:0">
               <span class="stat stat--heart">${icon("heart",15)}${w.hearts} hearts</span>
               <span class="stat">${icon("comment",15)}${w.comments}</span>
               <span class="stat">${icon("eye",15)}${w.reads}</span>
-            </div>
+            </div>`}
           </div>
         </div>
 
@@ -704,6 +704,15 @@
   // comments; the seeded reaction demo stays on the sample chapter.
   function renderLiveReading(w, chapters, chapterNum) {
     markVisited(w.id);
+    if (w.loggedInOnly && !WispDB.signedIn) {
+      $("#screen-reading").innerHTML = `<div class="reader"><div class="reader__wrap" style="text-align:center;padding:60px 20px">
+        <h1 class="reader__title">${esc(w.title)}</h1>
+        <p class="soft" style="font-size:15px;margin:14px 0 18px">The author made this work readable only to signed-in readers.</p>
+        <button class="btn btn--primary" data-auth="in">Sign in to read</button>
+      </div></div>`;
+      return;
+    }
+    const commentsOn = w.commentsEnabled !== false;
     const readable = releasedChapters(chapters);
     const ch = (chapterNum && readable.find(c => c.number === +chapterNum)) || readable[0] || chapters[0] || null;
     const idx = ch ? readable.findIndex(c => c.number === ch.number) : -1;
@@ -716,7 +725,7 @@
       ? paras.map((t, i) => {
           const n = (byPara[i] || []).length;
           return `<div class="para" data-lpara="${i}">
-            <button class="para__marker" data-lmark="${i}" aria-label="Open the conversation on this line">${icon("comment",15)}${n ? `<span class="para__count">${n}</span>` : ""}</button>
+            ${commentsOn ? `<button class="para__marker" data-lmark="${i}" aria-label="Open the conversation on this line">${icon("comment",15)}${n ? `<span class="para__count">${n}</span>` : ""}</button>` : ""}
             <p>${esc(t)}</p>
             <div class="thread-slot" data-lslot="${i}"></div>
           </div>`;
@@ -1408,11 +1417,9 @@
 
             <div class="panel">
               <h4>Per-work controls</h4>
-              <div class="toggle-row"><span>Allow inline comments</span><label class="switch"><input type="checkbox" checked aria-label="Allow inline comments"><span class="track"></span><span class="knob"></span></label></div>
-              <div class="toggle-row"><span>Moderate before posting</span><label class="switch"><input type="checkbox" aria-label="Moderate before posting"><span class="track"></span><span class="knob"></span></label></div>
-              <div class="toggle-row"><span>Logged-in readers only</span><label class="switch"><input type="checkbox" aria-label="Logged-in readers only"><span class="track"></span><span class="knob"></span></label></div>
-              <div class="toggle-row"><span>Post anonymously</span><label class="switch"><input type="checkbox" aria-label="Post anonymously"><span class="track"></span><span class="knob"></span></label></div>
-              <div class="toggle-row"><span>Hide my numbers</span><label class="switch"><input type="checkbox" aria-label="Hide my numbers"><span class="track"></span><span class="knob"></span></label></div>
+              <div class="toggle-row"><span>Allow inline comments</span><label class="switch"><input type="checkbox" id="we-comments" ${(editingLive ? work.commentsEnabled !== false : true) ? "checked" : ""} aria-label="Allow inline comments"><span class="track"></span><span class="knob"></span></label></div>
+              <div class="toggle-row"><span>Logged-in readers only</span><label class="switch"><input type="checkbox" id="we-loggedin" ${editingLive && work.loggedInOnly ? "checked" : ""} aria-label="Logged-in readers only"><span class="track"></span><span class="knob"></span></label></div>
+              <div class="toggle-row"><span>Hide my numbers</span><label class="switch"><input type="checkbox" id="we-hidestats" ${editingLive && work.hideStats ? "checked" : ""} aria-label="Hide my numbers"><span class="track"></span><span class="knob"></span></label></div>
             </div>
 
             <div class="panel">
@@ -2821,6 +2828,8 @@
     const rateBtn = $("#screen-write [data-wrate].is-on"); const rating = rateBtn ? rateBtn.dataset.wrate : "G";
     const tags = val("#we-tags").split(",").map(s => s.trim()).filter(Boolean);
     const warnings = $$("#screen-write [data-warn]:checked").map(el => el.dataset.warn);
+    const chk = (id) => { const e = $(id); return e ? !!e.checked : undefined; };
+    const controls = { comments_enabled: chk("#we-comments"), logged_in_only: chk("#we-loggedin"), hide_stats: chk("#we-hidestats") };
     const source = val("#we-source");
     const seriesName = val("#we-series");
     const scheduled_for = kind === "schedule" ? scheduleTime : null;
@@ -2842,7 +2851,8 @@
       if (liveEditor && liveEditor.work) {
         // Editing an existing work: update its fields, its first chapter, and tags.
         const id = liveEditor.work.id;
-        const fields = { title, type, source, rating, status, series_id, warnings };
+        const fields = { title, type, source, rating, status, series_id, warnings,
+          comments_enabled: controls.comments_enabled, logged_in_only: controls.logged_in_only, hide_stats: controls.hide_stats };
         if (editorCover) fields.cover_image_url = editorCover;
         else if (coverCleared) fields.cover_image_url = null;   // revert to the letter cover
         await WispDB.updateWork(id, fields);
@@ -2860,7 +2870,8 @@
         let book_number;
         if (series_id) book_number = (await WispDB.countInSeries(series_id).catch(() => 0)) + 1;
         await WispDB.createWork({ title, type, source, rating, tags, warnings, chapterBody: body, status,
-          cover_image_url: editorCover, series_id, book_number, scheduled_for });
+          cover_image_url: editorCover, series_id, book_number, scheduled_for,
+          comments_enabled: controls.comments_enabled, logged_in_only: controls.logged_in_only, hide_stats: controls.hide_stats });
         toast(kind === "schedule" ? "Scheduled. It releases at the time you set."
           : kind === "draft" ? "Draft saved to your account." : "Published. It is now in your works.");
       }

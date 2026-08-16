@@ -59,6 +59,9 @@ window.WispDB = (function () {
       format: row.format || "prose",
       seriesId: row.series_id || null,
       bookNumber: row.book_number || null,
+      commentsEnabled: row.comments_enabled !== false,
+      loggedInOnly: !!row.logged_in_only,
+      hideStats: !!row.hide_stats,
       _dbStatus: row.status,
       _db: true
     };
@@ -179,6 +182,7 @@ window.WispDB = (function () {
     if (f.series_id !== undefined) row.series_id = f.series_id;
     if (f.book_number !== undefined) row.book_number = f.book_number;
     if (f.schedule !== undefined) row.schedule = f.schedule;
+    ["comments_enabled", "logged_in_only", "hide_stats"].forEach(k => { if (f[k] !== undefined) row[k] = f[k]; });
     const { data, error } = await client.from("works").insert(row).select().single();
     if (error) throw error;
     if (f.chapterBody != null) {
@@ -205,7 +209,8 @@ window.WispDB = (function () {
     if (!user) throw new Error("Sign in first.");
     const patch = {};
     ["title","type","source","summary","rating","status","cover_color","cover_image_url",
-     "warnings","series_id","book_number","schedule","format"].forEach(k => {
+     "warnings","series_id","book_number","schedule","format",
+     "comments_enabled","logged_in_only","hide_stats"].forEach(k => {
       if (fields[k] !== undefined) patch[k] = fields[k];
     });
     patch.updated_at = new Date().toISOString();
