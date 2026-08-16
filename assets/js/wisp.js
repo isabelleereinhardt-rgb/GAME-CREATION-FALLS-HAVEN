@@ -37,7 +37,9 @@
   const LIVE = { works: [], byId: {}, chapters: {}, comments: {}, series: [] };
   let liveEditor = null;   // { work, chapter } when editing a real work, else null
   let editorCover = null;  // uploaded cover URL for the current editor session
+  let coverCleared = false; // true when the author removed an existing cover
   let pendingSeries = null; // series name to prefill when starting a new book in a series
+  let guestBrowsing = false; // set when a visitor chooses to look around without an account
   function isLive() { return !!(window.WispDB && WispDB.enabled); }
   function activeWorks() { return isLive() ? LIVE.works : W.WORKS; }
   function activeById(id) { return LIVE.byId[id] || W.byId[id]; }   // live wins; demo fills curated links
@@ -1077,6 +1079,7 @@
     const tagsValue = editingLive ? (work.tags || []).join(", ") : "";
     const coverIsImage = editingLive && work.cover && /^https?:/.test(work.cover);
     editorCover = coverIsImage ? work.cover : null;
+    coverCleared = false;
 
     // The editor holds one chapter at a time. Live edits load the real text;
     // otherwise the editor opens on a fresh chapter.
@@ -1174,10 +1177,11 @@
               <h4>Cover</h4>
               <label class="cover-drop" id="coverDrop" for="we-cover-file">
                 <input type="file" id="we-cover-file" accept="image/*" hidden>
-                ${icon("plus",18)}<div style="margin-top:6px">${coverIsImage ? "Replace cover" : "Upload a cover"}</div>
+                ${icon("plus",18)}<div style="margin-top:6px" id="coverDropText">${coverIsImage ? "Replace cover" : "Upload a cover"}</div>
                 <div style="font-size:11px;margin-top:2px">Required to publish</div>
               </label>
               <div id="coverPreview" style="margin-top:10px">${coverIsImage ? `<img src="${esc(work.cover)}" alt="Cover preview" style="width:100%;border-radius:10px;display:block">` : ""}</div>
+              <button class="btn--link" id="coverRemove" style="margin-top:8px;color:#a2444f;${coverIsImage ? "" : "display:none"}">Remove cover</button>
             </div>
 
             <div class="panel">
@@ -1214,12 +1218,23 @@
       const drop = $("#coverDrop"); if (drop) drop.style.opacity = "0.6";
       try {
         const url = await WispDB.uploadCover(file);
-        editorCover = url;
+        editorCover = url; coverCleared = false;
         const prev = $("#coverPreview");
         if (prev) prev.innerHTML = `<img src="${esc(url)}" alt="Cover preview" style="width:100%;border-radius:10px;display:block">`;
+        const rm = $("#coverRemove"); if (rm) rm.style.display = "";
+        const dt = $("#coverDropText"); if (dt) dt.textContent = "Replace cover";
         toast("Cover uploaded.");
       } catch (e) { toast((e && e.message) || "Could not upload the cover."); }
       finally { if (drop) drop.style.opacity = ""; }
+    });
+    const coverRemove = $("#coverRemove");
+    if (coverRemove) coverRemove.addEventListener("click", () => {
+      editorCover = null; coverCleared = true;
+      if (coverInput) coverInput.value = "";
+      const prev = $("#coverPreview"); if (prev) prev.innerHTML = "";
+      coverRemove.style.display = "none";
+      const dt = $("#coverDropText"); if (dt) dt.textContent = "Upload a cover";
+      toast("Cover removed. It reverts to the title-letter cover when you save.");
     });
   }
 
@@ -1285,14 +1300,14 @@
 
         <div class="shelf">
           <div class="shelf__head"><span class="shelf__title">Events and challenges</span><span class="muted" style="font-size:13px">Only events you have joined show up on Home</span></div>
-          ${W.EVENTS.map(e => `
+          ${W.EVENTS.map((e, i) => `
             <div class="event">
               <div class="event__date"><b>${e.d}</b><span class="muted" style="font-size:12px">${e.m}</span></div>
               <div style="flex:1">
                 <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="font:600 18px var(--font-display);color:var(--ink)">${esc(e.title)}</span><span class="pill">${esc(e.kind)}</span></div>
                 <p class="soft" style="font-size:14px;margin:6px 0 0;line-height:1.6">${esc(e.note)}</p>
               </div>
-              <button class="btn ${e.joined ? "btn--quiet" : "btn--ghost"} btn--sm" data-toast="${e.joined ? "Left the event." : "Joined. It'll show on your home."}">${e.joined ? "Joined" : "Join"}</button>
+              <button class="btn ${e.joined ? "btn--quiet" : "btn--ghost"} btn--sm" data-event="${i}" aria-pressed="${e.joined}">${e.joined ? "Joined" : "Join"}</button>
             </div>`).join("")}
           <p class="muted" style="font-size:12.5px;margin-top:10px">Collections now; full gift exchanges will come as the community grows.</p>
         </div>
@@ -1965,8 +1980,17 @@
     if (asb) { pendingSeries = asb.dataset.addSeriesBook; navigate("write/new"); return; }
     const nsr = e.target.closest("[data-new-series]");
     if (nsr) { newLiveSeries(); return; }
+    const ev = e.target.closest("[data-event]");
+    if (ev) {
+      const i = +ev.dataset.event; const evt = W.EVENTS[i]; if (!evt) return;
+      evt.joined = !evt.joined;
+      toast(evt.joined ? "Joined. It'll show on your home." : "Left the event.");
+      renderCommunity(); return;
+    }
     const au = e.target.closest("[data-auth]");
     if (au) { openAuth(au.dataset.auth || "in"); return; }
+    const guest = e.target.closest("[data-guest]");
+    if (guest) { guestBrowsing = true; hideAuthGate(); navigate("home"); return; }
 
     const work = e.target.closest("[data-work]");
     if (work && !e.target.closest("[data-read]")) { navigate("work/" + work.dataset.work); return; }
@@ -2073,9 +2097,38 @@
   /* ======================================================================= */
   /*  ACCOUNTS  ·  sign in / sign up (real when Supabase is connected)        */
   /* ======================================================================= */
+  // A full-screen welcome gate shown before the app when the site is connected
+  // to a backend and nobody is signed in (the hard sign-in wall).
+  function renderAuthGate() {
+    const el = $("#authGate"); if (!el) return;
+    el.innerHTML = `
+      <div class="authgate__panel">
+        <div class="authgate__brand">WISP</div>
+        <p class="authgate__tag">Read stories together instead of alone.</p>
+        <p class="authgate__lead">A quiet home for fanfiction and original fiction, where the point is the conversation: talk line by line in the margins, follow the writers you love, and keep control of what you see.</p>
+        <div class="authgate__actions">
+          <button class="btn btn--primary btn--full" data-auth="up">Create an account</button>
+          <button class="btn btn--quiet btn--full" data-auth="in">Sign in</button>
+        </div>
+        <button class="btn--link authgate__guest" data-guest>Look around first</button>
+      </div>`;
+    el.classList.add("is-open");
+    const app = $("#app"); if (app) app.setAttribute("inert", "");
+  }
+  function hideAuthGate() {
+    const el = $("#authGate"); if (el) { el.classList.remove("is-open"); el.innerHTML = ""; }
+    const app = $("#app"); if (app) app.removeAttribute("inert");
+  }
+  function updateAuthGate() {
+    if (!window.WispDB || !WispDB.enabled) { hideAuthGate(); return; }   // demo: no gate
+    if (WispDB.signedIn || guestBrowsing) hideAuthGate();
+    else renderAuthGate();
+  }
+
   function syncAuthHeader() {
     const link = $("#signOutBtn"); const avatar = $(".avatar-btn");
     if (!window.WispDB || !WispDB.enabled) return;             // demo mode: leave the header as-is
+    updateAuthGate();
     if (WispDB.signedIn) {
       const name = (WispDB.profile && WispDB.profile.display_name) || "You";
       if (link) link.textContent = "Sign out";
@@ -2160,6 +2213,7 @@
         const id = liveEditor.work.id;
         const fields = { title, type, source, rating, status, series_id };
         if (editorCover) fields.cover_image_url = editorCover;
+        else if (coverCleared) fields.cover_image_url = null;   // revert to the letter cover
         await WispDB.updateWork(id, fields);
         await WispDB.saveChapter(id, {
           id: liveEditor.chapter ? liveEditor.chapter.id : null,
@@ -2194,7 +2248,7 @@
     $("#themeScrim").addEventListener("click", (e) => { if (e.target.id === "themeScrim") closeTheme(); });
     $("#signOutBtn").addEventListener("click", () => {
       if (!window.WispDB || !WispDB.enabled) { toast("Sign out isn't wired up in demo mode. Connect Supabase to enable accounts."); return; }
-      if (WispDB.signedIn) WispDB.signOut().then(() => toast("Signed out."));
+      if (WispDB.signedIn) WispDB.signOut().then(() => { guestBrowsing = false; toast("Signed out."); updateAuthGate(); });
       else openAuth("in");
     });
     $("#notifBtn").addEventListener("click", () => {
@@ -2225,6 +2279,9 @@
 
     // Connect the backend if config.js has credentials; otherwise stay in demo.
     if (window.WispDB) {
+      // Show the sign-in wall immediately when a backend is configured, before
+      // the async connection resolves, so the app never flashes underneath it.
+      if (WispDB.configured) renderAuthGate();
       WispDB.onChange(syncAuthHeader);
       WispDB.init().then(() => syncAuthHeader());
     }

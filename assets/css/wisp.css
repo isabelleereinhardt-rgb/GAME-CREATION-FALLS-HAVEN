@@ -750,6 +750,22 @@ mark.hl { background: color-mix(in srgb, var(--amber) 34%, transparent); border-
 .gate__warnings .pill { color: var(--rose-ink); border-color: rgba(171,90,103,.3); }
 .gate__actions { display: flex; gap: 10px; justify-content: center; }
 
+/* Auth landing gate: the hard sign-in wall shown before the app. */
+#authGate { display: none; }
+#authGate.is-open {
+  display: flex; position: fixed; inset: 0; z-index: 70; align-items: center; justify-content: center;
+  background: var(--shell); padding: 24px; overflow: auto;
+}
+.authgate__panel {
+  max-width: 440px; width: 100%; background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 40px 34px; box-shadow: 0 30px 70px var(--shadow-lg); text-align: center;
+}
+.authgate__brand { font: 600 30px/1 var(--font-display); letter-spacing: .22em; color: var(--rose-ink); margin-bottom: 18px; }
+.authgate__tag { font: 500 19px var(--font-display); color: var(--ink); margin: 0 0 14px; }
+.authgate__lead { color: var(--ink2); font-size: 14.5px; line-height: 1.65; margin: 0 auto 26px; max-width: 360px; }
+.authgate__actions { display: flex; flex-direction: column; gap: 10px; }
+.authgate__guest { margin-top: 18px; }
+
 /* ---------------------------------------------------------------------------
    12. Browse  ·  progressive filter sidebar + results
    ------------------------------------------------------------------------- */
