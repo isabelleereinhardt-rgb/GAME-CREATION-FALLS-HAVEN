@@ -18,7 +18,7 @@
   --card:       #fbf8f1;
   --ink:        #2c2620;
   --ink2:       #6b6154;
-  --ink3:       #a89d8c;
+  --ink3:       #736b5c;   /* AA on paper/surface/card (~4.6:1) */
   --line:       rgba(44, 38, 32, .13);
   --line2:      rgba(44, 38, 32, .07);
   --rose:       #ab5a67;
@@ -50,7 +50,7 @@
   --card:       #f4ecd6;
   --ink:        #4a3b28;
   --ink2:       #7a6647;
-  --ink3:       #a89370;
+  --ink3:       #736345;   /* AA on sepia surfaces */
   --line:       rgba(74, 59, 40, .17);
   --line2:      rgba(74, 59, 40, .09);
   --rose:       #a5545f;
@@ -73,7 +73,7 @@
   --card:       #f6f7f9;
   --ink:        #23262c;
   --ink2:       #575d67;
-  --ink3:       #9aa0ab;
+  --ink3:       #6a707b;   /* AA on slate surfaces */
   --line:       rgba(35, 38, 44, .14);
   --line2:      rgba(35, 38, 44, .07);
   --rose:       #9c5566;
@@ -96,7 +96,7 @@
   --card:       #2a2833;
   --ink:        #ece7f0;
   --ink2:       #b0a9bd;
-  --ink3:       #7a7488;
+  --ink3:       #9791a6;   /* AA on midnight surfaces */
   --line:       rgba(236, 231, 240, .13);
   --line2:      rgba(236, 231, 240, .07);
   --rose:       #d98a99;
@@ -451,8 +451,11 @@ img { max-width: 100%; display: block; }
   width: 22px; height: 22px; border-radius: 6px; color: #fff;
   font: 600 11px/1 var(--font-text);
   display: flex; align-items: center; justify-content: center; flex: none;
+  /* A constant backing so the mark reads on any cover hue, never hue-on-hue. */
+  box-shadow: 0 1px 3px rgba(0,0,0,.4), 0 0 0 1px rgba(0,0,0,.18);
+  text-shadow: 0 1px 1px rgba(0,0,0,.25);
 }
-.rate--g { background: var(--sage); box-shadow: 0 0 0 1px rgba(255,255,255,.4) inset; }
+.rate--g { background: var(--sage); box-shadow: 0 1px 3px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.55) inset; }
 .rate--t { background: #b6844a; }
 .rate--m { background: #b5683f; }
 .rate--e { background: #a2444f; }
@@ -473,7 +476,7 @@ img { max-width: 100%; display: block; }
 .section-head {
   display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; gap: 16px;
 }
-.section-head h3 { font: 600 19px var(--font-display); color: var(--ink); }
+.section-head h2, .section-head h3 { font: 600 19px var(--font-display); color: var(--ink); }
 .section-lead { margin: 0 0 20px; font-size: 13.5px; color: var(--ink3); max-width: 560px; }
 
 /* ---------------------------------------------------------------------------
@@ -535,7 +538,8 @@ img { max-width: 100%; display: block; }
 .card__cover .rate { position: absolute; top: 10px; left: 10px; }
 .card__cover .cover-flag { position: absolute; top: 10px; right: 10px; }
 .card__body { padding: 13px 15px 15px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
-.card__title { font: 600 20px/1.15 var(--font-display); color: var(--ink); }
+.card__title { display: block; font: 600 20px/1.15 var(--font-display); color: var(--ink); }
+a.card__title:hover { color: var(--rose-ink); }
 .card__by { font-size: 13.5px; color: var(--ink2); }
 .card__summary {
   margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink2);
@@ -920,9 +924,9 @@ mark.hl { background: color-mix(in srgb, var(--amber) 34%, transparent); border-
 .scrim {
   position: fixed; inset: 0; background: color-mix(in srgb, var(--ink) 34%, transparent);
   z-index: 40; display: flex; justify-content: flex-end;
-  opacity: 0; pointer-events: none; transition: opacity .2s ease;
+  opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .2s ease, visibility .2s ease;
 }
-.scrim.is-open { opacity: 1; pointer-events: auto; }
+.scrim.is-open { opacity: 1; visibility: visible; pointer-events: auto; }
 .drawer {
   width: 400px; max-width: 94vw; height: 100%; background: var(--surface);
   border-left: 1px solid var(--line); box-shadow: -20px 0 50px var(--shadow-lg);
@@ -990,25 +994,39 @@ mark.hl { background: color-mix(in srgb, var(--amber) 34%, transparent); border-
   .home-tab { font-size: 22px; }
   .work-grid { grid-template-columns: 1fr 1fr; gap: 14px; }
   .card__cover { height: 128px; }
-  .reader__wrap { padding: 22px 20px 120px; font-size: 18px; }
-  .para__marker { left: -26px; }
-  .mobile-drawer { display: block; }
+  .reader__wrap { padding: 22px 34px 120px; font-size: 18px; }
+  .para__marker { left: -28px; }
+  .chapter-nav { flex-wrap: wrap; }
+  .chapter-nav .btn, .chapter-nav .btn--link { flex: 1 1 auto; }
 }
 @media (max-width: 460px) {
   .work-grid { grid-template-columns: 1fr; }
+  .home-tabs { flex-wrap: wrap; }
+  .home-tabs__meta { margin-left: 0; width: 100%; }
+  .reader-tools { flex-wrap: wrap; border-radius: 20px; justify-content: center; }
+  .reader-tools button { width: 34px; height: 34px; }
+}
+
+/* Touch devices have no hover: keep the conversation markers faintly visible so
+   a new margin thread can be started on any line. */
+@media (hover: none), (pointer: coarse) {
+  .para__marker { opacity: .5; }
 }
 
 /* Mobile nav sheet (hidden on desktop). */
 .sheet {
   position: fixed; inset: 0; z-index: 50; background: color-mix(in srgb, var(--ink) 40%, transparent);
-  opacity: 0; pointer-events: none; transition: opacity .2s;
+  opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .2s, visibility .2s;
 }
-.sheet.is-open { opacity: 1; pointer-events: auto; }
+.sheet.is-open { opacity: 1; visibility: visible; pointer-events: auto; }
 .sheet__panel {
   position: absolute; left: 0; top: 0; bottom: 0; width: 280px; max-width: 86vw; background: var(--surface);
   border-right: 1px solid var(--line); padding: 22px; transform: translateX(-16px); transition: transform .2s; overflow-y: auto;
 }
 .sheet.is-open .sheet__panel { transform: none; }
+.sheet--right .sheet__panel {
+  left: auto; right: 0; width: 344px; border-right: 0; border-left: 1px solid var(--line); transform: translateX(16px);
+}
 .sheet__nav button {
   display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: none; border: 0;
   padding: 13px 10px; border-radius: 10px; font: 16px var(--font-text); color: var(--ink); cursor: pointer;

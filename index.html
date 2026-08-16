@@ -40,7 +40,6 @@
   <symbol id="i-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m5 12 4.5 4.5L19 7"></path></symbol>
   <symbol id="i-edit" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3z"></path></symbol>
   <symbol id="i-flag" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M5 21V4h11l-2 4 2 4H5"></path></symbol>
-  <symbol id="i-star" viewBox="0 0 24 24"><path fill="currentColor" d="m12 3 2.6 5.5 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.3l6-.8z"></path></symbol>
   <symbol id="i-download" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M12 4v11m0 0 4-4m-4 4-4-4M5 20h14"></path></symbol>
 </defs></svg>
 
@@ -142,17 +141,17 @@
       <span class="val" id="measureVal">66ch</span>
     </div>
 
-    <h3>Reading face</h3>
-    <div class="seg" id="faceSeg">
-      <button data-face="humanist" class="is-on">Newsreader</button>
-      <button data-face="grotesk">Inter</button>
+    <h3 id="faceLabel">Reading face</h3>
+    <div class="seg" id="faceSeg" role="group" aria-labelledby="faceLabel">
+      <button data-face="humanist" class="is-on" aria-pressed="true">Newsreader</button>
+      <button data-face="grotesk" aria-pressed="false">Inter</button>
     </div>
 
     <h3>Comfort and access</h3>
-    <div class="opt-row"><span>Dyslexia-friendly font</span><label class="switch"><input type="checkbox" id="optDyslexia"><span class="track"></span><span class="knob"></span></label></div>
-    <div class="opt-row"><span>Reduce motion</span><label class="switch"><input type="checkbox" id="optMotion"><span class="track"></span><span class="knob"></span></label></div>
-    <div class="opt-row"><span>Justify and hyphenate prose</span><label class="switch"><input type="checkbox" id="optJustify"><span class="track"></span><span class="knob"></span></label></div>
-    <div class="opt-row"><span>Show margin comment counts</span><label class="switch"><input type="checkbox" id="optMargins" checked><span class="track"></span><span class="knob"></span></label></div>
+    <div class="opt-row"><span id="lbl-dyslexia">Dyslexia-friendly font</span><label class="switch"><input type="checkbox" id="optDyslexia" aria-labelledby="lbl-dyslexia"><span class="track"></span><span class="knob"></span></label></div>
+    <div class="opt-row"><span id="lbl-motion">Reduce motion</span><label class="switch"><input type="checkbox" id="optMotion" aria-labelledby="lbl-motion"><span class="track"></span><span class="knob"></span></label></div>
+    <div class="opt-row"><span id="lbl-justify">Justify and hyphenate prose</span><label class="switch"><input type="checkbox" id="optJustify" aria-labelledby="lbl-justify"><span class="track"></span><span class="knob"></span></label></div>
+    <div class="opt-row"><span id="lbl-margins">Show margin comment counts</span><label class="switch"><input type="checkbox" id="optMargins" checked aria-labelledby="lbl-margins"><span class="track"></span><span class="knob"></span></label></div>
 
     <button class="btn btn--quiet btn--full" id="resetTheme" style="margin-top:22px">Reset to defaults</button>
     <p class="reset-note">Full per-heading control (Title, Subtitle, H1 through H7, Normal Text, Caption, each with its own font, size, and color) lives one layer deeper. The reset above is always one tap away.</p>
@@ -175,6 +174,19 @@
       <button data-nav="community"><svg width="18" height="18"><use href="#i-user"></use></svg>Community Space</button>
       <button data-nav="profile"><svg width="18" height="18"><use href="#i-user"></use></svg>Your profile</button>
     </nav>
+    <div style="height:1px;background:var(--line);margin:14px 0"></div>
+    <nav class="sheet__nav" aria-label="Panels">
+      <button data-railsheet="activity"><svg width="18" height="18"><use href="#i-bell"></use></svg>Activity</button>
+      <button data-railsheet="widgets"><svg width="18" height="18"><use href="#i-plus"></use></svg>Widgets</button>
+    </nav>
+  </div>
+</div>
+
+<!-- ================= RAIL SHEET (mobile Activity / Widgets) ================= -->
+<div class="sheet sheet--right" id="railSheet" aria-hidden="true">
+  <div class="sheet__panel col" role="dialog" aria-modal="true" aria-label="Panel">
+    <button class="link-btn" data-railclose style="margin-bottom:10px">&lsaquo; Close</button>
+    <div id="railSheetBody"></div>
   </div>
 </div>
 

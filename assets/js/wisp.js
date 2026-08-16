@@ -47,11 +47,11 @@
     const timeStat = w.format === "comic"
       ? `<span class="stat">${icon("book",14)}${esc(w.chapters)}</span>`
       : `<span class="stat">${icon("eye",14)}${esc(w.reads)}</span>`;
-    return `<article class="card" data-work="${w.id}" role="link" tabindex="0" aria-label="Open ${esc(w.title)}">
+    return `<article class="card" data-work="${w.id}">
       <span class="card__cover">${cover(w.cover)}${rate(w.rating)}${flag}</span>
       <span class="card__body">
         <span class="tag-row"><span class="pill">${w.type === "fan" ? "Fanwork" : "Original"}</span><span class="pill">${esc(w.source)}</span></span>
-        <span class="card__title">${esc(w.title)}</span>
+        <a class="card__title" href="#/work/${w.id}">${esc(w.title)}</a>
         <span class="card__by">by ${esc(w.author)}</span>
         <span class="card__summary">${esc(w.summary)}</span>
         ${tagRow(w.tags)}
@@ -66,11 +66,11 @@
   }
 
   function cardList(w) {
-    return `<article class="list-card" data-work="${w.id}" role="link" tabindex="0" aria-label="Open ${esc(w.title)}">
+    return `<article class="list-card" data-work="${w.id}">
       <span class="list-card__cover">${cover(w.cover)}${rate(w.rating)}</span>
       <span class="list-card__main">
         <span class="tag-row"><span class="pill">${w.type === "fan" ? "Fanwork" : "Original"}</span><span class="pill">${esc(w.source)}</span>${w.format === "comic" ? '<span class="pill">Comic</span>' : ""}</span>
-        <span class="card__title" style="font-size:22px">${esc(w.title)}</span>
+        <a class="card__title" href="#/work/${w.id}" style="font-size:22px">${esc(w.title)}</a>
         <span class="card__by">by ${esc(w.author)}</span>
         <span class="card__summary" style="-webkit-line-clamp:3">${esc(w.summary)}</span>
         ${tagRow(w.tags, 4)}
@@ -97,14 +97,14 @@
 
     const forYou = `
       <div class="section-head">
-        <h3>Picked for you</h3>
+        <h2>Picked for you</h2>
         <button class="btn--link" data-nav="browse">Browse all &rsaquo;</button>
       </div>
       <p class="section-lead">Drawn from what you read and the tags you follow; never sold, never advertised.</p>
       ${grid}
 
       <div class="editorial">
-        <div class="eyebrow rose" style="margin-bottom:8px">Editors' picks</div>
+        <div class="eyebrow rose" style="margin-bottom:8px">Staff picks</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px">
           ${W.STAFF.map(s => { const w = W.byId[s.work]; return `
             <button class="list-tile" data-work="${w.id}" style="display:flex;gap:12px;align-items:flex-start;text-align:left">
@@ -138,22 +138,24 @@
           <div class="explainer__step"><span class="explainer__n">2</span><span class="soft" style="font-size:13px">Talk in the margins. Comment and react on the exact line that got you.</span></div>
           <div class="explainer__step"><span class="explainer__n">3</span><span class="soft" style="font-size:13px">Keep control. Filter and warn; adult content stays off until you say so.</span></div>
         </div>
-        <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start">
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start">
           <button class="btn btn--primary btn--sm" data-toast="Signup is instant: no invite queue. Reading stays open logged out.">Create an account</button>
-          <button class="btn--link" id="introDismiss">No ads, ever. Never sold. Dismiss</button>
+          <div class="muted" style="font-size:11.5px;line-height:1.5">No ads, ever. Your data is never sold.</div>
+          <button class="btn--link" id="introDismiss">Dismiss</button>
         </div>
       </div>`;
 
     $("#screen-home").innerHTML = `
       <div class="page">
+        <h1 class="vh">Your reading home</h1>
         ${intro}
         <div class="home-tabs">
           <button class="home-tab ${homeTab === "foryou" ? "is-active" : ""}" data-hometab="foryou">For You</button>
           <button class="home-tab ${homeTab === "following" ? "is-active" : ""}" data-hometab="following">Following</button>
           <div class="home-tabs__meta">
             <div class="view-toggle" role="group" aria-label="View mode">
-              <button data-view="gallery" class="${settings.view === "gallery" ? "is-active" : ""}">Gallery</button>
-              <button data-view="list" class="${settings.view === "list" ? "is-active" : ""}">List</button>
+              <button data-view="gallery" class="${settings.view === "gallery" ? "is-active" : ""}" aria-pressed="${settings.view === "gallery"}">Gallery</button>
+              <button data-view="list" class="${settings.view === "list" ? "is-active" : ""}" aria-pressed="${settings.view === "list"}">List</button>
             </div>
           </div>
         </div>
@@ -222,10 +224,10 @@
               <div class="filter-body">
                 <div>
                   <div class="muted" style="font-size:12px;margin-bottom:6px">Work type</div>
-                  <div class="seg">
-                    <button data-type="all" class="${filterState.type === "all" ? "is-on" : ""}">Both</button>
-                    <button data-type="fan" class="${filterState.type === "fan" ? "is-on" : ""}">Fanwork</button>
-                    <button data-type="original" class="${filterState.type === "original" ? "is-on" : ""}">Original</button>
+                  <div class="seg" role="group" aria-label="Work type">
+                    <button data-type="all" class="${filterState.type === "all" ? "is-on" : ""}" aria-pressed="${filterState.type === "all"}">Both</button>
+                    <button data-type="fan" class="${filterState.type === "fan" ? "is-on" : ""}" aria-pressed="${filterState.type === "fan"}">Fanwork</button>
+                    <button data-type="original" class="${filterState.type === "original" ? "is-on" : ""}" aria-pressed="${filterState.type === "original"}">Original</button>
                   </div>
                 </div>
                 <div style="margin-top:6px">
@@ -327,7 +329,7 @@
           </div>
         </div>
 
-        <h3 class="shelf__title" style="margin-bottom:14px">Chapters</h3>
+        <h2 class="shelf__title" style="margin-bottom:14px">Chapters</h2>
         <div class="chapter-list">${rows}</div>
 
         <div class="editorial" style="margin-top:30px">
@@ -351,15 +353,16 @@
       </button>`;
     return `<div class="para ${has ? "has-thread" : ""}" data-para="${i}">
       ${marker}
-      <p>${p.t}</p>
+      <p>${esc(p.t)}</p>
       <div class="thread-slot" data-slot="${i}"></div>
     </div>`;
   }
 
   function threadHTML(p, i) {
+    const mine = (p.thread && p.thread.mine) || new Set();
     const reactChips = REACTS.map(e => {
       const n = (p.thread && p.thread.reactions[e]) || 0;
-      return `<button class="react ${n ? "" : ""}" data-react="${i}:${e}">${e}${n ? `<small>${n}</small>` : ""}</button>`;
+      return `<button class="react ${mine.has(e) ? "is-on" : ""}" data-react="${i}:${e}" aria-pressed="${mine.has(e)}">${e}${n ? `<small>${n}</small>` : ""}</button>`;
     }).join("");
     const comments = (p.thread ? p.thread.comments : []).map(c => `
       <div class="comment">
@@ -381,6 +384,7 @@
   }
 
   function renderReading(reqId) {
+    openThreads.clear();               // the DOM is rebuilt below; open-state must reset
     const c = W.CHAPTER;
     const flagship = (!reqId || reqId === "amber");
     const w = W.byId[reqId] || W.byId.amber;
@@ -469,11 +473,11 @@
       <button data-tool="smaller" title="Smaller text">${icon("minus",16)}</button>
       <button data-tool="bigger" title="Larger text" style="font-size:19px">A</button>
       <span class="sep"></span>
-      <button data-tool="theme-cream" class="${settings.theme === "cream" ? "is-on" : ""}" title="Paper">Aa</button>
-      <button data-tool="theme-sepia" class="${settings.theme === "sepia" ? "is-on" : ""}" title="Sepia" style="color:#8a6a3a">Aa</button>
-      <button data-tool="theme-oled" class="${settings.theme === "oled" ? "is-on" : ""}" title="OLED black" style="background:#111;color:#eee">Aa</button>
+      <button data-tool="theme-cream" class="${settings.theme === "cream" ? "is-on" : ""}" aria-pressed="${settings.theme === "cream"}" title="Paper">Aa</button>
+      <button data-tool="theme-sepia" class="${settings.theme === "sepia" ? "is-on" : ""}" aria-pressed="${settings.theme === "sepia"}" title="Sepia" style="color:#8a6a3a">Aa</button>
+      <button data-tool="theme-oled" class="${settings.theme === "oled" ? "is-on" : ""}" aria-pressed="${settings.theme === "oled"}" title="OLED black" style="background:#111;color:#eee">Aa</button>
       <span class="sep"></span>
-      <button data-tool="margins" class="${settings.margins ? "is-on" : ""}" title="Toggle margin comments">${icon("comment",16)}</button>
+      <button data-tool="margins" class="${settings.margins ? "is-on" : ""}" aria-pressed="${settings.margins}" title="Toggle margin comments">${icon("comment",16)}</button>
       <button data-tool="listen" id="listenBtn" title="Read aloud">${icon("play",16)}</button>
       <button data-tool="settings" title="More reading settings">${icon("gear",16)}</button>
     </div>`;
@@ -487,14 +491,18 @@
         if (t === "smaller") { settings.size = Math.max(15, settings.size - 1); applySettings(); }
         else if (t === "bigger") { settings.size = Math.min(26, settings.size + 1); applySettings(); }
         else if (t.startsWith("theme-")) { settings.theme = t.slice(6); applySettings(); syncReaderThemeButtons(); }
-        else if (t === "margins") { settings.margins = !settings.margins; applySettings(); b.classList.toggle("is-on", settings.margins); }
+        else if (t === "margins") { settings.margins = !settings.margins; applySettings(); b.classList.toggle("is-on", settings.margins); b.setAttribute("aria-pressed", String(settings.margins)); }
         else if (t === "settings") { openTheme(); }
         else if (t === "listen") { toggleListen(b); }
       });
     });
   }
   function syncReaderThemeButtons() {
-    $$("#screen-reading [data-tool^='theme-']").forEach(b => b.classList.toggle("is-on", b.dataset.tool === "theme-" + settings.theme));
+    $$("#screen-reading [data-tool^='theme-']").forEach(b => {
+      const on = b.dataset.tool === "theme-" + settings.theme;
+      b.classList.toggle("is-on", on);
+      b.setAttribute("aria-pressed", String(on));
+    });
   }
   function toggleListen(btn) {
     if (!("speechSynthesis" in window)) { toast("Read-aloud is not available in this browser."); return; }
@@ -508,16 +516,28 @@
     toast("Reading aloud with a neural voice.");
   }
 
-  function wireReading() {
-    // Progress bar tracks scroll of the center column.
-    const bar = $("#readProgress > i");
+  // Persistent document/#main listeners are wired exactly once; they read the
+  // current reading DOM at event time so re-renders never leak handlers.
+  let readingGlobalsWired = false;
+  function updateReadProgress() {
+    const bar = $("#readProgress > i"); if (!bar) return;
     const main = $("#main");
-    const onScroll = () => {
-      const max = main.scrollHeight - main.clientHeight;
-      bar.style.width = max > 0 ? (100 * main.scrollTop / max) + "%" : "0%";
-    };
-    main.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
+    const max = main.scrollHeight - main.clientHeight;
+    bar.style.width = max > 0 ? (100 * main.scrollTop / max) + "%" : "0%";
+  }
+  function wireReadingGlobalsOnce() {
+    if (readingGlobalsWired) return;
+    readingGlobalsWired = true;
+    $("#main").addEventListener("scroll", updateReadProgress, { passive: true });
+    document.addEventListener("mousedown", (e) => {
+      const pop = $("#hlPop");
+      if (pop && !pop.contains(e.target)) pop.style.display = "none";
+    });
+  }
+
+  function wireReading() {
+    wireReadingGlobalsOnce();
+    updateReadProgress();
 
     // Open and close per-line threads.
     $$("#screen-reading .para__marker").forEach(m => m.addEventListener("click", (e) => {
@@ -546,7 +566,6 @@
       pop.style.left = Math.max(8, rect.left - host.left + rect.width / 2 - 70) + "px";
       pop.style.top = (rect.top - host.top - 46) + "px";
     });
-    document.addEventListener("mousedown", (e) => { if (!pop.contains(e.target)) pop.style.display = "none"; });
     pop.querySelectorAll("[data-hl]").forEach(b => b.addEventListener("click", () => {
       const kind = b.dataset.hl;
       if (kind === "copy") { navigator.clipboard && navigator.clipboard.writeText(String(window.getSelection())); toast("Copied."); }
@@ -566,8 +585,12 @@
     slot.querySelectorAll("[data-react]").forEach(r => r.addEventListener("click", () => {
       const [, emoji] = r.dataset.react.split(":");
       p.thread = p.thread || { reactions:{}, comments:[] };
-      const on = r.classList.toggle("is-on");
-      p.thread.reactions[emoji] = (p.thread.reactions[emoji] || 0) + (on ? 1 : -1);
+      if (!p.thread.mine) p.thread.mine = new Set();
+      const on = !p.thread.mine.has(emoji);
+      if (on) p.thread.mine.add(emoji); else p.thread.mine.delete(emoji);
+      p.thread.reactions[emoji] = Math.max(0, (p.thread.reactions[emoji] || 0) + (on ? 1 : -1));
+      r.classList.toggle("is-on", on);
+      r.setAttribute("aria-pressed", String(on));
       const n = p.thread.reactions[emoji];
       r.innerHTML = emoji + (n > 0 ? `<small>${n}</small>` : "");
     }));
@@ -664,11 +687,11 @@
 
             <div class="panel">
               <h4>Per-work controls</h4>
-              <div class="toggle-row"><span>Allow inline comments</span><label class="switch"><input type="checkbox" checked><span class="track"></span><span class="knob"></span></label></div>
-              <div class="toggle-row"><span>Moderate before posting</span><label class="switch"><input type="checkbox"><span class="track"></span><span class="knob"></span></label></div>
-              <div class="toggle-row"><span>Logged-in readers only</span><label class="switch"><input type="checkbox"><span class="track"></span><span class="knob"></span></label></div>
-              <div class="toggle-row"><span>Post anonymously</span><label class="switch"><input type="checkbox"><span class="track"></span><span class="knob"></span></label></div>
-              <div class="toggle-row"><span>Hide my numbers</span><label class="switch"><input type="checkbox"><span class="track"></span><span class="knob"></span></label></div>
+              <div class="toggle-row"><span>Allow inline comments</span><label class="switch"><input type="checkbox" checked aria-label="Allow inline comments"><span class="track"></span><span class="knob"></span></label></div>
+              <div class="toggle-row"><span>Moderate before posting</span><label class="switch"><input type="checkbox" aria-label="Moderate before posting"><span class="track"></span><span class="knob"></span></label></div>
+              <div class="toggle-row"><span>Logged-in readers only</span><label class="switch"><input type="checkbox" aria-label="Logged-in readers only"><span class="track"></span><span class="knob"></span></label></div>
+              <div class="toggle-row"><span>Post anonymously</span><label class="switch"><input type="checkbox" aria-label="Post anonymously"><span class="track"></span><span class="knob"></span></label></div>
+              <div class="toggle-row"><span>Hide my numbers</span><label class="switch"><input type="checkbox" aria-label="Hide my numbers"><span class="track"></span><span class="knob"></span></label></div>
             </div>
 
             <div class="panel">
@@ -815,8 +838,8 @@
   }
 
   /* ---- rails ------------------------------------------------------------- */
-  function renderActivity() {
-    const groups = Object.entries(W.ACTIVITY).map(([g, items]) => `
+  function activityHTML() {
+    return Object.entries(W.ACTIVITY).map(([g, items]) => `
       <div class="rail__group">${g}</div>
       <div class="act-list">
         ${items.map(a => `
@@ -825,19 +848,18 @@
             <span class="act__body">${a.html}<span class="act__time">${a.time}</span></span>
           </button>`).join("")}
       </div>`).join("");
-    $("#activityMount").innerHTML = groups;
   }
+  function renderActivity() { $("#activityMount").innerHTML = activityHTML(); }
 
   let luckyIdx = 0;
-  function renderWidgets() {
+  function widgetHTML() {
     const wd = W.WIDGETS;
-    const sp = W.byId[wd.staffPick.cover] ? W.byId[wd.staffPick.cover] : null;
-    $("#widgetMount").innerHTML = `
+    return `
       <div class="widget">
         <div class="widget__label" style="margin-bottom:10px">Lucky</div>
-        <div class="widget__title" id="luckyTitle" style="min-height:44px">${esc(wd.luckyPool[luckyIdx % wd.luckyPool.length])}</div>
+        <div class="widget__title lucky-title" style="min-height:44px">${esc(wd.luckyPool[luckyIdx % wd.luckyPool.length])}</div>
         <p class="muted" style="font-size:12.5px;margin:6px 0 12px">A random work from the tags you follow.</p>
-        <button class="btn btn--ghost btn--full" id="luckyBtn">${icon("shuffle",15)} Surprise me</button>
+        <button class="btn btn--ghost btn--full" data-lucky>${icon("shuffle",15)} Surprise me</button>
       </div>
 
       <div class="widget">
@@ -863,12 +885,8 @@
         <div style="font:17px/1.35 var(--font-display);color:var(--ink)">You read ${wd.week.works} works,<br>${wd.week.words} words.</div>
         <p class="muted" style="font-size:12.5px;margin:9px 0 0">Quiet by design: no streaks, no ranks.</p>
       </div>`;
-
-    $("#luckyBtn") && $("#luckyBtn").addEventListener("click", () => {
-      luckyIdx++;
-      $("#luckyTitle").textContent = wd.luckyPool[luckyIdx % wd.luckyPool.length];
-    });
   }
+  function renderWidgets() { $("#widgetMount").innerHTML = widgetHTML(); }
 
   /* ======================================================================= */
   /*  THEME ENGINE  ·  the accessibility engine too                          */
@@ -907,7 +925,7 @@
   function syncDrawer() {
     $$("#presetSwatches .swatch").forEach(s => s.classList.toggle("is-on", s.dataset.preset === settings.theme));
     $$("#accentRow .accent-dot").forEach(a => a.classList.toggle("is-on", a.dataset.accent === settings.accent));
-    $$("#faceSeg button").forEach(b => b.classList.toggle("is-on", b.dataset.face === settings.face));
+    $$("#faceSeg button").forEach(b => { const on = b.dataset.face === settings.face; b.classList.toggle("is-on", on); b.setAttribute("aria-pressed", String(on)); });
     const sv = $("#sizeVal"), ss = $("#sizeSlider"); if (sv && ss) { ss.value = settings.size; sv.textContent = settings.size + "px"; }
     const mv = $("#measureVal"), ms = $("#measureSlider"); if (mv && ms) { ms.value = settings.measure; mv.textContent = settings.measure + "ch"; }
     const set = (id, v) => { const e = $(id); if (e) e.checked = v; };
@@ -936,8 +954,42 @@
     $("#resetTheme").addEventListener("click", () => { settings = Object.assign({}, DEFAULTS, { adultOK: settings.adultOK }); applySettings(); toast("Reset to the quiet default."); });
   }
 
-  function openTheme() { $("#themeScrim").classList.add("is-open"); $("#themeScrim").setAttribute("aria-hidden","false"); syncDrawer(); }
-  function closeTheme() { $("#themeScrim").classList.remove("is-open"); $("#themeScrim").setAttribute("aria-hidden","true"); }
+  // Shared modal-overlay plumbing: move focus in, trap Tab, make the app inert,
+  // restore focus on close. Used by the theme drawer, the mobile sheets, and
+  // (partly) the content gate.
+  let lastFocus = null;
+  let trapHandler = null;
+  function focusables(el) {
+    return Array.from(el.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])'))
+      .filter(n => n.offsetParent !== null);
+  }
+  function openOverlay(el, focusSel) {
+    lastFocus = document.activeElement;
+    el.classList.add("is-open");
+    el.setAttribute("aria-hidden", "false");
+    const app = $("#app"); if (app) app.setAttribute("inert", "");
+    const target = (focusSel && el.querySelector(focusSel)) || focusables(el)[0];
+    if (target) target.focus();
+    trapHandler = (e) => {
+      if (e.key !== "Tab") return;
+      const f = focusables(el); if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    el.addEventListener("keydown", trapHandler);
+  }
+  function closeOverlay(el) {
+    if (!el.classList.contains("is-open")) return;
+    el.classList.remove("is-open");
+    el.setAttribute("aria-hidden", "true");
+    const app = $("#app"); if (app) app.removeAttribute("inert");
+    if (trapHandler) { el.removeEventListener("keydown", trapHandler); trapHandler = null; }
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+
+  function openTheme() { syncDrawer(); openOverlay($("#themeScrim"), "#themeClose"); }
+  function closeTheme() { closeOverlay($("#themeScrim")); }
 
   /* ======================================================================= */
   /*  ADULT GATE / CONTENT WARNING                                            */
@@ -958,8 +1010,11 @@
           </div>
         </div>
       </div>`;
-    $('[data-gate="back"]').addEventListener("click", () => { $("#gateMount").innerHTML = ""; navigate("home"); });
-    $('[data-gate="ok"]').addEventListener("click", () => { settings.adultOK = true; save(); $("#gateMount").innerHTML = ""; onPass(); });
+    const app = $("#app"); if (app) app.setAttribute("inert", "");
+    const dismiss = () => { if (app) app.removeAttribute("inert"); $("#gateMount").innerHTML = ""; };
+    $('[data-gate="back"]').addEventListener("click", () => { dismiss(); navigate("home"); });
+    $('[data-gate="ok"]').addEventListener("click", () => { settings.adultOK = true; save(); dismiss(); onPass(); });
+    $('[data-gate="ok"]').focus();
   }
 
   /* ======================================================================= */
@@ -968,10 +1023,24 @@
   const SCREENS = ["home","browse","reading","work","write","library","community","profile"];
   const NAV_FOR = { home:"home", browse:"home", reading:null, work:null, write:"write", library:"library", community:"community", profile:null };
 
+  let currentScreen = null;
   function setActive(screen) {
+    // Leaving the reader stops any read-aloud in progress.
+    if (currentScreen === "reading" && screen !== "reading" && window.speechSynthesis) {
+      window.speechSynthesis.cancel(); speaking = false;
+    }
+    currentScreen = screen;
     $$(".screen").forEach(s => s.classList.toggle("is-active", s.dataset.screen === screen));
-    $$(".nav__item").forEach(n => n.classList.toggle("is-active", n.dataset.nav === NAV_FOR[screen]));
-    $$(".sheet__nav button").forEach(n => n.classList.toggle("is-active", n.dataset.nav === screen));
+    $$(".nav__item").forEach(n => {
+      const on = n.dataset.nav === NAV_FOR[screen];
+      n.classList.toggle("is-active", on);
+      on ? n.setAttribute("aria-current", "page") : n.removeAttribute("aria-current");
+    });
+    $$(".sheet__nav button").forEach(n => {
+      const on = n.dataset.nav === screen;
+      n.classList.toggle("is-active", on);
+      on ? n.setAttribute("aria-current", "page") : n.removeAttribute("aria-current");
+    });
     // Reading and writing are focused surfaces: hide both rails for a calm,
     // centered column. Browse hides the widget rail so results get room.
     $("#railLeft").hidden  = (screen === "reading" || screen === "write");
@@ -1013,8 +1082,14 @@
     clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("is-on"), 2600);
   }
 
-  function openSheet() { $("#navSheet").classList.add("is-open"); }
-  function closeSheet() { $("#navSheet").classList.remove("is-open"); }
+  function openSheet() { openOverlay($("#navSheet")); }
+  function closeSheet() { closeOverlay($("#navSheet")); closeOverlay($("#railSheet")); }
+  function openRailSheet(kind) {
+    const body = $("#railSheetBody");
+    if (kind === "activity") body.innerHTML = `<h2 class="rail__title" style="margin-bottom:4px">Activity</h2><p class="rail__note">Your quiet stream. No pushes.</p>${activityHTML()}`;
+    else body.innerHTML = `<h2 class="rail__title" style="margin-bottom:16px">Widgets</h2>${widgetHTML()}`;
+    openOverlay($("#railSheet"));
+  }
 
   // Event delegation for the whole app.
   document.addEventListener("click", (e) => {
@@ -1035,6 +1110,16 @@
 
     if (e.target.closest("#introDismiss")) { settings.introSeen = true; save(); const bar = $("#introBar"); if (bar) bar.remove(); return; }
 
+    if (e.target.closest("[data-lucky]")) {
+      luckyIdx++;
+      const t = W.WIDGETS.luckyPool[luckyIdx % W.WIDGETS.luckyPool.length];
+      $$(".lucky-title").forEach(el => el.textContent = t);
+      return;
+    }
+
+    const rs = e.target.closest("[data-railsheet]");
+    if (rs) { openRailSheet(rs.dataset.railsheet); return; }
+
     const tst = e.target.closest("[data-toast]");
     if (tst) { toast(tst.dataset.toast); return; }
 
@@ -1051,16 +1136,6 @@
     if (lt) { libTab = lt.dataset.libtab; renderLibrary(); return; }
   });
 
-  // Keyboard activation for the article-cards (role="link", not native buttons).
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== "Enter" && e.key !== " ") return;
-    const t = e.target;
-    if (!t || !(t.matches && t.matches('[role="link"][data-work], [role="link"][data-read]'))) return;
-    if (/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(t.tagName)) return;
-    e.preventDefault();
-    if (t.dataset.read) navigate("read/" + t.dataset.read);
-    else navigate("work/" + t.dataset.work);
-  });
 
   // Browse controls (delegated separately because they use inputs/selects).
   document.addEventListener("change", (e) => {
@@ -1100,8 +1175,12 @@
     $("#themeClose").addEventListener("click", closeTheme);
     $("#themeScrim").addEventListener("click", (e) => { if (e.target.id === "themeScrim") closeTheme(); });
     $("#signOutBtn").addEventListener("click", () => toast("Sign-out is a stub in this demo. Reading logged out keeps the whole discovery funnel open."));
-    $("#notifBtn").addEventListener("click", () => toast("Notifications are gentle here: feed-first, off-heavy by default, and never a re-engagement nudge."));
-    $("#addWidget").addEventListener("click", () => toast("The widget tray holds 50-plus preprogrammed widgets: Lucky, highlighter, read-aloud, and more."));
+    $("#notifBtn").addEventListener("click", () => {
+      if (window.matchMedia("(max-width:1040px)").matches) openRailSheet("activity");
+      else toast("Notifications are gentle here: feed-first, off-heavy by default, and never a re-engagement nudge.");
+    });
+    $("#railSheet").addEventListener("click", (e) => { if (e.target.id === "railSheet" || e.target.closest("[data-railclose]")) closeOverlay($("#railSheet")); });
+    $("#addWidget").addEventListener("click", () => toast("The widget tray holds 50+ preprogrammed widgets: Lucky, highlighter, read-aloud, and more."));
     $("#customizeWidgets").addEventListener("click", () => toast("Rearrange, add, or remove widgets. Your tray, your desk."));
     $("#menuBtn").addEventListener("click", openSheet);
     $("#navSheet").addEventListener("click", (e) => { if (e.target.id === "navSheet") closeSheet(); });

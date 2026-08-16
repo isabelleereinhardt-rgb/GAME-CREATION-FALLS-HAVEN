@@ -11,6 +11,16 @@ design plan and the brand asset kit.
 This is a self-contained static site. No build step, no framework, no backend;
 open `index.html` and it runs.
 
+## Live site
+
+The whole site, bundled into one file with the Playfair Display and Newsreader
+faces embedded so it renders exactly as designed:
+
+**[View the live site](https://claude.ai/code/artifact/dc38a943-f41c-4855-a5f6-6a324d787816)**
+
+The same single-file build ships in this repo as `wisp-standalone.html`; you can
+open it directly in a browser with nothing to install.
+
 ## Running it
 
 Because the app fetches its own scripts, open it through a static server rather
@@ -21,7 +31,9 @@ python3 -m http.server 8000
 # then visit http://localhost:8000
 ```
 
-Opening `index.html` directly in a browser also works.
+Opening `index.html` (or the bundled `wisp-standalone.html`) directly in a
+browser also works. To host it on GitHub Pages, point Pages at this branch in
+the repository settings; the site serves straight from the repository root.
 
 ## What is here
 
@@ -34,6 +46,7 @@ assets/js/data.js     The demo dataset: works, activity, widgets, community,
                       library, and the reading-page chapter with seeded threads.
 assets/js/wisp.js     The app: hash router, screen rendering, the reading-page
                       conversation, the theming engine, and persistence.
+wisp-standalone.html  The entire site bundled into one file, fonts embedded.
 ```
 
 ## The screens
