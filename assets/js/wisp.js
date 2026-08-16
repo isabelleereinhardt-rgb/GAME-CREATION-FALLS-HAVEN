@@ -58,7 +58,7 @@
      empty and every accessor falls back to the bundled demo dataset, so the
      demo behaves exactly as before. */
   const LIVE = { works: [], byId: {}, chapters: {}, comments: {}, reactions: {}, upcoming: {}, series: [], events: [], myEvents: new Set(),
-                 lib: { bookmarks: null, history: null, lists: null, things: null }, viewingList: null };
+                 lib: { bookmarks: null, history: null, lists: null, things: null }, viewingList: null, resume: null };
   let liveEditor = null;   // { work, chapter } when editing a real work, else null
   let editorCover = null;  // uploaded cover URL for the current editor session
   let coverCleared = false; // true when the author removed an existing cover
@@ -200,6 +200,14 @@
     try {
       LIVE.works = await WispDB.listWorks({ sort: "recent", limit: 30 });
       LIVE.works.forEach(w => { LIVE.byId[w.id] = w; });
+      LIVE.resume = null;
+      if (WispDB.signedIn) {
+        const p = await WispDB.latestProgress().catch(() => null);
+        if (p) {
+          const works = await WispDB.getWorksByIds([p.work_id]).catch(() => []);
+          if (works[0]) LIVE.resume = { work: works[0], progress: p };
+        }
+      }
     } catch (e) { console.error("[wisp] home load failed:", e); LIVE.works = LIVE.works || []; }
     renderHomeLive();
   }
@@ -226,6 +234,15 @@
             </div>
           </div>
         </div>
+        ${LIVE.resume ? `<button class="resume" data-read="${LIVE.resume.work.id}">
+          <span class="resume__cover">${cover(LIVE.resume.work.cover, LIVE.resume.work.title)}</span>
+          <span class="resume__body">
+            <span class="eyebrow rose" style="display:block;margin-bottom:5px">Continue reading</span>
+            <span class="resume__title">${esc(LIVE.resume.work.title)}</span>
+            <span class="progress"><span class="progress__track"><span class="progress__fill" style="width:${Math.max(6, LIVE.resume.progress.percent || 6)}%"></span></span><span class="progress__label">Chapter ${LIVE.resume.progress.chapter_number || 1}</span></span>
+          </span>
+          <span style="color:var(--rose);display:flex;align-items:center">${icon("chev",20)}</span>
+        </button>` : ""}
         ${works.length ? `<div class="section-head"><h2>Latest works</h2><button class="btn--link" data-nav="browse">Browse all &rsaquo;</button></div>` : ""}
         ${grid}
       </div>`;
@@ -714,6 +731,8 @@
 
     mountReaderTools();
     if (ch) wireLiveReading(w, ch);
+    // Record that this work was opened, for history + Continue reading.
+    if (WispDB.signedIn && ch) WispDB.saveProgress(w.id, ch.number, 0);
   }
 
   function wireLiveReading(w, ch) {
