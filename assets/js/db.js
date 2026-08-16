@@ -178,6 +178,12 @@ window.WispDB = (function () {
     return data;
   }
 
+  async function deleteWork(workId) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("works").delete().eq("id", workId).eq("author_id", user.id);
+    if (error) throw error;
+  }
+
   async function addTags(workId, names) {
     for (const raw of names) {
       const name = String(raw).trim(); if (!name) continue;
@@ -241,7 +247,7 @@ window.WispDB = (function () {
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     init, signUp, signIn, signOut,
     listWorks, getWork, getChapters, myWorks,
-    createWork, toggle, myRelations, getComments, postComment, uploadCover,
+    createWork, deleteWork, toggle, myRelations, getComments, postComment, uploadCover,
     fmtCount, relTime
   };
 })();

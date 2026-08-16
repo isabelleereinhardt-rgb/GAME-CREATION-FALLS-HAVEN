@@ -64,9 +64,21 @@ Leave it on for a real launch, and set up an email sender under
   automatically for each new account.
 - Posting works from the Writing Station writes real rows to your database (you
   can watch them appear under **Table Editor > works**).
+- Browse lists every published work from your database, with the same filters
+  and sorting.
+- Opening a work shows its real chapters; the reader shows the real chapter text
+  with the full reading controls.
+- Per-line comments are live: readers can open the conversation on any line and
+  post, and the comment is saved to your database.
+- Hearts, subscriptions, and bookmarks are saved to your account and come back
+  the way you left them.
+- The Writing Station lists your own works with their real stats, and you can
+  delete a work.
 
-Reading real posted works, comments, reactions, and image uploads are wired in
-the data layer (`assets/js/db.js`) and get connected to the screens next.
+The Home page stays a curated showcase until your own works fill it in. Editing
+an already-posted work's text, series grouping, reactions, reading progress, and
+cover-image uploads use the same data layer (`assets/js/db.js`) and get wired to
+the screens next.
 
 ## How it is secured
 

@@ -29,6 +29,19 @@
                       mutedTags: new Set(), blockedUsers: new Set() };
   function markVisited(id) { if (id) userState.visited.add(id); }
 
+  /* ---- live data cache ---------------------------------------------------
+     When Supabase is connected, the content screens read from these caches,
+     which the loaders below fill from the database. In demo mode they stay
+     empty and every accessor falls back to the bundled demo dataset, so the
+     demo behaves exactly as before. */
+  const LIVE = { works: [], byId: {}, chapters: {}, comments: {} };
+  function isLive() { return !!(window.WispDB && WispDB.enabled); }
+  function activeWorks() { return isLive() ? LIVE.works : W.WORKS; }
+  function activeById(id) { return LIVE.byId[id] || W.byId[id]; }   // live wins; demo fills curated links
+  function loadingScreen(sel) {
+    const el = $(sel); if (el) el.innerHTML = `<div class="page"><p style="text-align:center;padding:80px 0;color:var(--ink3)">Loading&hellip;</p></div>`;
+  }
+
   /* ---- shared modal, confirm dialog, and small action menus -------------- */
   function openModal(html, label) {
     const modal = $("#modal");
@@ -244,11 +257,11 @@
   const filterState = { q:"", type:"all", ratings:new Set(), tagsInc:new Set(), tagsExc:new Set(), sort:"hearts" };
   function allTags() {
     const m = new Map();
-    W.WORKS.forEach(w => w.tags.forEach(t => m.set(t, (m.get(t) || 0) + 1)));
+    activeWorks().forEach(w => (w.tags || []).forEach(t => m.set(t, (m.get(t) || 0) + 1)));
     return Array.from(m.entries()).sort((a, b) => b[1] - a[1]);
   }
   function filteredWorks() {
-    let list = W.WORKS.slice();
+    let list = activeWorks().slice();
     if (filterState.type !== "all") list = list.filter(w => w.type === filterState.type);
     if (filterState.ratings.size) list = list.filter(w => filterState.ratings.has(w.rating));
     if (filterState.tagsInc.size) list = list.filter(w => Array.from(filterState.tagsInc).every(t => w.tags.includes(t)));
@@ -339,7 +352,9 @@
               ? (settings.view === "list"
                   ? `<div class="stack-list">${results.map(cardList).join("")}</div>`
                   : `<div class="work-grid">${results.map(cardGallery).join("")}</div>`)
-              : `<div style="text-align:center;padding:70px 0;color:var(--ink3)"><p style="font-size:16px">Nothing matches yet.</p><p style="font-size:14px">Loosen a filter, or clear the exclusions.</p></div>`}
+              : (activeWorks().length === 0
+                  ? `<div style="text-align:center;padding:70px 0;color:var(--ink3)"><p style="font-size:16px">No works here yet.</p><p style="font-size:14px">Post the first one from the Writing Station.</p></div>`
+                  : `<div style="text-align:center;padding:70px 0;color:var(--ink3)"><p style="font-size:16px">Nothing matches yet.</p><p style="font-size:14px">Loosen a filter, or clear the exclusions.</p></div>`)}
           </div>
         </div>
       </div>`;
@@ -349,17 +364,29 @@
   /*  SCREEN: WORK DETAIL                                                     */
   /* ======================================================================= */
   function renderWork(id) {
-    const w = W.byId[id] || W.byId.amber;
+    const w = activeById(id) || W.byId.amber;
     markVisited(w.id);
-    const chapters = Math.min(w.chapters, 8);
-    const rows = Array.from({ length: chapters }, (_, i) => {
-      const n = i + 1;
-      return `<button class="chapter-row" data-read="${w.id}">
-        <span class="chapter-row__n">${n}</span>
-        <span class="chapter-row__title">Chapter ${n}${n === 1 ? ": The First Cold Morning" : ""}</span>
-        <span class="chapter-row__when">${n <= 3 ? "posted" : "posted"} ${["3mo","2mo","6w","1mo","3w","2w","1w","9h"][i] || ""}</span>
-      </button>`;
-    }).join("");
+    let rows;
+    const liveChapters = w._db ? (LIVE.chapters[w.id] || []).filter(c => c.published) : null;
+    if (liveChapters) {
+      rows = liveChapters.length
+        ? liveChapters.map(c => `<button class="chapter-row" data-read="${w.id}">
+            <span class="chapter-row__n">${c.number}</span>
+            <span class="chapter-row__title">Chapter ${c.number}${c.title ? ": " + esc(c.title) : ""}</span>
+            <span class="chapter-row__when">posted ${WispDB.relTime(c.published_at || c.created_at)}</span>
+          </button>`).join("")
+        : `<p class="muted" style="padding:14px 4px">No chapters published yet.</p>`;
+    } else {
+      const chapters = Math.min(w.chapters, 8);
+      rows = Array.from({ length: chapters }, (_, i) => {
+        const n = i + 1;
+        return `<button class="chapter-row" data-read="${w.id}">
+          <span class="chapter-row__n">${n}</span>
+          <span class="chapter-row__title">Chapter ${n}${n === 1 ? ": The First Cold Morning" : ""}</span>
+          <span class="chapter-row__when">posted ${["3mo","2mo","6w","1mo","3w","2w","1w","9h"][i] || ""}</span>
+        </button>`;
+      }).join("");
+    }
 
     $("#screen-work").innerHTML = `
       <div class="page">
@@ -374,8 +401,8 @@
               ${rate(w.rating)} <span>${RATE[w.rating]}</span>
               ${w.warnings.length ? `<span style="color:var(--rose-ink)">${icon("flag",14)} ${w.warnings.map(esc).join(", ")}</span>` : `<span class="muted">${icon("check",14)} No warnings</span>`}
               <span>${icon("book",14)} ${w.complete ? w.chapters + " chapters, complete" : w.chapters + " chapters, ongoing"}</span>
-              <span>${w.words} words</span>
-              <span>${icon("clock",14)} ${w.read}</span>
+              ${w.words ? `<span>${w.words} words</span>` : ""}
+              ${w.read ? `<span>${icon("clock",14)} ${w.read}</span>` : ""}
             </div>
             <p class="soft" style="font-size:16px;line-height:1.6;max-width:620px">${esc(w.summary)}</p>
             <div style="margin:16px 0">${tagRow(w.tags, 12)}</div>
@@ -453,6 +480,8 @@
 
   function renderReading(reqId) {
     openThreads.clear();               // the DOM is rebuilt below; open-state must reset
+    const liveWork = LIVE.byId[reqId];
+    if (liveWork && liveWork._db) { renderLiveReading(liveWork, LIVE.chapters[reqId] || []); return; }
     const c = W.CHAPTER;
     const flagship = (!reqId || reqId === "amber");
     const w = W.byId[reqId] || W.byId.amber;
@@ -535,6 +564,120 @@
 
     mountReaderTools();
     wireReading();
+  }
+
+  // Split a chapter body into display paragraphs: blank lines first, then any
+  // remaining single newlines. Empty pieces are dropped.
+  function splitParagraphs(body) {
+    const text = String(body || "").replace(/\r\n/g, "\n").trim();
+    if (!text) return [];
+    let parts = text.split(/\n{2,}/).map(s => s.trim()).filter(Boolean);
+    if (parts.length <= 1) parts = text.split(/\n/).map(s => s.trim()).filter(Boolean);
+    return parts.length ? parts : [text];
+  }
+
+  // Reader for a real, database-backed work. Full reading chrome and per-line
+  // comments; the seeded reaction demo stays on the sample chapter.
+  function renderLiveReading(w, chapters) {
+    markVisited(w.id);
+    const published = chapters.filter(c => c.published);
+    const ch = published[0] || chapters[0] || null;
+    const paras = ch ? splitParagraphs(ch.body) : [];
+    const byPara = LIVE.comments[w.id] || {};
+
+    const proseHTML = paras.length
+      ? paras.map((t, i) => {
+          const n = (byPara[i] || []).length;
+          return `<div class="para" data-lpara="${i}">
+            <button class="para__marker" data-lmark="${i}" aria-label="Open the conversation on this line">${icon("comment",15)}${n ? `<span class="para__count">${n}</span>` : ""}</button>
+            <p>${esc(t)}</p>
+            <div class="thread-slot" data-lslot="${i}"></div>
+          </div>`;
+        }).join("")
+      : `<div class="note"><p>This work has no published chapters yet.</p></div>`;
+
+    $("#screen-reading").innerHTML = `
+      <div class="reader">
+        <div class="reader__progress" id="readProgress"><i></i></div>
+        <div class="reader__wrap" id="readerWrap">
+          <div class="reader__crumbs"><a href="#/work/${w.id}">${esc(w.title)}</a> ${icon("chev",12)} <span>Chapter ${ch ? ch.number : 1}</span></div>
+          <h1 class="reader__title">${esc(w.title)}</h1>
+          <div class="reader__by">by <a href="#/work/${w.id}">${esc(w.author)}</a></div>
+          ${ch ? `<div class="reader__chapter">Chapter ${ch.number}</div>${ch.title ? `<div class="reader__chapter-title">${esc(ch.title)}</div>` : ""}` : ""}
+          <div class="prose" id="prose" data-justify="${settings.justify ? "on" : "off"}" data-hyphen="${settings.justify ? "on" : "off"}">
+            ${proseHTML}
+          </div>
+          ${published.length > 1 ? `<div class="chapter-nav"><button class="btn--link" data-work="${w.id}">Chapter index</button></div>` : ""}
+        </div>
+        ${readerToolsHTML()}
+      </div>`;
+
+    mountReaderTools();
+    if (ch) wireLiveReading(w, ch);
+  }
+
+  function wireLiveReading(w, ch) {
+    $$("#screen-reading [data-lmark]").forEach(m => m.addEventListener("click", () => {
+      const i = +m.dataset.lmark;
+      const slot = $(`#screen-reading [data-lslot="${i}"]`);
+      if (!slot) return;
+      const para = slot.closest(".para");
+      if (openThreads.has(i)) { openThreads.delete(i); slot.innerHTML = ""; para.classList.remove("thread-open"); return; }
+      openThreads.add(i); para.classList.add("thread-open");
+      openLiveThread(w, ch, i, slot);
+    }));
+  }
+
+  // Render the thread for line i into its slot and bind the composer. Called
+  // again after each post so the new comment shows immediately.
+  function openLiveThread(w, ch, i, slot) {
+    slot.innerHTML = liveThreadHTML(w, i);
+    const ta = slot.querySelector("textarea"); if (ta) ta.focus();
+    const post = slot.querySelector("[data-lpost]");
+    if (!post) return;
+    post.addEventListener("click", async () => {
+      if (!WispDB.signedIn) { openAuth("in"); return; }
+      const body = (ta.value || "").trim(); if (!body) return;
+      post.disabled = true;
+      try {
+        await WispDB.postComment(w.id, body, ch.id, i);
+        const list = (LIVE.comments[w.id] = LIVE.comments[w.id] || {});
+        (list[i] = list[i] || []).push({
+          body, created_at: new Date().toISOString(),
+          profiles: { display_name: (WispDB.profile && WispDB.profile.display_name) || "You" }
+        });
+        openLiveThread(w, ch, i, slot);       // re-render with the new comment
+        refreshLiveCount(w, i);
+      } catch (e) { toast((e && e.message) || "Could not post."); post.disabled = false; }
+    });
+  }
+
+  function refreshLiveCount(w, i) {
+    const mark = $(`#screen-reading [data-lmark="${i}"]`); if (!mark) return;
+    const n = ((LIVE.comments[w.id] || {})[i] || []).length;
+    let badge = mark.querySelector(".para__count");
+    if (n && !badge) { badge = document.createElement("span"); badge.className = "para__count"; mark.appendChild(badge); }
+    if (badge) badge.textContent = n ? String(n) : (badge.remove(), "");
+  }
+
+  function liveThreadHTML(w, i) {
+    const comments = (LIVE.comments[w.id] && LIVE.comments[w.id][i]) || [];
+    const who = (c) => (c.profiles && c.profiles.display_name) || "Reader";
+    const rows = comments.map(c => `
+      <div class="comment">
+        <span class="comment__av">${esc((who(c)[0] || "R").toUpperCase())}</span>
+        <div>
+          <div><span class="comment__who">${esc(who(c))}</span><span class="comment__when">${WispDB.relTime(c.created_at)}</span></div>
+          <div class="comment__text">${esc(c.body)}</div>
+        </div>
+      </div>`).join("");
+    return `<div class="thread">
+      ${rows || '<p class="muted" style="font-size:13px;margin:2px 0 10px">No comments on this line yet.</p>'}
+      <div class="thread__compose">
+        <textarea placeholder="Reply on this line"></textarea>
+        <button class="btn btn--primary btn--sm" data-lpost>Post</button>
+      </div>
+    </div>`;
   }
 
   function readerToolsHTML() {
@@ -1381,27 +1524,201 @@
     $("#main").focus({ preventScroll:true });
   }
 
+  /* ======================================================================= */
+  /*  LIVE LOADERS  ·  fetch from Supabase, then hand off to the renderers    */
+  /* ======================================================================= */
+  async function seedRelations(id) {
+    if (!WispDB.signedIn) return;
+    try {
+      const [h, s, b] = await Promise.all([
+        WispDB.myRelations("hearts", [id]),
+        WispDB.myRelations("subscriptions", [id]),
+        WispDB.myRelations("bookmarks", [id])
+      ]);
+      h.has(id) ? userState.hearted.add(id) : userState.hearted.delete(id);
+      s.has(id) ? userState.subscribed.add(id) : userState.subscribed.delete(id);
+      b.has(id) ? userState.bookmarked.add(id) : userState.bookmarked.delete(id);
+    } catch (e) { /* leave toggles at their defaults */ }
+  }
+
+  async function loadBrowse() {
+    loadingScreen("#screen-browse");
+    try {
+      const list = await WispDB.listWorks({ sort: "recent", limit: 60 });
+      LIVE.works = list;
+      list.forEach(w => { LIVE.byId[w.id] = w; });
+    } catch (e) { console.error("[wisp] browse load failed:", e); LIVE.works = []; }
+    renderBrowse();
+  }
+
+  async function loadWork(id) {
+    loadingScreen("#screen-work");
+    try {
+      const w = await WispDB.getWork(id);
+      LIVE.byId[id] = w;
+      LIVE.chapters[id] = await WispDB.getChapters(id).catch(() => []);
+      await seedRelations(id);
+      renderWork(id);
+    } catch (e) {
+      if (W.byId[id]) { renderWork(id); return; }         // a curated demo link
+      $("#screen-work").innerHTML = `<div class="page"><button class="btn--link" data-back style="margin-bottom:18px">&lsaquo; Back</button><p style="padding:40px 0;color:var(--ink3)">This work could not be found.</p></div>`;
+    }
+  }
+
+  async function loadReading(id) {
+    loadingScreen("#screen-reading");
+    let w = null;
+    try {
+      w = await WispDB.getWork(id);
+      LIVE.byId[id] = w;
+      LIVE.chapters[id] = await WispDB.getChapters(id).catch(() => []);
+      const grouped = {};
+      (await WispDB.getComments(id).catch(() => [])).forEach(r => {
+        const k = r.paragraph_index == null ? -1 : r.paragraph_index;
+        (grouped[k] = grouped[k] || []).push(r);
+      });
+      LIVE.comments[id] = grouped;
+    } catch (e) {
+      const dw = W.byId[id];                                // fall back to a demo/sample chapter
+      if (needsGate(dw)) { showGate(dw, () => renderReading(id)); return; }
+      renderReading(id || "amber"); return;
+    }
+    if (needsGate(w)) { showGate(w, () => renderReading(id)); return; }
+    renderReading(id);
+  }
+
+  /* ---- writing desk (live) ----------------------------------------------- */
+  function dbToDeskRow(r) {
+    return {
+      id: r.id, title: r.title, status: r.status,
+      cover: r.cover_image_url || r.cover_color || "#6d5566",
+      rating: r.rating, chapters: +r.chapters_count || 0,
+      hearts: WispDB.fmtCount(r.hearts_count), comments: WispDB.fmtCount(r.comments_count),
+      reads: WispDB.fmtCount(r.reads_count),
+      when: "Updated " + WispDB.relTime(r.updated_at),
+      book: r.book_number || null
+    };
+  }
+  function liveMsRow(b) {
+    const st = WSTATUS[b.status];
+    const isPublic = b.status === "ongoing" || b.status === "complete";
+    const stats = isPublic
+      ? `<span class="ms-stats"><span class="stat stat--heart">${icon("heart",13)}${b.hearts}</span><span class="stat">${icon("comment",13)}${b.comments}</span><span class="stat">${icon("eye",13)}${b.reads}</span></span>`
+      : `<span class="ms-stats muted">${b.status === "scheduled" ? "Scheduled, not visible to readers yet" : "Draft, only you can see it"}</span>`;
+    return `<div class="ms-row" data-work="${b.id}">
+      <span class="ms-cover">${cover(b.cover, b.title)}${rate(b.rating)}</span>
+      <span class="ms-main">
+        <span class="ms-title">${esc(b.title)}</span>
+        <span class="ms-meta">
+          <span class="ms-status"><span class="pip pip--${st.pip}"></span>${st.t}</span>
+          <span class="muted">${b.chapters} ${b.chapters === 1 ? "chapter" : "chapters"}</span>
+          <span class="muted">${esc(b.when)}</span>
+        </span>
+        ${stats}
+      </span>
+      <span class="ms-row__actions">
+        <button class="ms-menu" data-live-menu="${b.id}" aria-label="More actions for ${esc(b.title)}">${icon("more",18)}</button>
+        <button class="ms-go-btn" data-work="${b.id}">Open ${icon("chev",15)}</button>
+      </span>
+    </div>`;
+  }
+  function renderLiveDashboard(rows) {
+    const books = rows.map(dbToDeskRow);
+    const drafts = books.filter(b => b.status === "draft").length;
+    const scheduled = books.filter(b => b.status === "scheduled").length;
+    const hearts = rows.reduce((n, r) => n + (+r.hearts_count || 0), 0);
+    const listHTML = books.length
+      ? books.map(liveMsRow).join("")
+      : `<p class="muted" style="padding:20px 4px">You have not posted anything yet. Start your first work below.</p>`;
+    $("#screen-write").innerHTML = `
+      <div class="page page--wide">
+        <div class="write-head">
+          <div>
+            <h1 class="vh">Writing Station</h1>
+            <div class="eyebrow rose" style="margin-bottom:8px">Writing Station</div>
+            <div class="display" style="font-size:30px">Your works</div>
+            <p class="section-lead" style="margin-bottom:0">All of your works in one place.</p>
+          </div>
+          <div class="write-actions">
+            <button class="btn btn--primary" data-edit="new">${icon("plus",16)} New work</button>
+          </div>
+        </div>
+        <div class="desk-totals">
+          <div><b>${books.length}</b><span>works</span></div>
+          <div><b>${drafts}</b><span>drafts</span></div>
+          <div><b>${scheduled}</b><span>scheduled</span></div>
+          <div><b>${WispDB.fmtCount(hearts)}</b><span>hearts</span></div>
+        </div>
+        <section class="ms-series">
+          <div class="ms-list">
+            ${listHTML}
+            <button class="ms-add" data-edit="new">${icon("plus",15)} Start a new work</button>
+          </div>
+        </section>
+      </div>`;
+  }
+  function renderWriteSignedOut() {
+    $("#screen-write").innerHTML = `
+      <div class="page page--wide">
+        <div class="write-head"><div>
+          <div class="eyebrow rose" style="margin-bottom:8px">Writing Station</div>
+          <div class="display" style="font-size:30px">Your works</div>
+        </div></div>
+        <div class="editorial" style="text-align:center;padding:50px 20px">
+          <p class="soft" style="font-size:16px;margin-bottom:16px">Sign in to see your works and post new ones.</p>
+          <button class="btn btn--primary" data-auth="in">Sign in</button>
+        </div>
+      </div>`;
+  }
+  async function loadWriteDashboard() {
+    if (!WispDB.signedIn) { renderWriteSignedOut(); return; }
+    loadingScreen("#screen-write");
+    try { renderLiveDashboard(await WispDB.myWorks()); }
+    catch (e) { console.error("[wisp] my-works load failed:", e); renderLiveDashboard([]); }
+  }
+  function liveWorkMenu(id) {
+    const w = LIVE.byId[id]; const title = (w && w.title) || "this work";
+    menuDialog(title, [
+      { icon: "share", label: "Copy link", run: () => copyLink(id) },
+      { icon: "trash", label: "Delete work", danger: true, run: () => confirmDialog({
+          title: "Delete this work?",
+          body: `${esc(title)} and its chapters will be deleted. You can't undo this.`,
+          confirmText: "Delete work", danger: true
+        }, async () => {
+          try { await WispDB.deleteWork(id); toast("Work deleted."); loadWriteDashboard(); }
+          catch (e) { toast((e && e.message) || "Could not delete."); }
+        }) }
+    ]);
+  }
+
   function route() {
     const hash = location.hash.replace(/^#\/?/, "");
     const [seg, arg] = hash.split("/");
     let screen = SCREENS.includes(seg) ? seg : "home";
     if (seg === "read") screen = "reading";
 
-    if (screen === "reading") {
-      const id = arg || "amber"; const w = W.byId[id];
-      if (needsGate(w)) { setActive("reading"); showGate(w, () => renderReading(id)); return; }
-      renderReading(id);
-    }
-    else if (screen === "work") { renderWork(arg); }
-    else if (screen === "browse") { renderBrowse(); }
-    else if (screen === "home") { renderHome(); }
-    else if (screen === "write") { renderWrite(arg); }
-    else if (screen === "library") { renderLibrary(); }
-    else if (screen === "community") { renderCommunity(); }
-    else if (screen === "profile") { renderProfile(); }
     setActive(screen);
     closeSheet();
     closeModal();
+
+    const live = isLive();
+    if (screen === "reading") {
+      if (live) { loadReading(arg || ""); return; }
+      const id = arg || "amber"; const w = W.byId[id];
+      if (needsGate(w)) { showGate(w, () => renderReading(id)); return; }
+      renderReading(id);
+    }
+    else if (screen === "work") { live ? loadWork(arg || "") : renderWork(arg); }
+    else if (screen === "browse") { live ? loadBrowse() : renderBrowse(); }
+    else if (screen === "home") { renderHome(); }
+    else if (screen === "write") {
+      if (live && arg === "new") renderWrite("new");
+      else if (live) loadWriteDashboard();
+      else renderWrite(arg);
+    }
+    else if (screen === "library") { renderLibrary(); }
+    else if (screen === "community") { renderCommunity(); }
+    else if (screen === "profile") { renderProfile(); }
   }
 
   function navigate(to) { location.hash = "#/" + to; }
@@ -1445,6 +1762,11 @@
     const tagEl = e.target.closest("[data-tag]:not([data-tag-more])");
     if (tagEl) { filterState.tagsInc.add(tagEl.dataset.tag); navigate("browse"); if (location.hash.includes("browse")) renderBrowse(); return; }
 
+    const lm = e.target.closest("[data-live-menu]");
+    if (lm) { liveWorkMenu(lm.dataset.liveMenu); return; }
+    const au = e.target.closest("[data-auth]");
+    if (au) { openAuth(au.dataset.auth || "in"); return; }
+
     const work = e.target.closest("[data-work]");
     if (work && !e.target.closest("[data-read]")) { navigate("work/" + work.dataset.work); return; }
 
@@ -1466,9 +1788,14 @@
     const tog = e.target.closest("[data-toggle]");
     if (tog) {
       const kind = tog.dataset.toggle;
+      if (isLive() && !WispDB.signedIn) { openAuth("in"); return; }   // must be signed in to act
       const wid = (location.hash.match(/#\/(?:work|read)\/([^/]+)/) || [])[1];
       const set = userState[kind === "heart" ? "hearted" : kind === "subscribe" ? "subscribed" : "bookmarked"];
       const on = tog.getAttribute("aria-pressed") !== "true";
+      if (isLive() && wid) {
+        const table = kind === "heart" ? "hearts" : kind === "subscribe" ? "subscriptions" : "bookmarks";
+        WispDB.toggle(table, wid, on).catch(err => toast((err && err.message) || "Could not save that."));
+      }
       tog.setAttribute("aria-pressed", String(on));
       if (wid) { on ? set.add(wid) : set.delete(wid); }
       const label = tog.querySelector(".toggle-label");
