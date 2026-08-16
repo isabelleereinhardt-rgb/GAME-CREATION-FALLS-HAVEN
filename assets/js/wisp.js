@@ -29,7 +29,7 @@
   // Reader actions that persist for the session (a stand-in for the server), so
   // a work you hearted or subscribed to still reads that way when you come back.
   const userState = { hearted: new Set(), subscribed: new Set(), bookmarked: new Set(), visited: new Set(),
-                      mutedTags: new Set(), blockedUsers: new Set() };
+                      mutedTags: new Set(), blockedUsers: new Set(), following: new Set() };
   function markVisited(id) { if (id) userState.visited.add(id); }
 
   /* ---- live data cache ---------------------------------------------------
@@ -446,7 +446,12 @@
           <div class="work-hero__main">
             <span class="tag-row"><span class="pill">${w.type === "fan" ? "Fanwork" : "Original"}</span><span class="pill">${esc(w.source)}</span>${w.format === "comic" ? '<span class="pill">Comic</span>' : ""}</span>
             <h1 class="work-hero__title">${esc(w.title)}</h1>
-            <div class="soft" style="font-size:16px">by <a href="#/profile">${esc(w.author)}</a></div>
+            <div class="soft" style="font-size:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <span>by <a href="#/profile">${esc(w.author)}</a></span>
+              ${(w._db && w.authorId && !(WispDB.profile && WispDB.profile.id === w.authorId))
+                ? `<button class="btn btn--quiet btn--sm ${userState.following.has(w.authorId) ? "is-on-quiet" : ""}" data-follow="${w.authorId}" aria-pressed="${userState.following.has(w.authorId)}">${userState.following.has(w.authorId) ? "Following" : "Follow"}</button>`
+                : ""}
+            </div>
             <div class="work-hero__meta">
               ${rate(w.rating)} <span>${RATE[w.rating]}</span>
               ${w.warnings.length ? `<span style="color:var(--rose-ink)">${icon("flag",14)} ${w.warnings.map(esc).join(", ")}</span>` : `<span class="muted">${icon("check",14)} No warnings</span>`}
@@ -1458,8 +1463,9 @@
         </div>
       </div>`;
   }
-  function renderProfileLive(works) {
+  function renderProfileLive(works, counts) {
     const p = WispDB.profile || {};
+    counts = counts || { followers: 0, following: 0 };
     const name = p.display_name || "You";
     const handle = p.handle ? "@" + p.handle : "";
     const published = (works || []).filter(w => w.status === "ongoing" || w.status === "complete");
@@ -1478,8 +1484,8 @@
             <div class="profile-stats">
               <div><b>${published.length}</b><span>Works</span></div>
               <div><b>${WispDB.fmtCount(hearts)}</b><span>Hearts</span></div>
-              <div><b>0</b><span>Followers</span></div>
-              <div><b>0</b><span>Following</span></div>
+              <div><b>${WispDB.fmtCount(counts.followers)}</b><span>Followers</span></div>
+              <div><b>${WispDB.fmtCount(counts.following)}</b><span>Following</span></div>
             </div>
           </div>
           <div style="display:flex;flex-direction:column;gap:8px">
@@ -1497,8 +1503,14 @@
   async function loadProfile() {
     if (!WispDB.signedIn) { renderProfileSignedOut(); return; }
     loadingScreen("#screen-profile");
-    try { renderProfileLive(await WispDB.myWorks()); }
-    catch (e) { console.error("[wisp] profile load failed:", e); renderProfileLive([]); }
+    try {
+      const uid = WispDB.user && WispDB.user.id;
+      const [works, counts] = await Promise.all([
+        WispDB.myWorks(),
+        uid ? WispDB.followCounts(uid).catch(() => ({ followers: 0, following: 0 })) : { followers: 0, following: 0 }
+      ]);
+      renderProfileLive(works, counts);
+    } catch (e) { console.error("[wisp] profile load failed:", e); renderProfileLive([]); }
   }
   function renderProfile() {
     if (isLive()) return loadProfile();
@@ -1798,6 +1810,10 @@
       LIVE.chapters[id] = await WispDB.getChapters(id).catch(() => []);
       LIVE.upcoming[id] = await WispDB.getUpcoming(id).catch(() => []);
       await seedRelations(id);
+      if (WispDB.signedIn && w.authorId) {
+        const f = await WispDB.amFollowing(w.authorId).catch(() => false);
+        f ? userState.following.add(w.authorId) : userState.following.delete(w.authorId);
+      }
       renderWork(id);
     } catch (e) {
       if (W.byId[id]) { renderWork(id); return; }         // a curated demo link
@@ -2166,6 +2182,19 @@
     if (asb) { pendingSeries = asb.dataset.addSeriesBook; navigate("write/new"); return; }
     const nsr = e.target.closest("[data-new-series]");
     if (nsr) { newLiveSeries(); return; }
+    const fol = e.target.closest("[data-follow]");
+    if (fol) {
+      if (isLive() && !WispDB.signedIn) { openAuth("in"); return; }
+      const aid = fol.dataset.follow;
+      const on = !userState.following.has(aid);
+      on ? userState.following.add(aid) : userState.following.delete(aid);
+      fol.textContent = on ? "Following" : "Follow";
+      fol.setAttribute("aria-pressed", String(on));
+      fol.classList.toggle("is-on-quiet", on);
+      toast(on ? "Following. New works show in your Following feed." : "Unfollowed.");
+      if (isLive()) WispDB.toggleFollow(aid, on).catch(err => toast((err && err.message) || "Could not update."));
+      return;
+    }
     const evj = e.target.closest("[data-event-join]");
     if (evj) {
       if (!WispDB.signedIn) { openAuth("in"); return; }
