@@ -25,7 +25,47 @@
 
   // Reader actions that persist for the session (a stand-in for the server), so
   // a work you hearted or subscribed to still reads that way when you come back.
-  const userState = { hearted: new Set(), subscribed: new Set(), bookmarked: new Set() };
+  const userState = { hearted: new Set(), subscribed: new Set(), bookmarked: new Set(), visited: new Set(),
+                      mutedTags: new Set(), blockedUsers: new Set() };
+  function markVisited(id) { if (id) userState.visited.add(id); }
+
+  /* ---- shared modal, confirm dialog, and small action menus -------------- */
+  function openModal(html, label) {
+    const modal = $("#modal");
+    const card = $("#modalCard");
+    card.setAttribute("aria-label", label || "Dialog");
+    card.innerHTML = html;
+    card.querySelectorAll("[data-modal-cancel]").forEach(b => b.addEventListener("click", closeModal));
+    if (!modal.classList.contains("is-open")) openOverlay(modal);        // first open: full modal setup
+    else { const f = focusables(card)[0]; if (f) f.focus(); }            // already open: just swap content
+  }
+  function closeModal() { closeOverlay($("#modal")); }
+
+  function confirmDialog(opts, onConfirm) {
+    openModal(`
+      <h2>${esc(opts.title)}</h2>
+      <p class="soft" style="font-size:14.5px;line-height:1.6;margin-top:8px">${opts.body}</p>
+      <div class="modal-actions">
+        <button class="btn btn--quiet" data-modal-cancel>${esc(opts.cancelText || "Cancel")}</button>
+        <button class="btn ${opts.danger ? "btn--danger" : "btn--primary"}" data-confirm-ok>${esc(opts.confirmText || "Confirm")}</button>
+      </div>`, opts.title);
+    $("[data-confirm-ok]").addEventListener("click", () => { closeModal(); onConfirm(); });
+  }
+
+  function menuDialog(title, items) {
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <h2 style="font-size:20px">${esc(title)}</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-menu">
+        ${items.map((it, i) => `<button data-menu-item="${i}" class="${it.danger ? "danger" : ""}">${icon(it.icon, 17)}${esc(it.label)}</button>`).join("")}
+      </div>`, title);
+    items.forEach((it, i) => {
+      const btn = $(`[data-menu-item="${i}"]`);
+      if (btn) btn.addEventListener("click", () => { closeModal(); it.run(); });
+    });
+  }
   function icon(id, size = 16) { return `<svg width="${size}" height="${size}" aria-hidden="true"><use href="#i-${id}"></use></svg>`; }
 
   function cover(key, className = "", extra = "") {
@@ -51,8 +91,9 @@
     const timeStat = w.format === "comic"
       ? `<span class="stat">${icon("book",14)}${esc(w.chapters)}</span>`
       : `<span class="stat">${icon("eye",14)}${esc(w.reads)}</span>`;
+    const readMark = userState.visited.has(w.id) ? `<span class="read-badge">${icon("check",11)} Read</span>` : "";
     return `<article class="card" data-work="${w.id}">
-      <span class="card__cover">${cover(w.cover)}${rate(w.rating)}${flag}</span>
+      <span class="card__cover">${cover(w.cover)}${rate(w.rating)}${flag}${readMark}</span>
       <span class="card__body">
         <span class="tag-row"><span class="pill">${w.type === "fan" ? "Fanwork" : "Original"}</span><span class="pill">${esc(w.source)}</span></span>
         <a class="card__title" href="#/work/${w.id}">${esc(w.title)}</a>
@@ -71,7 +112,7 @@
 
   function cardList(w) {
     return `<article class="list-card" data-work="${w.id}">
-      <span class="list-card__cover">${cover(w.cover)}${rate(w.rating)}</span>
+      <span class="list-card__cover">${cover(w.cover)}${rate(w.rating)}${userState.visited.has(w.id) ? `<span class="read-badge">${icon("check",11)} Read</span>` : ""}</span>
       <span class="list-card__main">
         <span class="tag-row"><span class="pill">${w.type === "fan" ? "Fanwork" : "Original"}</span><span class="pill">${esc(w.source)}</span>${w.format === "comic" ? '<span class="pill">Comic</span>' : ""}</span>
         <a class="card__title" href="#/work/${w.id}" style="font-size:22px">${esc(w.title)}</a>
@@ -104,7 +145,7 @@
         <h2>Picked for you</h2>
         <button class="btn--link" data-nav="browse">Browse all &rsaquo;</button>
       </div>
-      <p class="section-lead">Drawn from what you read and the tags you follow; never sold, never advertised.</p>
+      <p class="section-lead">Based on what you read and the tags you follow.</p>
       ${grid}
 
       <div class="editorial">
@@ -119,7 +160,7 @@
               </span>
             </button>`; }).join("")}
         </div>
-        <p class="muted" style="font-size:12.5px;margin-top:14px">Community-nominated, editor-selected, weighted toward overlooked and small works. <a href="#/community">See who picks &rsaquo;</a></p>
+        <p class="muted" style="font-size:12.5px;margin-top:14px">Nominated by readers and chosen by the editors, often smaller works. <a href="#/community">See who picks &rsaquo;</a></p>
       </div>`;
 
     const following = `<div class="stack-list" style="gap:0">
@@ -135,16 +176,16 @@
       <div class="explainer" id="introBar">
         <div style="flex:1;min-width:230px">
           <div class="eyebrow rose" style="margin-bottom:6px">New here</div>
-          <div class="display" style="font-size:20px">Read stories together instead of alone.</div>
+          <div class="display" style="font-size:20px">How Wisp works</div>
         </div>
         <div class="explainer__steps">
-          <div class="explainer__step"><span class="explainer__n">1</span><span class="soft" style="font-size:13px">Find something to fall into. Picks come from what you read, never from an advertiser.</span></div>
-          <div class="explainer__step"><span class="explainer__n">2</span><span class="soft" style="font-size:13px">Talk in the margins. Comment and react on the exact line that got you.</span></div>
-          <div class="explainer__step"><span class="explainer__n">3</span><span class="soft" style="font-size:13px">Keep control. Filter and warn; adult content stays off until you say so.</span></div>
+          <div class="explainer__step"><span class="explainer__n">1</span><span class="soft" style="font-size:13px">Recommendations are based on what you read, not on ads.</span></div>
+          <div class="explainer__step"><span class="explainer__n">2</span><span class="soft" style="font-size:13px">You can comment and react on any line as you read.</span></div>
+          <div class="explainer__step"><span class="explainer__n">3</span><span class="soft" style="font-size:13px">You filter what you see, and adult content stays off until you turn it on.</span></div>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start">
-          <button class="btn btn--primary btn--sm" data-toast="Signup is instant: no invite queue. Reading stays open logged out.">Create an account</button>
-          <div class="muted" style="font-size:11.5px;line-height:1.5">No ads, ever. Your data is never sold.</div>
+          <button class="btn btn--primary btn--sm" data-toast="Sign up is instant. You can read without an account.">Create an account</button>
+          <div class="muted" style="font-size:11.5px;line-height:1.5">No ads. Your data is never sold.</div>
           <button class="btn--link" id="introDismiss">Dismiss</button>
         </div>
       </div>`;
@@ -218,8 +259,8 @@
       <div class="page page--wide">
         <div style="margin-bottom:24px">
           <div class="eyebrow rose" style="margin-bottom:8px">Browse</div>
-          <h1 class="display" style="font-size:32px">Fanwork and original, filtered together</h1>
-          <p class="section-lead">One search across both. Shared facets span everything; a fandom narrows to fanwork, a genre to original. The type toggle is sticky when you set it.</p>
+          <h1 class="display" style="font-size:32px">Browse fanfiction and original fiction</h1>
+          <p class="section-lead">Search both at once. Most filters apply to everything; a few, like fandom or genre, apply to one type.</p>
         </div>
         <div class="browse">
           <aside class="filters">
@@ -251,7 +292,7 @@
             <details class="filter-group">
               <summary>Exclude ${excCount ? `<span class="filter-group__count">${excCount}</span>` : ""} ${icon("chev",16).replace("<svg","<svg class='chev'")}</summary>
               <div class="filter-body">
-                <p class="muted" style="font-size:12px;margin:0 0 4px">Full parity with include. Also honored by your global tag blacklist.</p>
+                <p class="muted" style="font-size:12px;margin:0 0 4px">Works the same as include. Tags you have muted are always excluded.</p>
                 ${tags.map(([t, n]) => `<label class="check"><input type="checkbox" data-exc="${esc(t)}" ${filterState.tagsExc.has(t) ? "checked" : ""}> ${esc(t)} <span class="n">${n}</span></label>`).join("")}
               </div>
             </details>
@@ -290,6 +331,7 @@
   /* ======================================================================= */
   function renderWork(id) {
     const w = W.byId[id] || W.byId.amber;
+    markVisited(w.id);
     const chapters = Math.min(w.chapters, 8);
     const rows = Array.from({ length: chapters }, (_, i) => {
       const n = i + 1;
@@ -316,16 +358,18 @@
               <span>${w.words} words</span>
               <span>${icon("clock",14)} ${w.read}</span>
             </div>
-            <p class="soft" style="font-size:16px;line-height:1.6;max-width:620px">${esc(w.summary)} A patient, character-first story that takes exactly as long as it needs to; posted chapter by chapter, with the conversation open in the margins.</p>
+            <p class="soft" style="font-size:16px;line-height:1.6;max-width:620px">${esc(w.summary)}</p>
             <div style="margin:16px 0">${tagRow(w.tags, 12)}</div>
             <div class="work-actions">
               <button class="btn btn--primary" data-read="${w.id}">${icon("book",16)} Start reading</button>
               <button class="btn ${userState.hearted.has(w.id) ? "btn--primary" : "btn--ghost"}" data-toggle="heart" aria-pressed="${userState.hearted.has(w.id)}">${icon("heart",16)}<span class="toggle-label">${userState.hearted.has(w.id) ? "Hearted" : "Heart"}</span></button>
               <button class="btn btn--quiet ${userState.subscribed.has(w.id) ? "is-on-quiet" : ""}" data-toggle="subscribe" aria-pressed="${userState.subscribed.has(w.id)}">${icon("bell",16)}<span class="toggle-label">${userState.subscribed.has(w.id) ? "Subscribed" : "Subscribe"}</span></button>
               <button class="btn btn--quiet ${userState.bookmarked.has(w.id) ? "is-on-quiet" : ""}" data-toggle="bookmark" aria-pressed="${userState.bookmarked.has(w.id)}">${icon("bookmark",16)}<span class="toggle-label">${userState.bookmarked.has(w.id) ? "Bookmarked" : "Bookmark"}</span></button>
-              <button class="btn btn--quiet" data-toast="Downloads: EPUB, PDF, and HTML are free and always will be.">${icon("download",16)} Download</button>
+              <button class="btn btn--quiet" data-share="${w.id}">${icon("share",16)} Share</button>
+              <button class="btn btn--quiet" data-toast="Download as EPUB, PDF, or HTML. Downloads are free.">${icon("download",16)} Download</button>
+              <button class="btn btn--quiet" data-work-overflow="${w.id}" aria-label="More options">${icon("more",16)}</button>
             </div>
-            <p class="muted" style="font-size:12px;margin:2px 0 0">Hearts are one per reader, quiet and un-gameable.</p>
+            <p class="muted" style="font-size:12px;margin:2px 0 0">One heart per reader.</p>
             <div class="card__stats" style="border:0;max-width:420px;padding:0">
               <span class="stat stat--heart">${icon("heart",15)}${w.hearts} hearts</span>
               <span class="stat">${icon("comment",15)}${w.comments}</span>
@@ -338,8 +382,8 @@
         <div class="chapter-list">${rows}</div>
 
         <div class="editorial" style="margin-top:30px">
-          <div class="eyebrow rose" style="margin-bottom:6px">Per-work controls the author set</div>
-          <p class="soft" style="font-size:14px;margin:0;line-height:1.7">Inline comments are on. This work is open to everyone, including logged-out readers. The author has not locked comments or required moderation. A reader can always mute a tag, block a user, or turn off any work skin from their own settings; reader override always wins.</p>
+          <div class="eyebrow rose" style="margin-bottom:6px">This work's settings</div>
+          <p class="soft" style="font-size:14px;margin:0;line-height:1.7">Comments are on, and anyone can read it, including logged-out visitors. You can mute a tag, block a user, or turn off the author's skin from the button above or your own settings. Your settings always win over the author's.</p>
         </div>
       </div>`;
   }
@@ -380,7 +424,7 @@
       </div>`).join("");
     return `<div class="thread">
       <div class="thread__reactions">${reactChips}<button class="react react--add" title="More reactions">${icon("plus",14)}</button></div>
-      ${comments || '<p class="muted" style="font-size:13px;margin:2px 0 10px">No one has said anything here yet. Be the first, gently.</p>'}
+      ${comments || '<p class="muted" style="font-size:13px;margin:2px 0 10px">No comments on this line yet.</p>'}
       <div class="thread__compose">
         <textarea placeholder="Reply on this line" data-compose="${i}"></textarea>
         <button class="btn btn--primary btn--sm" data-post="${i}">Post</button>
@@ -393,6 +437,7 @@
     const c = W.CHAPTER;
     const flagship = (!reqId || reqId === "amber");
     const w = W.byId[reqId] || W.byId.amber;
+    markVisited(flagship ? "amber" : w.id);
 
     if (!flagship) {
       // Honest preview for non-flagship works: full reader chrome, a short opening,
@@ -408,13 +453,13 @@
             <div class="reader__chapter-title">The First Cold Morning</div>
             <div class="prose" data-justify="${settings.justify ? "on" : "off"}" data-hyphen="${settings.justify ? "on" : "off"}">
               <div class="para"><p>${esc(w.summary)}</p></div>
-              <div class="para"><p>This chapter is a short preview in the demo build. The reader you are looking at, the calm column, the adjustable width, the theme and comfort controls, works on every story on Wisp.</p></div>
-              <div class="note"><p>The full social reading demo, with per-line threads and one-tap reactions faint in the margin, lives on our flagship chapter. Open it to see the conversation.</p>
-                <p style="margin-top:12px"><button class="btn btn--primary btn--sm" data-read="amber">${icon("comment",15)} Open the conversation demo</button></p></div>
+              <div class="para"><p>This is a short preview. The reader, the adjustable width, and the theme and comfort settings work on every story.</p></div>
+              <div class="note"><p>The full per-line comment demo is on our sample chapter. Open it to try it.</p>
+                <p style="margin-top:12px"><button class="btn btn--primary btn--sm" data-read="amber">${icon("comment",15)} Open the sample chapter</button></p></div>
             </div>
             <div class="chapter-nav">
               <button class="btn btn--quiet btn--sm" data-work="${w.id}">&lsaquo; Work page</button>
-              <button class="btn btn--quiet btn--sm" data-read="amber">Next: the flagship &rsaquo;</button>
+              <button class="btn btn--quiet btn--sm" data-read="amber">Open the sample chapter &rsaquo;</button>
             </div>
           </div>
           ${readerToolsHTML()}
@@ -450,13 +495,13 @@
           <details class="note" style="margin-top:34px">
             <summary>End note</summary>
             <p>${esc(c.endNote)}</p>
-            <p style="margin-top:12px;font-size:13.5px;color:var(--ink3)">A gentle prompt, never a demand: if a single line stayed with you, the margin is right there.</p>
+            <p style="margin-top:12px;font-size:13.5px;color:var(--ink3)">Tap any line to leave a comment or a reaction.</p>
           </details>
 
           <div class="chapter-nav">
             <button class="btn btn--quiet" data-toast="This is the earliest chapter in the demo.">&lsaquo; Previous</button>
             <button class="btn--link" data-work="amber">Chapter index</button>
-            <button class="btn btn--primary" data-toast="The concert hall, at last. Next chapter is a demo stub.">Next chapter &rsaquo;</button>
+            <button class="btn btn--primary" data-toast="This is the last chapter in the demo.">Next chapter &rsaquo;</button>
           </div>
         </div>
 
@@ -518,7 +563,7 @@
     u.onend = () => { speaking = false; btn.classList.remove("is-on"); btn.innerHTML = icon("play",16); };
     window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
     speaking = true; btn.classList.add("is-on"); btn.innerHTML = icon("play",16);
-    toast("Reading aloud with a neural voice.");
+    toast("Reading aloud.");
   }
 
   // Persistent document/#main listeners are wired exactly once; they read the
@@ -578,8 +623,8 @@
         try {
           const mark = document.createElement("mark"); mark.className = "hl";
           mark.appendChild(lastRange.extractContents()); lastRange.insertNode(mark);
-          toast(kind === "note" ? "Saved to Things, with room for a note." : "Highlighted. Find it in Library, under Things.");
-        } catch (e) { toast("Try selecting within a single paragraph."); }
+          toast(kind === "note" ? "Saved to your highlights. Add a note in Library." : "Highlighted. Find it in Library, under Things.");
+        } catch (e) { toast("Select text within one paragraph."); }
       }
       pop.style.display = "none"; window.getSelection().removeAllRanges();
     }));
@@ -641,13 +686,130 @@
     return w ? renderWriteEditor(w) : renderWriteDashboard();
   }
 
+  /* ---- desk mutations (in-memory stand-in for the server) ---------------- */
+  function allBooks() { return W.WRITER.series.flatMap(s => s.books).concat(W.WRITER.standalone); }
+  function totalWorks() { return allBooks().length; }
+  function deleteWork(id) {
+    for (const s of W.WRITER.series) { const i = s.books.findIndex(b => b.id === id); if (i >= 0) { s.books.splice(i, 1); return; } }
+    const j = W.WRITER.standalone.findIndex(b => b.id === id); if (j >= 0) W.WRITER.standalone.splice(j, 1);
+  }
+  function makeStandalone(id) {
+    for (const s of W.WRITER.series) {
+      const i = s.books.findIndex(b => b.id === id);
+      if (i >= 0) { const b = s.books.splice(i, 1)[0]; delete b.book; b.type = s.type; b.source = s.source; W.WRITER.standalone.push(b); return; }
+    }
+  }
+  function deleteSeries(id) {
+    const i = W.WRITER.series.findIndex(s => s.id === id); if (i < 0) return;
+    const s = W.WRITER.series.splice(i, 1)[0];
+    s.books.forEach(b => { delete b.book; b.type = s.type; b.source = s.source; W.WRITER.standalone.push(b); });
+  }
+  function reorderBook(seriesId, bookId, dir) {
+    const s = W.WRITER.series.find(x => x.id === seriesId); if (!s) return;
+    const i = s.books.findIndex(b => b.id === bookId); const j = i + (dir === "up" ? -1 : 1);
+    if (i < 0 || j < 0 || j >= s.books.length) return;
+    [s.books[i], s.books[j]] = [s.books[j], s.books[i]];
+    s.books.forEach((b, k) => { if (b.book != null) b.book = k + 1; });
+  }
+
+  /* ---- manage-series dialog ---------------------------------------------- */
+  function seriesModalHTML(s) {
+    const arrow = (deg) => `<span style="display:inline-flex;transform:rotate(${deg}deg)">${icon("chev", 13)}</span>`;
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <h2 style="font-size:20px">Manage series</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <div class="field"><label>Series name</label><input type="text" id="ms-name" value="${esc(s.name)}"></div>
+      <div class="field"><label>Description</label><textarea id="ms-note" rows="2">${esc(s.note)}</textarea></div>
+      <div class="field"><label>Order of books</label>
+        <div class="reorder">
+          ${s.books.map((b, i) => `
+            <div class="reorder-row">
+              <span>${esc(b.title)}</span>
+              <span class="reorder-ctrls">
+                <button data-move="up|${b.id}" ${i === 0 ? "disabled" : ""} aria-label="Move ${esc(b.title)} up">${arrow(-90)}</button>
+                <button data-move="down|${b.id}" ${i === s.books.length - 1 ? "disabled" : ""} aria-label="Move ${esc(b.title)} down">${arrow(90)}</button>
+              </span>
+            </div>`).join("")}
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px">
+        <button class="btn--link" data-delete-series style="color:#a2444f">Delete series</button>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn--quiet" data-modal-cancel>Cancel</button>
+          <button class="btn btn--primary" data-save-series>Save</button>
+        </div>
+      </div>`;
+  }
+  function manageSeries(id) {
+    const s = W.WRITER.series.find(x => x.id === id); if (!s) return;
+    openModal(seriesModalHTML(s), "Manage series");
+    $$("#modalCard [data-move]").forEach(b => b.addEventListener("click", () => {
+      const [dir, bid] = b.dataset.move.split("|");
+      reorderBook(id, bid, dir); manageSeries(id);
+      const again = $(`#modalCard [data-move="${dir}|${bid}"]`);
+      (again && !again.disabled ? again : $("#modalCard [data-save-series]")).focus();
+    }));
+    $("#modalCard [data-save-series]").addEventListener("click", () => {
+      const nm = $("#ms-name").value.trim(); if (nm) s.name = nm;
+      s.note = $("#ms-note").value.trim();
+      closeModal(); renderWriteDashboard(); toast("Series saved.");
+    });
+    $("#modalCard [data-delete-series]").addEventListener("click", () => {
+      const n = s.books.length;
+      confirmDialog({
+        title: "Delete this series?",
+        body: `The series grouping is removed. Its ${n} ${n === 1 ? "book stays" : "books stay"} in your works as standalone.`,
+        confirmText: "Delete series", danger: true
+      }, () => { deleteSeries(id); renderWriteDashboard(); toast("Series deleted. The books were kept."); });
+    });
+  }
+
+  /* ---- per-work menu on the desk ----------------------------------------- */
+  function workRowMenu(id) {
+    const w = findWriterWork(id); if (!w) return;
+    const items = [{ icon: "edit", label: "Edit", run: () => navigate("write/" + id) }];
+    if (w.series) items.push({ icon: "book", label: "Make standalone", run: () => { makeStandalone(id); renderWriteDashboard(); toast("Moved to your standalone works."); } });
+    items.push({
+      icon: "trash", label: "Delete work", danger: true, run: () => {
+        confirmDialog({
+          title: "Delete this work?",
+          body: `${esc(w.title)} and its ${w.chapters} ${w.chapters === 1 ? "chapter" : "chapters"} will be deleted. You can't undo this.`,
+          confirmText: "Delete work", danger: true
+        }, () => { deleteWork(id); renderWriteDashboard(); toast("Work deleted."); });
+      }
+    });
+    menuDialog(w.title, items);
+  }
+
+  /* ---- reader work-page menu and sharing --------------------------------- */
+  function copyLink(id) {
+    const url = location.origin + location.pathname + "#/work/" + id;
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(() => toast("Link copied."), () => toast("Could not copy the link."));
+    else toast("Link copied.");
+  }
+  function workOverflow(id) {
+    const w = W.byId[id]; if (!w) return;
+    menuDialog(w.title, [
+      { icon: "share", label: "Copy link", run: () => copyLink(id) },
+      { icon: "mute", label: "Mute " + w.source, run: () => { userState.mutedTags.add(w.source); toast("Muted " + w.source + ". You won't see works tagged with it."); } },
+      { icon: "user", label: "Block " + w.author, run: () => { userState.blockedUsers.add(w.author); toast("Blocked " + w.author + "."); } },
+      { icon: "flag", label: "Report", run: () => confirmDialog({
+          title: "Report this work?",
+          body: "Reports go to the moderation team. Use this for illegal content, harassment, or spam.",
+          confirmText: "Send report"
+        }, () => toast("Report sent to the moderation team.")) }
+    ]);
+  }
+
   function msRow(b) {
     const st = WSTATUS[b.status];
     const isPublic = b.status === "ongoing" || b.status === "complete";
     const stats = isPublic
       ? `<span class="ms-stats"><span class="stat stat--heart">${icon("heart",13)}${b.hearts}</span><span class="stat">${icon("comment",13)}${b.comments}</span><span class="stat">${icon("eye",13)}${b.reads}</span></span>`
-      : `<span class="ms-stats muted">${b.status === "scheduled" ? "Queued, not visible to readers yet" : "Draft, only you can see this"}</span>`;
-    return `<button class="ms-row" data-edit="${b.id}">
+      : `<span class="ms-stats muted">${b.status === "scheduled" ? "Scheduled, not visible to readers yet" : "Draft, only you can see it"}</span>`;
+    return `<div class="ms-row" data-edit="${b.id}">
       <span class="ms-cover">${cover(b.cover)}${rate(b.rating)}</span>
       <span class="ms-main">
         <span class="ms-title">${esc(b.title)}${b.book ? `<span class="ms-book">Book ${b.book}</span>` : ""}</span>
@@ -658,12 +820,17 @@
         </span>
         ${stats}
       </span>
-      <span class="ms-go">${b.status === "draft" ? "Continue" : "Edit"} ${icon("chev",15)}</span>
-    </button>`;
+      <span class="ms-row__actions">
+        <button class="ms-menu" data-work-menu="${b.id}" aria-label="More actions for ${esc(b.title)}">${icon("more",18)}</button>
+        <button class="ms-go-btn" data-edit="${b.id}">${b.status === "draft" ? "Continue" : "Edit"} ${icon("chev",15)}</button>
+      </span>
+    </div>`;
   }
 
   function renderWriteDashboard() {
-    const t = W.WRITER.totals;
+    const books = allBooks();
+    const drafts = books.filter(b => b.status === "draft").length;
+    const scheduled = books.filter(b => b.status === "scheduled").length;
     const seriesHTML = W.WRITER.series.map(s => `
       <section class="ms-series">
         <div class="series-head">
@@ -673,12 +840,12 @@
             <span class="pill">${s.type === "fan" ? "Fanwork" : "Original"}</span>
             <span class="pill">${esc(s.source)}</span>
           </div>
-          <button class="btn--link" data-toast="Reorder the books, edit the series blurb, and manage characters shared across the series.">Manage series</button>
+          <button class="btn--link" data-manage-series="${s.id}">Manage series</button>
         </div>
         <p class="muted" style="font-size:13px;margin:2px 0 12px">${esc(s.note)}</p>
         <div class="ms-list">
           ${s.books.map(msRow).join("")}
-          <button class="ms-add" data-toast="A new book in this series inherits its characters and blurb.">${icon("plus",15)} Add a book to this series</button>
+          <button class="ms-add" data-toast="A new book in this series keeps its characters and description.">${icon("plus",15)} Add a book to this series</button>
         </div>
       </section>`).join("");
 
@@ -700,23 +867,23 @@
           <div>
             <h1 class="vh">Writing Station</h1>
             <div class="eyebrow rose" style="margin-bottom:8px">Writing Station</div>
-            <div class="display" style="font-size:30px">Your desk</div>
-            <p class="section-lead" style="margin-bottom:0">Everything you are working on, in one place. Several books and several series can be in flight at once; drafts, scheduled chapters, and finished stories all live here together.</p>
+            <div class="display" style="font-size:30px">Your works</div>
+            <p class="section-lead" style="margin-bottom:0">All of your works in one place. You can have several books and several series going at once.</p>
           </div>
           <div class="write-actions">
             <button class="btn btn--primary" data-edit="new">${icon("plus",16)} New work</button>
-            <button class="btn btn--quiet" data-toast="A new series groups related books and shares characters and a blurb across them.">New series</button>
+            <button class="btn btn--quiet" data-toast="A series groups related books together and shares their characters.">New series</button>
           </div>
         </div>
 
         <div class="desk-totals">
-          <div><b>${t.works}</b><span>works</span></div>
+          <div><b>${totalWorks()}</b><span>works</span></div>
           <div><b>${W.WRITER.series.length}</b><span>series</span></div>
-          <div><b>${t.drafts}</b><span>drafts</span></div>
-          <div><b>${t.scheduled}</b><span>scheduled</span></div>
-          <div><b>${t.hearts}</b><span>hearts, all works</span></div>
+          <div><b>${drafts}</b><span>drafts</span></div>
+          <div><b>${scheduled}</b><span>scheduled</span></div>
+          <div><b>${W.WRITER.totals.hearts}</b><span>hearts</span></div>
         </div>
-        <p class="muted" style="font-size:12px;margin:10px 2px 26px">Sober by design: hearts, comments, reads, and bookmarks, nothing more. No rankings, no leaderboards.</p>
+        <p class="muted" style="font-size:12px;margin:10px 2px 26px">Stats stay simple: hearts, comments, reads, and bookmarks. No rankings.</p>
 
         ${seriesHTML}
         ${standaloneHTML}
@@ -757,7 +924,7 @@
               ${st ? `<span class="ms-status"><span class="pip pip--${st.pip}"></span>${st.t}</span>` : "<span>Not published yet</span>"}
             </div>
           </div>
-          <div class="save-flag">${icon("check",14)} Saved just now, on this device and the server</div>
+          <div class="save-flag">${icon("check",14)} Saved just now</div>
         </div>
 
         <div class="writer">
@@ -779,13 +946,13 @@
             </div>
             <div class="editor" contenteditable="true" spellcheck="true" aria-label="Chapter body">
               <h2>Chapter ${chapters + 1}${isNew ? ": Untitled" : ""}</h2>
-              <p>${isNew ? "Start typing, or paste clean from your editor of choice; both are first-class." : "Pick up where you left off. Everything you write autosaves as you go, on this device and the server."}</p>
-              <p>A slash brings up blocks; two dashes make nothing, because we do not use them. Colons and semicolons carry the weight.</p>
+              <p>${isNew ? "Start typing, or paste from another editor." : "Pick up where you left off. Your writing saves automatically."}</p>
+              <p>Format with the toolbar above, or use Markdown shortcuts.</p>
             </div>
             <div class="write-actions" style="margin-top:16px">
-              <button class="btn btn--primary" data-toast="Chapter published. It will appear in your subscribers' Activity, quietly.">Publish chapter</button>
+              <button class="btn btn--primary" data-toast="Chapter published. Subscribers will see it in their activity.">Publish chapter</button>
               <button class="btn btn--quiet" data-toast="Saved as a draft.">Save draft</button>
-              <button class="btn btn--quiet" data-toast="Scheduled. It will post itself on the date you set; backdating is here too.">Schedule &hellip;</button>
+              <button class="btn btn--quiet" data-toast="Scheduled to post on the date you set.">Schedule &hellip;</button>
               <button class="btn btn--link">Preview</button>
             </div>
           </div>
@@ -808,7 +975,7 @@
               </div>
               ${typeFields}
               <div class="field"><label>Additional tags</label><input type="text" placeholder="Slow burn, found family, ..."></div>
-              <p class="muted" style="font-size:11.5px;margin-top:2px">Up to 50. House tags get a one-line description; the long tail is freeform, gently canonicalized later.</p>
+              <p class="muted" style="font-size:11.5px;margin-top:2px">Up to 50 tags. Common tags have short descriptions; the rest are freeform.</p>
             </div>
 
             <div class="panel">
@@ -823,13 +990,13 @@
 
             <div class="panel">
               <h4>Cover</h4>
-              <div class="cover-drop" data-toast="Covers are upload-only: no in-app maker, no auto-fallback. A cover is required to publish.">${icon("plus",18)}<div style="margin-top:6px">${isNew ? "Upload a cover" : "Replace cover"}</div><div style="font-size:11px;margin-top:2px">Required to publish</div></div>
+              <div class="cover-drop" data-toast="Upload a cover image. A cover is required to publish.">${icon("plus",18)}<div style="margin-top:6px">${isNew ? "Upload a cover" : "Replace cover"}</div><div style="font-size:11px;margin-top:2px">Required to publish</div></div>
             </div>
 
             <div class="panel">
               <h4>Serialization</h4>
               <div class="field"><label>Update schedule, shown to readers</label><input type="text" value="${work && work.schedule ? esc(work.schedule) : ""}" placeholder="e.g. Sundays"></div>
-              <p class="muted" style="font-size:12px;margin:0;line-height:1.55">Scheduled auto-publishing and backdating live here. A visible schedule tells subscribers when to expect you.</p>
+              <p class="muted" style="font-size:12px;margin:0;line-height:1.55">Schedule chapters to post automatically, or backdate them. Readers can see your schedule.</p>
             </div>
 
             <div class="panel">
@@ -843,7 +1010,7 @@
 
             <div class="panel">
               <h4>Notes and workspace</h4>
-              <p class="muted" style="font-size:13px;line-height:1.6;margin:0">Outlines, character sheets, and worldbuilding notes attach to this work and its series. Not a full outliner; just enough to keep the thread.</p>
+              <p class="muted" style="font-size:13px;line-height:1.6;margin:0">Attach outlines, character sheets, and worldbuilding notes to this work and its series.</p>
               <button class="btn--link" style="margin-top:10px">Open workspace</button>
             </div>
           </aside>
@@ -863,7 +1030,7 @@
       bookmarks: `<div class="shelf"><div class="shelf__head"><span class="shelf__title">Bookmarks</span><span class="muted" style="font-size:13px">${L.bookmarks.length} works</span></div>${gridOf(L.bookmarks)}</div>`,
       lists: `
         <div class="shelf">
-          <div class="shelf__head"><span class="shelf__title">Reading lists</span><button class="btn btn--quiet btn--sm" data-toast="New list. Private by default; make it public when you want it to become a discovery surface.">${icon("plus",14)} New list</button></div>
+          <div class="shelf__head"><span class="shelf__title">Reading lists</span><button class="btn btn--quiet btn--sm" data-toast="New list. Private by default.">${icon("plus",14)} New list</button></div>
           <div class="list-grid">
             ${L.lists.map(l => `
               <div class="list-tile">
@@ -872,7 +1039,7 @@
                 <div class="muted" style="font-size:12.5px;margin-top:4px">${l.count} works &middot; ${l.public ? "Public" : "Private"}</div>
               </div>`).join("")}
           </div>
-          <p class="muted" style="font-size:12.5px;margin-top:12px">Private by default. A public list becomes browsable for everyone; that is the only time anyone else sees it.</p>
+          <p class="muted" style="font-size:12.5px;margin-top:12px">Lists are private by default. Make one public and anyone can browse it.</p>
         </div>`,
       history: `<div class="shelf"><div class="shelf__head"><span class="shelf__title">Recently read</span><button class="btn--link" data-toast="History cleared for this session.">Clear history</button></div>${gridOf(L.history)}</div>`,
       things: `
@@ -890,8 +1057,8 @@
     $("#screen-library").innerHTML = `
       <div class="page page--wide">
         <div class="eyebrow rose" style="margin-bottom:8px">Library</div>
-        <h1 class="display" style="font-size:30px;margin-bottom:6px">Everything you keep</h1>
-        <p class="section-lead">Yours and quiet. Bookmarks and history stay private; a reading list is private until you choose to share it.</p>
+        <h1 class="display" style="font-size:30px;margin-bottom:6px">Your library</h1>
+        <p class="section-lead">Your bookmarks, lists, history, and notes. Bookmarks and history are private. Lists stay private until you share them.</p>
 
         <div class="subtabs">
           ${[["bookmarks","Bookmarks"],["lists","Reading lists"],["history","History"],["things","Things"]].map(([k, n]) =>
@@ -908,8 +1075,8 @@
     $("#screen-community").innerHTML = `
       <div class="page page--wide">
         <div class="eyebrow rose" style="margin-bottom:8px">Community Space</div>
-        <h1 class="display" style="font-size:30px;margin-bottom:6px">Where readers gather</h1>
-        <p class="section-lead">Async hubs for a fandom or a tag, and events you can join when you feel like it. No real-time chat, no direct messages; everything here is public and unhurried, a complement to your Discord, not a replacement.</p>
+        <h1 class="display" style="font-size:30px;margin-bottom:6px">Community</h1>
+        <p class="section-lead">Hubs for fandoms and tags, plus events you can join. Everything here is public. There's no live chat or direct messages.</p>
 
         <div class="shelf">
           <div class="shelf__head"><span class="shelf__title">Events and challenges</span><span class="muted" style="font-size:13px">Only events you have joined show up on Home</span></div>
@@ -920,9 +1087,9 @@
                 <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="font:600 18px var(--font-display);color:var(--ink)">${esc(e.title)}</span><span class="pill">${esc(e.kind)}</span></div>
                 <p class="soft" style="font-size:14px;margin:6px 0 0;line-height:1.6">${esc(e.note)}</p>
               </div>
-              <button class="btn ${e.joined ? "btn--quiet" : "btn--ghost"} btn--sm" data-toast="${e.joined ? "Left the event." : "Joined. It will now appear on your Home."}">${e.joined ? "Joined" : "Join"}</button>
+              <button class="btn ${e.joined ? "btn--quiet" : "btn--ghost"} btn--sm" data-toast="${e.joined ? "Left the event." : "Joined. It'll show on your home."}">${e.joined ? "Joined" : "Join"}</button>
             </div>`).join("")}
-          <p class="muted" style="font-size:12.5px;margin-top:10px">Phased by design: collections first, full exchange matching as the community grows.</p>
+          <p class="muted" style="font-size:12.5px;margin-top:10px">Collections now; full gift exchanges will come as the community grows.</p>
         </div>
 
         <div class="shelf">
@@ -940,7 +1107,7 @@
 
         <div class="editorial">
           <div class="eyebrow rose" style="margin-bottom:6px">Reporting and support</div>
-          <p class="soft" style="font-size:14px;margin:0;line-height:1.7">Most conversation, bug reports, and support live on the Wisp Discord. For the serious and urgent cases, a minimal in-app report button feeds the moderation queue directly. Fiction is free here as long as it is tagged and warned; the hard limits are real: illegal material, targeted harassment, doxxing, threats against real people, and spam.</p>
+          <p class="soft" style="font-size:14px;margin:0;line-height:1.7">Most discussion, bug reports, and support happen on the Wisp Discord. The in-app report button is for urgent cases and goes straight to the moderation team. Fiction is allowed as long as it's tagged and warned. The limits are illegal content, targeted harassment, doxxing, threats against real people, and spam.</p>
         </div>
       </div>`;
   }
@@ -967,7 +1134,7 @@
           </div>
           <div style="display:flex;flex-direction:column;gap:8px">
             <button class="btn btn--quiet btn--sm" id="themeBtn2">${icon("gear",15)} Customize theme</button>
-            <button class="btn btn--quiet btn--sm" data-toast="This is where your profile theme, pinned works, and widgets are arranged.">Edit profile</button>
+            <button class="btn btn--quiet btn--sm" data-toast="Arrange your profile theme, pinned works, and widgets here.">Edit profile</button>
           </div>
         </div>
 
@@ -977,8 +1144,8 @@
         </div>
 
         <div class="editorial">
-          <div class="eyebrow rose" style="margin-bottom:6px">Expressive, within reason</div>
-          <p class="soft" style="font-size:14px;margin:0;line-height:1.7">A profile is styled through the same theme system as everything else: accent, fonts, background, presets, pinned works, and widgets. No raw-HTML builder; sane defaults, and a reset that is always one tap away. Your theme only ever changes your own view of Wisp.</p>
+          <div class="eyebrow rose" style="margin-bottom:6px">Your profile</div>
+          <p class="soft" style="font-size:14px;margin:0;line-height:1.7">Style your profile with the same theme system as the rest of the site: accent, fonts, background, pinned works, and widgets. There's no raw HTML, and reset is one tap away. Your theme only changes your own view.</p>
         </div>
       </div>`;
     $("#themeBtn2") && $("#themeBtn2").addEventListener("click", openTheme);
@@ -1015,7 +1182,7 @@
           <span class="mini-cover">${cover("room9")}</span>
           <span><span class="mini-work__title">${esc(wd.staffPick.title)}</span><span class="mini-work__by">by ${esc(wd.staffPick.author)}</span></span>
         </button>
-        <p class="muted" style="font-size:12.5px;line-height:1.5;margin-top:12px">Chosen by the Wisp editors, weighted to overlooked and small works. <a href="#/community">See who picks &rsaquo;</a></p>
+        <p class="muted" style="font-size:12.5px;line-height:1.5;margin-top:12px">Chosen by the editors, often smaller works. <a href="#/community">See who picks &rsaquo;</a></p>
       </div>
 
       <div class="widget">
@@ -1030,7 +1197,7 @@
       <div class="widget">
         <div class="widget__label">This week</div>
         <div style="font:17px/1.35 var(--font-display);color:var(--ink)">You read ${wd.week.works} works,<br>${wd.week.words} words.</div>
-        <p class="muted" style="font-size:12.5px;margin:9px 0 0">Quiet by design: no streaks, no ranks.</p>
+        <p class="muted" style="font-size:12.5px;margin:9px 0 0">No streaks or rankings.</p>
       </div>`;
   }
   function renderWidgets() { $("#widgetMount").innerHTML = widgetHTML(); }
@@ -1098,7 +1265,7 @@
     $("#optMotion").addEventListener("change", e => { settings.motion = e.target.checked; applySettings(); });
     $("#optJustify").addEventListener("change", e => { settings.justify = e.target.checked; applySettings(); });
     $("#optMargins").addEventListener("change", e => { settings.margins = e.target.checked; applySettings(); });
-    $("#resetTheme").addEventListener("click", () => { settings = Object.assign({}, DEFAULTS, { adultOK: settings.adultOK }); applySettings(); toast("Reset to the quiet default."); });
+    $("#resetTheme").addEventListener("click", () => { settings = Object.assign({}, DEFAULTS, { adultOK: settings.adultOK }); applySettings(); toast("Reset to defaults."); });
   }
 
   // Shared modal-overlay plumbing: move focus in, trap Tab, make the app inert,
@@ -1216,6 +1383,7 @@
     else if (screen === "profile") { renderProfile(); }
     setActive(screen);
     closeSheet();
+    closeModal();
   }
 
   function navigate(to) { location.hash = "#/" + to; }
@@ -1233,7 +1401,7 @@
   function closeSheet() { closeOverlay($("#navSheet")); closeOverlay($("#railSheet")); }
   function openRailSheet(kind) {
     const body = $("#railSheetBody");
-    if (kind === "activity") body.innerHTML = `<h2 class="rail__title" style="margin-bottom:4px">Activity</h2><p class="rail__note">Your quiet stream. No pushes.</p>${activityHTML()}`;
+    if (kind === "activity") body.innerHTML = `<h2 class="rail__title" style="margin-bottom:4px">Activity</h2><p class="rail__note">Recent activity from the people and works you follow.</p>${activityHTML()}`;
     else body.innerHTML = `<h2 class="rail__title" style="margin-bottom:16px">Widgets</h2>${widgetHTML()}`;
     openOverlay($("#railSheet"));
   }
@@ -1254,6 +1422,15 @@
 
     const back = e.target.closest("[data-back]");
     if (back) { history.length > 1 ? history.back() : navigate("home"); return; }
+
+    const wm = e.target.closest("[data-work-menu]");
+    if (wm) { workRowMenu(wm.dataset.workMenu); return; }
+    const mgs = e.target.closest("[data-manage-series]");
+    if (mgs) { manageSeries(mgs.dataset.manageSeries); return; }
+    const wo = e.target.closest("[data-work-overflow]");
+    if (wo) { workOverflow(wo.dataset.workOverflow); return; }
+    const shr = e.target.closest("[data-share]");
+    if (shr) { copyLink(shr.dataset.share); return; }
 
     const edit = e.target.closest("[data-edit]");
     if (edit) { navigate("write/" + edit.dataset.edit); return; }
@@ -1334,7 +1511,7 @@
       else if (k === "exc") filterState.tagsExc.delete(v);
       renderBrowse(); return;
     }
-    if (e.target.closest("#saveSearch")) { toast("Search saved. It will not send notifications; check it whenever you like."); return; }
+    if (e.target.closest("#saveSearch")) { toast("Search saved. It won't send notifications."); return; }
   });
 
   function boot() {
@@ -1347,14 +1524,14 @@
     $("#themeBtn").addEventListener("click", openTheme);
     $("#themeClose").addEventListener("click", closeTheme);
     $("#themeScrim").addEventListener("click", (e) => { if (e.target.id === "themeScrim") closeTheme(); });
-    $("#signOutBtn").addEventListener("click", () => toast("Sign-out is a stub in this demo. Reading logged out keeps the whole discovery funnel open."));
+    $("#signOutBtn").addEventListener("click", () => toast("Sign out isn't wired up in this demo. You can read without an account."));
     $("#notifBtn").addEventListener("click", () => {
       if (window.matchMedia("(max-width:1040px)").matches) openRailSheet("activity");
-      else toast("Notifications are gentle here: feed-first, off-heavy by default, and never a re-engagement nudge.");
+      else toast("Notifications show up in your activity feed. Most are off by default.");
     });
     $("#railSheet").addEventListener("click", (e) => { if (e.target.id === "railSheet" || e.target.closest("[data-railclose]")) closeOverlay($("#railSheet")); });
-    $("#addWidget").addEventListener("click", () => toast("The widget tray holds 50+ preprogrammed widgets: Lucky, highlighter, read-aloud, and more."));
-    $("#customizeWidgets").addEventListener("click", () => toast("Rearrange, add, or remove widgets. Your tray, your desk."));
+    $("#addWidget").addEventListener("click", () => toast("Add widgets from the tray, like Lucky, highlighter, and read-aloud."));
+    $("#customizeWidgets").addEventListener("click", () => toast("Rearrange, add, or remove widgets."));
     $("#menuBtn").addEventListener("click", openSheet);
     $("#navSheet").addEventListener("click", (e) => { if (e.target.id === "navSheet") closeSheet(); });
 
@@ -1366,8 +1543,9 @@
 
     // Esc closes overlays.
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") { closeTheme(); closeSheet(); if ($(".gate")) { /* leave gate; it has explicit buttons */ } }
+      if (e.key === "Escape") { closeModal(); closeTheme(); closeSheet(); }
     });
+    $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
 
     window.addEventListener("hashchange", route);
     if (!location.hash) location.replace("#/home");

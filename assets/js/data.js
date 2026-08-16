@@ -200,9 +200,9 @@ window.WISP = (function () {
 
   /* Editorial / staff picks list. */
   const STAFF = [
-    { work:"marrow", note:"A greenhouse for grief, and not one wasted word. Small, and it stayed with us." },
-    { work:"room9", note:"Gothic done with restraint. The scares are all in what the prose declines to say." },
-    { work:"ledger", note:"Under a thousand hearts and it should not be. Kind, strange, and quietly perfect." }
+    { work:"marrow", note:"A short, strange book about a greenhouse that grows what people have lost." },
+    { work:"room9", note:"Quiet gothic horror; the scares are in what it leaves unsaid." },
+    { work:"ledger", note:"A kind, odd little book that deserves more readers." }
   ];
 
   /* Community hubs and events. */

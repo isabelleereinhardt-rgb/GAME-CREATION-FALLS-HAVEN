@@ -41,6 +41,10 @@
   <symbol id="i-edit" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3z"></path></symbol>
   <symbol id="i-flag" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M5 21V4h11l-2 4 2 4H5"></path></symbol>
   <symbol id="i-download" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M12 4v11m0 0 4-4m-4 4-4-4M5 20h14"></path></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.7" fill="currentColor"></circle><circle cx="12" cy="12" r="1.7" fill="currentColor"></circle><circle cx="12" cy="19" r="1.7" fill="currentColor"></circle></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2.4"></circle><circle cx="6" cy="12" r="2.4"></circle><circle cx="18" cy="19" r="2.4"></circle><path d="m8.1 10.8 7.8-4.6M8.1 13.2l7.8 4.6"></path></g></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M5 7h14M10 7V5h4v2M6 7l1 13h10l1-13"></path></symbol>
+  <symbol id="i-mute" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M11 5 6 9H3v6h3l5 4zM16 9l5 6M21 9l-5 6"></path></symbol>
 </defs></svg>
 
 <div id="app">
@@ -83,7 +87,7 @@
         <h2 class="rail__title">Activity</h2>
         <button class="btn--link" data-nav="library">See all</button>
       </div>
-      <p class="rail__note">Your quiet stream. No pushes.</p>
+      <p class="rail__note">Recent activity from the people and works you follow.</p>
       <div id="activityMount"></div>
     </aside>
 
@@ -120,7 +124,7 @@
       <h2>Theme</h2>
       <button class="drawer__close" id="themeClose" aria-label="Close">&times;</button>
     </div>
-    <p style="font-size:14px;line-height:1.6;color:var(--ink2);margin:0">Your look follows you across every device. Nothing here touches anyone else's view.</p>
+    <p style="font-size:14px;line-height:1.6;color:var(--ink2);margin:0">These settings sync across your devices and only change your own view.</p>
 
     <h3>Preset looks</h3>
     <div class="swatches" id="presetSwatches"></div>
@@ -154,7 +158,7 @@
     <div class="opt-row"><span id="lbl-margins">Show margin comment counts</span><label class="switch"><input type="checkbox" id="optMargins" checked aria-labelledby="lbl-margins"><span class="track"></span><span class="knob"></span></label></div>
 
     <button class="btn btn--quiet btn--full" id="resetTheme" style="margin-top:22px">Reset to defaults</button>
-    <p class="reset-note">Full per-heading control (Title, Subtitle, H1 through H7, Normal Text, Caption, each with its own font, size, and color) lives one layer deeper. The reset above is always one tap away.</p>
+    <p class="reset-note">Per-heading control (title, subtitle, H1 to H7, body text, caption, each with its own font, size, and color) lives one layer deeper. Reset is always one tap away.</p>
   </div>
 </div>
 
@@ -188,6 +192,11 @@
     <button class="link-btn" data-railclose style="margin-bottom:10px">&lsaquo; Close</button>
     <div id="railSheetBody"></div>
   </div>
+</div>
+
+<!-- ================= SHARED MODAL (manage series, confirm, menus) ================= -->
+<div class="scrim scrim--center" id="modal" aria-hidden="true">
+  <div class="modal-card col" role="dialog" aria-modal="true" aria-label="Dialog" id="modalCard"></div>
 </div>
 
 <!-- ================= GATE / INTERSTITIAL MOUNT ================= -->
