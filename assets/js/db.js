@@ -88,15 +88,15 @@ window.WispDB = (function () {
 
   async function refreshUser(session) {
     user = session ? session.user : null;
+    profile = null;
+    emit();                       // report the signed-in/out state right away
     if (user && client) {
       try {
         const { data } = await client.from("profiles").select("*").eq("id", user.id).single();
         profile = data || null;
       } catch (e) { profile = null; }
-    } else {
-      profile = null;
+      emit();                     // fill in the profile when it arrives, without blocking auth state
     }
-    emit();
   }
 
   /* ---- auth ------------------------------------------------------------- */

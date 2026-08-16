@@ -765,6 +765,10 @@ mark.hl { background: color-mix(in srgb, var(--amber) 34%, transparent); border-
 .authgate__lead { color: var(--ink2); font-size: 14.5px; line-height: 1.65; margin: 0 auto 26px; max-width: 360px; }
 .authgate__actions { display: flex; flex-direction: column; gap: 10px; }
 .authgate__guest { margin-top: 18px; }
+.authgate__panel--loading { background: none; border: 0; box-shadow: none; }
+.authgate__panel--loading .authgate__brand { margin: 0; animation: authgate-pulse 1.3s ease-in-out infinite; }
+@keyframes authgate-pulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .authgate__panel--loading .authgate__brand { animation: none; } }
 
 /* ---------------------------------------------------------------------------
    12. Browse  ·  progressive filter sidebar + results

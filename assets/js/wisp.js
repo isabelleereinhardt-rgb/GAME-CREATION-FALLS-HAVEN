@@ -2202,10 +2202,13 @@
   /* ======================================================================= */
   // A full-screen welcome gate shown before the app when the site is connected
   // to a backend and nobody is signed in (the hard sign-in wall).
-  function renderAuthGate() {
+  function renderAuthGate(loading) {
     const el = $("#authGate"); if (!el) return;
-    el.innerHTML = `
-      <div class="authgate__panel">
+    // While the connection resolves, show only a quiet branded splash (no form),
+    // so an already-signed-in reader never sees the sign-in form flash past.
+    el.innerHTML = loading
+      ? `<div class="authgate__panel authgate__panel--loading"><div class="authgate__brand">WISP</div></div>`
+      : `<div class="authgate__panel">
         <div class="authgate__brand">WISP</div>
         <p class="authgate__tag">Read stories together instead of alone.</p>
         <p class="authgate__lead">A quiet home for fanfiction and original fiction, where the point is the conversation: talk line by line in the margins, follow the writers you love, and keep control of what you see.</p>
@@ -2225,7 +2228,7 @@
   function updateAuthGate() {
     if (!window.WispDB || !WispDB.enabled) { hideAuthGate(); return; }   // demo: no gate
     if (WispDB.signedIn || guestBrowsing) hideAuthGate();
-    else renderAuthGate();
+    else renderAuthGate(false);
   }
 
   function syncAuthHeader() {
@@ -2383,11 +2386,16 @@
 
     // Connect the backend if config.js has credentials; otherwise stay in demo.
     if (window.WispDB) {
-      // Show the sign-in wall immediately when a backend is configured, before
-      // the async connection resolves, so the app never flashes underneath it.
-      if (WispDB.configured) renderAuthGate();
+      // Cover the app with a quiet branded splash the moment a backend is
+      // configured, before the async connection resolves, so it never flashes
+      // underneath and an already-signed-in reader never sees the sign-in form.
+      if (WispDB.configured) renderAuthGate(true);
       WispDB.onChange(syncAuthHeader);
-      WispDB.init().then(() => syncAuthHeader());
+      WispDB.init().then(() => {
+        syncAuthHeader();
+        // If the connection failed (demo fallback), don't leave the splash up.
+        if (!WispDB.enabled) hideAuthGate();
+      });
     }
   }
 
