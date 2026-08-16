@@ -34,8 +34,11 @@ Supabase's free tier.
 6. Run [`supabase/migrations/004_events.sql`](supabase/migrations/004_events.sql)
    to make Community events real, so joining and leaving them persists.
 7. Run [`supabase/migrations/005_work_controls.sql`](supabase/migrations/005_work_controls.sql)
-   to add the per-work "hide my numbers" control. Run new migration files in
-   order as they are added.
+   to add the per-work "hide my numbers" control.
+8. Run [`supabase/migrations/006_reports.sql`](supabase/migrations/006_reports.sql)
+   to make the in-app report button real, so reports are written to a table
+   only you (as the project owner) can read. Run new migration files in order
+   as they are added.
 
 All of these are safe to re-run if you ever need to.
 

@@ -679,6 +679,15 @@ a.card__title:hover { color: var(--rose-ink); }
 .dl-grid .btn { justify-content: flex-start; gap: 8px; }
 @media (max-width: 480px) { .dl-grid { grid-template-columns: 1fr; } }
 
+/* Report reason chips. */
+.report-reasons { display: flex; flex-wrap: wrap; gap: 8px; }
+.report-reason {
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink2);
+  border-radius: 999px; padding: 7px 14px; font: 13.5px var(--font-text); cursor: pointer;
+}
+.report-reason:hover { border-color: var(--rose); color: var(--ink); }
+.report-reason.is-on { background: var(--rose-wash); border-color: var(--rose); color: var(--rose-ink); }
+
 .para { position: relative; }
 .para__marker {
   position: absolute; left: -34px; top: .32em; width: 26px;

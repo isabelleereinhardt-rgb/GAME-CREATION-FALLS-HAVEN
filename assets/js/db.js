@@ -508,6 +508,18 @@ window.WispDB = (function () {
     const { error } = await client.from("highlights").delete().eq("id", id).eq("user_id", user.id);
     if (error) throw error;
   }
+  async function submitReport(f) {
+    if (!user) throw new Error("Sign in to report.");
+    const { error } = await client.from("reports").insert({
+      reporter_id: user.id,
+      target_type: f.target_type || "work",
+      target_id: f.target_id,
+      reason: f.reason,
+      detail: f.detail || ""
+    });
+    if (error) throw error;
+    return true;
+  }
   async function saveProgress(workId, chapterNumber, percent) {
     if (!user) return;
     try {
@@ -573,7 +585,7 @@ window.WispDB = (function () {
     listEvents, myEventIds, toggleEventJoin,
     getWorksByIds, myBookmarks, myHistory, clearHistory,
     myLists, createList, deleteList, listContents, addToList, removeFromList,
-    myHighlights, saveHighlight, deleteHighlight, saveProgress, latestProgress,
+    myHighlights, saveHighlight, deleteHighlight, submitReport, saveProgress, latestProgress,
     toCard: toUi, fmtCount, relTime
   };
 })();
