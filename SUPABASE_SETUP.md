@@ -70,7 +70,9 @@ in. For testing, the simplest setup is to turn that off:
   accounts can sign in immediately.
 
 Leave it on for a real launch, and set up an email sender under
-**Authentication > Emails** when you are ready.
+**Authentication > Emails** when you are ready. The same email sender powers
+the "Forgot your password?" reset link, so password reset only sends real
+mail once an email sender is configured.
 
 ## What works once connected
 

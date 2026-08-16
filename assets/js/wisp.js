@@ -3121,6 +3121,7 @@
         <div class="field"><label>Password</label><input type="password" data-af="pw" autocomplete="${isUp ? "new-password" : "current-password"}" minlength="6" required></div>
         <div data-af="error" style="display:none;color:#a2444f;font-size:13px;margin:4px 0 10px"></div>
         <button class="btn btn--primary btn--full" type="submit" data-af="submit" style="margin-top:6px">${isUp ? "Create account" : "Sign in"}</button>
+        ${isUp ? "" : `<button class="btn--link" data-af="forgot" type="button" style="display:block;margin:12px auto 0;font-size:13px">Forgot your password?</button>`}
       </form>
       <p class="muted" style="font-size:13px;text-align:center;margin-top:14px">
         ${isUp ? "Already have an account?" : "New to Wisp?"}
@@ -3132,6 +3133,7 @@
     const q = (sel) => root.querySelector(sel);
     const err = q('[data-af="error"]');
     const sw = q('[data-af="switch"]'); if (sw) sw.addEventListener("click", onSwitch);
+    const fg = q('[data-af="forgot"]'); if (fg) fg.addEventListener("click", openForgot);
     const form = q('[data-authform]'); if (!form) return;
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -3170,6 +3172,79 @@
     wireAuthForm($("#modalCard"), isUp,
       () => openAuth(isUp ? "in" : "up"),
       () => closeModal());
+  }
+
+  // "Forgot your password?": email a reset link. The message never reveals
+  // whether an address has an account.
+  function openForgot() {
+    if (!isLive()) { toast("Password reset works once the site is connected to its backend."); return; }
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <h2 style="font-size:22px">Reset your password</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <p class="muted" style="font-size:13px;margin-bottom:16px">Enter your email and we'll send a link to set a new password.</p>
+      <form data-forgot novalidate>
+        <div class="field"><label>Email</label><input type="email" data-fg-email autocomplete="email" required></div>
+        <div data-fg-error style="display:none;color:#a2444f;font-size:13px;margin:4px 0 10px"></div>
+        <button class="btn btn--primary btn--full" type="submit" data-fg-send>Send reset link</button>
+      </form>
+      <p class="muted" style="font-size:13px;text-align:center;margin-top:14px">
+        Remembered it? <button class="btn--link" type="button" data-fg-back>Back to sign in</button>
+      </p>`, "Reset password");
+    const card = $("#modalCard");
+    card.querySelector("[data-fg-back]").addEventListener("click", () => openAuth("in"));
+    card.querySelector("[data-forgot]").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = (card.querySelector("[data-fg-email]").value || "").trim();
+      const err = card.querySelector("[data-fg-error]");
+      if (!email) { err.textContent = "Enter your email."; err.style.display = "block"; return; }
+      const btn = card.querySelector("[data-fg-send]"); btn.disabled = true; btn.textContent = "Sending...";
+      err.style.display = "none";
+      try {
+        await WispDB.resetPassword(email);
+        closeModal();
+        toast("If that email has an account, a reset link is on its way.");
+      } catch (ex) {
+        err.textContent = (ex && ex.message) || "Could not send the link."; err.style.display = "block";
+        btn.disabled = false; btn.textContent = "Send reset link";
+      }
+    });
+  }
+
+  // Shown after the reader follows a reset link (PASSWORD_RECOVERY): pick a new
+  // password to finish. The recovery session is already active at this point.
+  function openSetNewPassword() {
+    if (window.WispDB && WispDB.clearRecovery) WispDB.clearRecovery();
+    openModal(`
+      <div style="margin-bottom:6px"><h2 style="font-size:22px">Set a new password</h2></div>
+      <p class="muted" style="font-size:13px;margin-bottom:16px">You followed a reset link. Choose a new password to finish.</p>
+      <form data-setpw novalidate>
+        <div class="field"><label>New password</label><input type="password" data-sp-pw autocomplete="new-password" minlength="6" required></div>
+        <div class="field"><label>Confirm new password</label><input type="password" data-sp-pw2 autocomplete="new-password" minlength="6" required></div>
+        <div data-sp-error style="display:none;color:#a2444f;font-size:13px;margin:4px 0 10px"></div>
+        <button class="btn btn--primary btn--full" type="submit" data-sp-save>Save new password</button>
+      </form>`, "Set a new password");
+    const card = $("#modalCard");
+    card.querySelector("[data-setpw]").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const pw = card.querySelector("[data-sp-pw]").value || "";
+      const pw2 = card.querySelector("[data-sp-pw2]").value || "";
+      const err = card.querySelector("[data-sp-error]");
+      if (pw.length < 6) { err.textContent = "Use at least 6 characters."; err.style.display = "block"; return; }
+      if (pw !== pw2) { err.textContent = "The two passwords don't match."; err.style.display = "block"; return; }
+      const btn = card.querySelector("[data-sp-save]"); btn.disabled = true; btn.textContent = "Saving...";
+      err.style.display = "none";
+      try {
+        await WispDB.updatePassword(pw);
+        closeModal();
+        toast("Password updated. You're signed in.");
+        syncAuthHeader();
+      } catch (ex) {
+        err.textContent = (ex && ex.message) || "Could not update the password."; err.style.display = "block";
+        btn.disabled = false; btn.textContent = "Save new password";
+      }
+    });
   }
 
   // Toolbar: apply formatting to the current selection in the editor. Uses the
@@ -3427,10 +3502,15 @@
       // underneath and an already-signed-in reader never sees the sign-in form.
       if (WispDB.configured) renderAuthGate(true);
       WispDB.onChange(syncAuthHeader);
+      // A password-reset link lands the reader back here with a recovery
+      // session: show the "set a new password" screen when that happens.
+      WispDB.onRecovery(openSetNewPassword);
       WispDB.init().then(() => {
         syncAuthHeader();
         // If the connection failed (demo fallback), don't leave the splash up.
         if (!WispDB.enabled) hideAuthGate();
+        // Catch a recovery event that fired during init, before the subscription.
+        if (WispDB.enabled && WispDB.pendingRecovery) openSetNewPassword();
       });
     }
   }

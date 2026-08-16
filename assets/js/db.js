@@ -13,6 +13,8 @@ window.WispDB = (function () {
   let profile = null;    // row from public.profiles, or null
   const listeners = new Set();
   const emit = () => listeners.forEach(fn => { try { fn(); } catch (e) {} });
+  const recoveryListeners = new Set();
+  let pendingRecovery = false;
 
   const COVER_PALETTE = ["#9e5560","#6a7385","#2c2620","#a9743f","#566b4e","#6d5566",
                          "#4c5a63","#748a97","#7a4a44","#59614f","#3f4a6b","#b06a44","#575170","#8a6d3f"];
@@ -78,7 +80,16 @@ window.WispDB = (function () {
         createClient = mod.createClient;
       }
       client = createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
-      client.auth.onAuthStateChange((_event, session) => { refreshUser(session); });
+      client.auth.onAuthStateChange((event, session) => {
+        // A password-reset link brings the reader back with a temporary
+        // recovery session. Remember it so the app can show a "set a new
+        // password" screen, even if it subscribes a moment later.
+        if (event === "PASSWORD_RECOVERY") {
+          pendingRecovery = true;
+          recoveryListeners.forEach(fn => { try { fn(); } catch (e) {} });
+        }
+        refreshUser(session);
+      });
       const { data } = await client.auth.getSession();
       await refreshUser(data ? data.session : null);
       return { enabled: true };
@@ -121,6 +132,22 @@ window.WispDB = (function () {
   async function signOut() {
     if (client) await client.auth.signOut();
     user = null; profile = null; emit();
+  }
+  // Email a reset link. It brings the reader back to the site with a recovery
+  // session; PASSWORD_RECOVERY then drives the "set a new password" screen.
+  async function resetPassword(email) {
+    if (!client) throw new Error("Connect the backend first.");
+    const redirectTo = location.origin + location.pathname;
+    const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) throw error;
+    return true;
+  }
+  async function updatePassword(newPassword) {
+    if (!client) throw new Error("Connect the backend first.");
+    const { error } = await client.auth.updateUser({ password: newPassword });
+    if (error) throw error;
+    pendingRecovery = false;
+    return true;
   }
 
   /* ---- reads ------------------------------------------------------------ */
@@ -574,8 +601,11 @@ window.WispDB = (function () {
     get user() { return user; },
     get profile() { return profile; },
     get signedIn() { return !!user; },
+    get pendingRecovery() { return pendingRecovery; },
+    clearRecovery() { pendingRecovery = false; },
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
-    init, signUp, signIn, signOut,
+    onRecovery(fn) { recoveryListeners.add(fn); return () => recoveryListeners.delete(fn); },
+    init, signUp, signIn, signOut, resetPassword, updatePassword,
     listWorks, getWork, getChapters, myWorks,
     createWork, updateWork, deleteWork, firstChapter, saveChapter, getUpcoming, setTags,
     mySeries, findOrCreateSeries, updateSeries, deleteSeries, countInSeries,
