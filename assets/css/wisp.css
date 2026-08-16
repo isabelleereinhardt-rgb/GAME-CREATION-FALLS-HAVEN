@@ -679,6 +679,13 @@ a.card__title:hover { color: var(--rose-ink); }
 .dl-grid .btn { justify-content: flex-start; gap: 8px; }
 @media (max-width: 480px) { .dl-grid { grid-template-columns: 1fr; } }
 
+/* Policy pages. */
+.legal-body { max-height: 60vh; overflow-y: auto; padding-right: 6px; }
+.legal-body h3 { font-family: var(--font-display); font-size: 15px; margin: 18px 0 6px; color: var(--ink); }
+.legal-body p { font-size: 14px; line-height: 1.7; color: var(--ink2); margin: 0 0 10px; }
+.legal-links { display: flex; flex-wrap: wrap; gap: 16px; }
+.legal-links .btn--link { font-size: 13.5px; }
+
 /* Report reason chips. */
 .report-reasons { display: flex; flex-wrap: wrap; gap: 8px; }
 .report-reason {

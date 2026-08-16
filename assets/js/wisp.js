@@ -831,7 +831,7 @@
       .replace(/^#{1,6}\s+/gm, "")
       .replace(/^>\s?/gm, "")
       .replace(/^[-*]\s+/gm, "• ")
-      .replace(/^(-{3,}|\*{3,}|_{3,})$/gm, "———")
+      .replace(/^(-{3,}|\*{3,}|_{3,})$/gm, "* * *")
       .replace(/\*\*([^*]+?)\*\*/g, "$1").replace(/__([^_]+?)__/g, "$1")
       .replace(/(^|[^*\w])\*(?!\s)([^*]+?)\*(?!\*)/g, "$1$2")
       .replace(/(^|[^_\w])_(?!\s)([^_]+?)_(?!_)/g, "$1$2")
@@ -2049,9 +2049,78 @@
 
         <div class="editorial">
           <div class="eyebrow rose" style="margin-bottom:6px">Reporting and support</div>
-          <p class="soft" style="font-size:14px;margin:0;line-height:1.7">Most discussion, bug reports, and support happen on the Wisp Discord. The in-app report button is for urgent cases and goes straight to the moderation team. Fiction is allowed as long as it's tagged and warned. The limits are illegal content, targeted harassment, doxxing, threats against real people, and spam.</p>
+          <p class="soft" style="font-size:14px;margin:0 0 12px;line-height:1.7">Most discussion, bug reports, and support happen on the Wisp Discord. The in-app report button is for urgent cases and goes straight to the moderation team. Fiction is allowed as long as it's tagged and warned. The limits are illegal content, targeted harassment, doxxing, threats against real people, and spam.</p>
+          <div class="legal-links">
+            <button class="btn--link" data-legal="terms">Terms of use</button>
+            <button class="btn--link" data-legal="privacy">Privacy</button>
+            <button class="btn--link" data-legal="content">Content and copyright</button>
+          </div>
         </div>
       </div>`;
+  }
+
+  // Plain-language policy pages, shown in a modal. Written to match how Wisp
+  // actually works; the operator can adjust the wording as the site grows.
+  const LEGAL = {
+    terms: {
+      title: "Terms of use",
+      html: `
+        <p class="soft" style="font-size:12.5px;margin:0 0 16px">Last updated: August 2026</p>
+        <p>Wisp is a place to read and to post written works. By using it, you agree to these terms. If you do not agree, please do not use the site.</p>
+        <h3>Your account</h3>
+        <p>You are responsible for what happens under your account; keep your password to yourself. One account belongs to one person. Tell the moderators if you think someone else is using it.</p>
+        <h3>Your work stays yours</h3>
+        <p>You keep ownership of everything you post. By posting, you give Wisp permission to store your work and show it to readers, which is what makes the site work. You can edit or delete your work at any time, and deleting it withdraws that permission going forward.</p>
+        <h3>The rules</h3>
+        <p>Tag and warn your works honestly. Fiction is welcome, including fanwork, as long as it is tagged and warned. The limits are illegal content, targeted harassment, doxxing, threats against real people, and spam.</p>
+        <h3>Moderation</h3>
+        <p>Reports are reviewed by the moderation team. Works that break the rules can be removed, and accounts that break them can be suspended or closed.</p>
+        <h3>No promises about uptime</h3>
+        <p>Wisp is offered as it is. It can change, pause, or go offline; keep your own copy of anything you cannot bear to lose. The download button on any work saves a copy to your device.</p>
+        <h3>Changes</h3>
+        <p>These terms can change. When they do, the date above changes; continuing to use the site means you accept the current version.</p>`
+    },
+    privacy: {
+      title: "Privacy",
+      html: `
+        <p class="soft" style="font-size:12.5px;margin:0 0 16px">Last updated: August 2026</p>
+        <p>This explains what Wisp keeps and why. The short version: Wisp keeps what it needs to be your reading and writing home, and nothing more.</p>
+        <h3>What is stored</h3>
+        <p>Your account holds an email address and a display name. As you use the site it also stores the things you make and do: works and chapters, comments, hearts, subscriptions, bookmarks, reading lists, highlights, reading progress, event sign-ups, and any reports you file. These are kept so the site works and comes back the way you left it.</p>
+        <h3>What is public and what is private</h3>
+        <p>Published works, comments, and public profiles are visible to everyone. Your drafts, bookmarks, reading history, highlights, and reports are private to you. This is enforced in the database itself by row-level security, not just hidden in the page.</p>
+        <h3>What Wisp does not do</h3>
+        <p>Wisp does not sell your data and does not run third-party advertising trackers. Downloads are built in your browser and are not sent anywhere.</p>
+        <h3>On your device</h3>
+        <p>Your reading preferences, such as theme and text size, are stored on your own device. Your sign-in session is stored in your browser by the backend so you stay signed in.</p>
+        <h3>Deleting things</h3>
+        <p>You can delete any work you posted. To close your account and remove its data, contact the moderators through the community links.</p>`
+    },
+    content: {
+      title: "Content and copyright",
+      html: `
+        <p class="soft" style="font-size:12.5px;margin:0 0 16px">Last updated: August 2026</p>
+        <h3>What is allowed</h3>
+        <p>Wisp is for written fiction, including fanwork. Post what you like, as long as it is tagged and warned so readers can choose for themselves.</p>
+        <h3>The limits</h3>
+        <p>The limits are illegal content, targeted harassment, doxxing, threats against real people, and spam. Work that crosses these lines is removed.</p>
+        <h3>Ratings and warnings</h3>
+        <p>Rate and warn your work honestly. Untagged or mis-rated work can be reported, and the moderators may add a warning or take the work down.</p>
+        <h3>Copyright</h3>
+        <p>Fanwork is transformative and is welcome here. Even so, if you believe a work copies yours without permission, report it: name the work, say what it copies, and leave a way to reach you. Verified claims are actioned, and repeat infringement can close an account.</p>
+        <h3>How to report</h3>
+        <p>Use the report button on any work, or reach the moderators through the community links. Urgent cases go straight to the team.</p>`
+    }
+  };
+  function openLegal(kind) {
+    const doc = LEGAL[kind] || LEGAL.terms;
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <h2 style="font-size:22px">${esc(doc.title)}</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <div class="legal-body">${doc.html}</div>
+      <div class="modal-actions" style="margin-top:16px"><button class="btn btn--primary" data-modal-cancel>Close</button></div>`, doc.title);
   }
 
   /* ======================================================================= */
@@ -2949,6 +3018,8 @@
     if (shr) { copyLink(shr.dataset.share); return; }
     const dl = e.target.closest("[data-download]");
     if (dl) { openDownload(dl.dataset.download); return; }
+    const lg = e.target.closest("[data-legal]");
+    if (lg) { openLegal(lg.dataset.legal); return; }
 
     const edit = e.target.closest("[data-edit]");
     if (edit) { navigate("write/" + edit.dataset.edit); return; }
@@ -3123,6 +3194,7 @@
         <button class="btn btn--primary btn--full" type="submit" data-af="submit" style="margin-top:6px">${isUp ? "Create account" : "Sign in"}</button>
         ${isUp ? "" : `<button class="btn--link" data-af="forgot" type="button" style="display:block;margin:12px auto 0;font-size:13px">Forgot your password?</button>`}
       </form>
+      ${isUp ? `<p class="muted" style="font-size:12px;text-align:center;margin-top:12px;line-height:1.5">By creating an account, you agree to the <button class="btn--link" type="button" data-legal="terms" style="font-size:12px">Terms</button> and <button class="btn--link" type="button" data-legal="privacy" style="font-size:12px">Privacy</button>.</p>` : ""}
       <p class="muted" style="font-size:13px;text-align:center;margin-top:14px">
         ${isUp ? "Already have an account?" : "New to Wisp?"}
         <button class="btn--link" data-af="switch" type="button">${isUp ? "Sign in" : "Create one"}</button>
