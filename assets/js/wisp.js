@@ -2202,22 +2202,29 @@
   /* ======================================================================= */
   // A full-screen welcome gate shown before the app when the site is connected
   // to a backend and nobody is signed in (the hard sign-in wall).
-  function renderAuthGate(loading) {
+  function renderAuthGate(loading, mode) {
     const el = $("#authGate"); if (!el) return;
-    // While the connection resolves, show only a quiet branded splash (no form),
-    // so an already-signed-in reader never sees the sign-in form flash past.
-    el.innerHTML = loading
-      ? `<div class="authgate__panel authgate__panel--loading"><div class="authgate__brand">WISP</div></div>`
-      : `<div class="authgate__panel">
-        <div class="authgate__brand">WISP</div>
-        <p class="authgate__tag">Read stories together instead of alone.</p>
-        <p class="authgate__lead">A quiet home for fanfiction and original fiction, where the point is the conversation: talk line by line in the margins, follow the writers you love, and keep control of what you see.</p>
-        <div class="authgate__actions">
-          <button class="btn btn--primary btn--full" data-auth="up">Create an account</button>
-          <button class="btn btn--quiet btn--full" data-auth="in">Sign in</button>
-        </div>
-        <button class="btn--link authgate__guest" data-guest>Look around first</button>
-      </div>`;
+    if (loading) {
+      // While the connection resolves, show only a quiet branded splash (no
+      // form), so an already-signed-in reader never sees the form flash past.
+      el.innerHTML = `<div class="authgate__panel authgate__panel--loading"><div class="authgate__brand">WISP</div></div>`;
+    } else {
+      const isUp = mode === "up";
+      el.innerHTML = `
+        <div class="authgate__panel">
+          <div class="authgate__brand">WISP</div>
+          <p class="authgate__tag">Read stories together instead of alone.</p>
+          <h2 class="authgate__h">${isUp ? "Create your account" : "Sign in"}</h2>
+          ${authFormHTML(isUp)}
+          <button class="btn--link authgate__guest" data-guest>Look around first</button>
+        </div>`;
+      const panel = el.querySelector(".authgate__panel");
+      wireAuthForm(panel, isUp,
+        () => renderAuthGate(false, isUp ? "in" : "up"),
+        (res) => { if (isUp && res.needsConfirm) renderAuthGate(false, "in"); /* sign-in hides the gate via the auth emit */ });
+      const focusEl = panel.querySelector('[data-af="name"], [data-af="email"]');
+      if (focusEl) focusEl.focus();
+    }
     el.classList.add("is-open");
     const app = $("#app"); if (app) app.setAttribute("inert", "");
   }
@@ -2228,7 +2235,7 @@
   function updateAuthGate() {
     if (!window.WispDB || !WispDB.enabled) { hideAuthGate(); return; }   // demo: no gate
     if (WispDB.signedIn || guestBrowsing) hideAuthGate();
-    else renderAuthGate(false);
+    else renderAuthGate(false, "in");
   }
 
   function syncAuthHeader() {
@@ -2246,6 +2253,54 @@
     }
   }
 
+  // Shared sign-in / sign-up form, used both in the modal (in-app) and inline in
+  // the sign-in wall. Fields are addressed by data-attribute, scoped to a root
+  // element, so the two copies never collide.
+  function authFormHTML(isUp) {
+    return `
+      <form data-authform novalidate>
+        ${isUp ? '<div class="field"><label>Display name</label><input type="text" data-af="name" autocomplete="name" required></div>' : ""}
+        <div class="field"><label>Email</label><input type="email" data-af="email" autocomplete="email" required></div>
+        <div class="field"><label>Password</label><input type="password" data-af="pw" autocomplete="${isUp ? "new-password" : "current-password"}" minlength="6" required></div>
+        <div data-af="error" style="display:none;color:#a2444f;font-size:13px;margin:4px 0 10px"></div>
+        <button class="btn btn--primary btn--full" type="submit" data-af="submit" style="margin-top:6px">${isUp ? "Create account" : "Sign in"}</button>
+      </form>
+      <p class="muted" style="font-size:13px;text-align:center;margin-top:14px">
+        ${isUp ? "Already have an account?" : "New to Wisp?"}
+        <button class="btn--link" data-af="switch" type="button">${isUp ? "Sign in" : "Create one"}</button>
+      </p>`;
+  }
+  function wireAuthForm(root, isUp, onSwitch, onSuccess) {
+    if (!root) return;
+    const q = (sel) => root.querySelector(sel);
+    const err = q('[data-af="error"]');
+    const sw = q('[data-af="switch"]'); if (sw) sw.addEventListener("click", onSwitch);
+    const form = q('[data-authform]'); if (!form) return;
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = (q('[data-af="email"]').value || "").trim();
+      const pw = q('[data-af="pw"]').value || "";
+      const nameEl = q('[data-af="name"]'); const name = nameEl ? nameEl.value.trim() : "";
+      if (!email || pw.length < 6) {
+        err.textContent = "Enter an email and a password of at least 6 characters.";
+        err.style.display = "block"; return;
+      }
+      const btn = q('[data-af="submit"]'); btn.disabled = true; btn.textContent = isUp ? "Creating..." : "Signing in...";
+      err.style.display = "none";
+      try {
+        if (isUp) {
+          const r = await WispDB.signUp(email, pw, name);
+          if (!r.session) { onSuccess({ needsConfirm: true }); toast("Account created. Check your email to confirm, then sign in."); return; }
+        } else {
+          await WispDB.signIn(email, pw);
+        }
+        onSuccess({}); toast(isUp ? "Welcome to Wisp." : "Signed in.");
+      } catch (ex) {
+        err.textContent = (ex && ex.message) || "Something went wrong."; err.style.display = "block";
+        btn.disabled = false; btn.textContent = isUp ? "Create account" : "Sign in";
+      }
+    });
+  }
   function openAuth(mode) {
     const isUp = mode === "up";
     openModal(`
@@ -2254,38 +2309,10 @@
         <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
       </div>
       <p class="muted" style="font-size:13px;margin-bottom:16px">${isUp ? "Join Wisp to post works, comment, and keep a library." : "Welcome back."}</p>
-      <form id="authForm">
-        ${isUp ? '<div class="field"><label>Display name</label><input type="text" id="authName" autocomplete="name" required></div>' : ""}
-        <div class="field"><label>Email</label><input type="email" id="authEmail" autocomplete="email" required></div>
-        <div class="field"><label>Password</label><input type="password" id="authPw" autocomplete="${isUp ? "new-password" : "current-password"}" minlength="6" required></div>
-        <div id="authError" style="display:none;color:#a2444f;font-size:13px;margin:4px 0 10px"></div>
-        <button class="btn btn--primary btn--full" type="submit" id="authSubmit" style="margin-top:6px">${isUp ? "Create account" : "Sign in"}</button>
-      </form>
-      <p class="muted" style="font-size:13px;text-align:center;margin-top:14px">
-        ${isUp ? "Already have an account?" : "New to Wisp?"}
-        <button class="btn--link" id="authSwitch">${isUp ? "Sign in" : "Create one"}</button>
-      </p>`, isUp ? "Create account" : "Sign in");
-    const err = $("#authError");
-    $("#authSwitch").addEventListener("click", () => openAuth(isUp ? "in" : "up"));
-    $("#authForm").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const email = $("#authEmail").value.trim(), pw = $("#authPw").value;
-      const name = isUp ? $("#authName").value.trim() : "";
-      const btn = $("#authSubmit"); btn.disabled = true; btn.textContent = isUp ? "Creating..." : "Signing in...";
-      err.style.display = "none";
-      try {
-        if (isUp) {
-          const r = await WispDB.signUp(email, pw, name);
-          if (!r.session) { closeModal(); toast("Account created. Confirm your email, then sign in."); return; }
-        } else {
-          await WispDB.signIn(email, pw);
-        }
-        closeModal(); toast(isUp ? "Welcome to Wisp." : "Signed in.");
-      } catch (ex) {
-        err.textContent = (ex && ex.message) || "Something went wrong."; err.style.display = "block";
-        btn.disabled = false; btn.textContent = isUp ? "Create account" : "Sign in";
-      }
-    });
+      ${authFormHTML(isUp)}`, isUp ? "Create account" : "Sign in");
+    wireAuthForm($("#modalCard"), isUp,
+      () => openAuth(isUp ? "in" : "up"),
+      () => closeModal());
   }
 
   async function handlePublish(kind) {

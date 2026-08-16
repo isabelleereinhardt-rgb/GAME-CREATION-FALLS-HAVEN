@@ -764,6 +764,9 @@ mark.hl { background: color-mix(in srgb, var(--amber) 34%, transparent); border-
 .authgate__tag { font: 500 19px var(--font-display); color: var(--ink); margin: 0 0 14px; }
 .authgate__lead { color: var(--ink2); font-size: 14.5px; line-height: 1.65; margin: 0 auto 26px; max-width: 360px; }
 .authgate__actions { display: flex; flex-direction: column; gap: 10px; }
+.authgate__h { font: 600 21px var(--font-display); color: var(--ink); margin: 4px 0 16px; }
+.authgate__panel form, .authgate__panel .field { text-align: left; }
+.authgate__panel [data-af="error"] { text-align: left; }
 .authgate__guest { margin-top: 18px; }
 .authgate__panel--loading { background: none; border: 0; box-shadow: none; }
 .authgate__panel--loading .authgate__brand { margin: 0; animation: authgate-pulse 1.3s ease-in-out infinite; }
