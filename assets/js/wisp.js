@@ -726,13 +726,67 @@
           </div>
           ${published.length > 1 ? `<div class="chapter-nav"><button class="btn--link" data-work="${w.id}">Chapter index</button></div>` : ""}
         </div>
+        <div class="hl-pop" id="hlPopLive">
+          <button data-lhl="mark">Highlight</button>
+          <button data-lhl="note">Note</button>
+          <button data-lhl="copy">Copy</button>
+        </div>
         ${readerToolsHTML()}
       </div>`;
 
     mountReaderTools();
-    if (ch) wireLiveReading(w, ch);
+    if (ch) { wireLiveReading(w, ch); wireLiveHighlights(w, ch); wireReadingGlobalsOnce(); }
     // Record that this work was opened, for history + Continue reading.
     if (WispDB.signedIn && ch) WispDB.saveProgress(w.id, ch.number, 0);
+  }
+
+  // Text-selection highlight popover for real works: saves to the highlights
+  // table so it appears in Library > Things.
+  function wireLiveHighlights(w, ch) {
+    const pop = $("#hlPopLive"), prose = $("#prose");
+    if (!pop || !prose) return;
+    let lastText = "", lastRange = null;
+    const hide = () => { pop.style.display = "none"; };
+    prose.addEventListener("mouseup", () => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || !sel.toString().trim()) { hide(); return; }
+      lastText = sel.toString().trim();
+      lastRange = sel.getRangeAt(0);
+      const rect = lastRange.getBoundingClientRect();
+      const host = $("#screen-reading").getBoundingClientRect();
+      pop.style.display = "flex";
+      pop.style.left = Math.max(8, rect.left - host.left + rect.width / 2 - 70) + "px";
+      pop.style.top = (rect.top - host.top - 46) + "px";
+    });
+    pop.querySelectorAll("[data-lhl]").forEach(b => b.addEventListener("click", async () => {
+      const kind = b.dataset.lhl, text = lastText;
+      if (kind === "copy") { navigator.clipboard && navigator.clipboard.writeText(text); toast("Copied."); hide(); window.getSelection().removeAllRanges(); return; }
+      if (!WispDB.signedIn) { openAuth("in"); hide(); return; }
+      if (!text) { hide(); return; }
+      try { const mk = document.createElement("mark"); mk.className = "hl"; mk.appendChild(lastRange.extractContents()); lastRange.insertNode(mk); } catch (e) {}
+      hide(); window.getSelection().removeAllRanges();
+      if (kind === "note") { openNoteDialog(w, ch, text); return; }
+      try { await WispDB.saveHighlight({ work_id: w.id, chapter_id: ch.id, text }); toast("Highlighted. Find it in Library, under Things."); }
+      catch (e) { toast((e && e.message) || "Could not save the highlight."); }
+    }));
+  }
+  function openNoteDialog(w, ch, text) {
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <h2 style="font-size:20px">Add a note</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <blockquote style="border-left:3px solid var(--rose);padding:4px 0 4px 12px;margin:0 0 12px;color:var(--ink2);font:italic 14px var(--font-read)">${esc(text)}</blockquote>
+      <div class="field"><label>Your note</label><textarea id="hl-note" rows="3" placeholder="What struck you here"></textarea></div>
+      <div class="modal-actions">
+        <button class="btn btn--quiet" data-modal-cancel>Skip</button>
+        <button class="btn btn--primary" data-hl-save>Save to Things</button>
+      </div>`, "Add a note");
+    const finish = async (note) => {
+      try { await WispDB.saveHighlight({ work_id: w.id, chapter_id: ch.id, text, note }); closeModal(); toast("Saved to your highlights."); }
+      catch (e) { toast((e && e.message) || "Could not save."); }
+    };
+    $("#modalCard [data-hl-save]").addEventListener("click", () => finish($("#hl-note").value.trim()));
   }
 
   function wireLiveReading(w, ch) {
@@ -741,8 +795,8 @@
       const slot = $(`#screen-reading [data-lslot="${i}"]`);
       if (!slot) return;
       const para = slot.closest(".para");
-      if (openThreads.has(i)) { openThreads.delete(i); slot.innerHTML = ""; para.classList.remove("thread-open"); return; }
-      openThreads.add(i); para.classList.add("thread-open");
+      if (openThreads.has(i)) { openThreads.delete(i); slot.innerHTML = ""; para.classList.remove("is-open"); return; }
+      openThreads.add(i); para.classList.add("is-open");
       openLiveThread(w, ch, i, slot);
     }));
   }
@@ -887,8 +941,10 @@
     readingGlobalsWired = true;
     $("#main").addEventListener("scroll", updateReadProgress, { passive: true });
     document.addEventListener("mousedown", (e) => {
-      const pop = $("#hlPop");
-      if (pop && !pop.contains(e.target)) pop.style.display = "none";
+      ["#hlPop", "#hlPopLive"].forEach(sel => {
+        const pop = $(sel);
+        if (pop && !pop.contains(e.target)) pop.style.display = "none";
+      });
     });
   }
 
