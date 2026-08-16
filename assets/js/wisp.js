@@ -58,7 +58,7 @@
      empty and every accessor falls back to the bundled demo dataset, so the
      demo behaves exactly as before. */
   const LIVE = { works: [], byId: {}, chapters: {}, comments: {}, reactions: {}, upcoming: {}, series: [], events: [], myEvents: new Set(),
-                 lib: { bookmarks: null, history: null, lists: null, things: null }, viewingList: null, resume: null };
+                 lib: { bookmarks: null, history: null, lists: null, things: null }, viewingList: null, resume: null, followingWorks: [] };
   let liveEditor = null;   // { work, chapter } when editing a real work, else null
   let editorCover = null;  // uploaded cover URL for the current editor session
   let coverCleared = false; // true when the author removed an existing cover
@@ -195,38 +195,45 @@
   /*  SCREEN: HOME                                                            */
   /* ======================================================================= */
   let homeTab = "foryou";
+  let liveHomeTab = "latest";
   async function loadHome() {
     loadingScreen("#screen-home");
     try {
       LIVE.works = await WispDB.listWorks({ sort: "recent", limit: 30 });
       LIVE.works.forEach(w => { LIVE.byId[w.id] = w; });
-      LIVE.resume = null;
+      LIVE.resume = null; LIVE.followingWorks = [];
       if (WispDB.signedIn) {
         const p = await WispDB.latestProgress().catch(() => null);
         if (p) {
           const works = await WispDB.getWorksByIds([p.work_id]).catch(() => []);
           if (works[0]) LIVE.resume = { work: works[0], progress: p };
         }
+        const ids = await WispDB.myFollowingIds().catch(() => []);
+        LIVE.followingWorks = ids.length ? await WispDB.listWorks({ authors: ids, sort: "recent", limit: 30 }).catch(() => []) : [];
       }
     } catch (e) { console.error("[wisp] home load failed:", e); LIVE.works = LIVE.works || []; }
     renderHomeLive();
   }
   function renderHomeLive() {
-    const works = LIVE.works || [];
-    const grid = works.length
-      ? (settings.view === "list"
-          ? `<div class="stack-list">${works.map(cardList).join("")}</div>`
-          : `<div class="work-grid">${works.map(cardGallery).join("")}</div>`)
-      : `<div style="text-align:center;padding:64px 0;color:var(--ink3)">
-           <p style="font-size:16px;color:var(--ink2)">No works have been posted yet.</p>
-           <p style="font-size:14px">Be the first: write something in the Writing Station.</p>
-           <p style="margin-top:16px"><button class="btn btn--primary btn--sm" data-nav="write">Go to the Writing Station</button></p>
-         </div>`;
+    const following = liveHomeTab === "following";
+    const works = following ? (LIVE.followingWorks || []) : (LIVE.works || []);
+    const gridOf = (ws) => settings.view === "list"
+      ? `<div class="stack-list">${ws.map(cardList).join("")}</div>`
+      : `<div class="work-grid">${ws.map(cardGallery).join("")}</div>`;
+    const grid = works.length ? gridOf(works)
+      : following
+        ? `<div style="text-align:center;padding:64px 0;color:var(--ink3)"><p style="font-size:16px;color:var(--ink2)">Nothing here yet.</p><p style="font-size:14px">Follow authors and their new works show up here.</p></div>`
+        : `<div style="text-align:center;padding:64px 0;color:var(--ink3)">
+             <p style="font-size:16px;color:var(--ink2)">No works have been posted yet.</p>
+             <p style="font-size:14px">Be the first: write something in the Writing Station.</p>
+             <p style="margin-top:16px"><button class="btn btn--primary btn--sm" data-nav="write">Go to the Writing Station</button></p>
+           </div>`;
     $("#screen-home").innerHTML = `
       <div class="page">
         <h1 class="vh">Your reading home</h1>
         <div class="home-tabs">
-          <button class="home-tab is-active">Latest</button>
+          <button class="home-tab ${!following ? "is-active" : ""}" data-lhometab="latest">Latest</button>
+          ${WispDB.signedIn ? `<button class="home-tab ${following ? "is-active" : ""}" data-lhometab="following">Following</button>` : ""}
           <div class="home-tabs__meta">
             <div class="view-toggle" role="group" aria-label="View mode">
               <button data-view="gallery" class="${settings.view === "gallery" ? "is-active" : ""}" aria-pressed="${settings.view === "gallery"}">Gallery</button>
@@ -234,7 +241,7 @@
             </div>
           </div>
         </div>
-        ${LIVE.resume ? `<button class="resume" data-read="${LIVE.resume.work.id}">
+        ${!following && LIVE.resume ? `<button class="resume" data-read="${LIVE.resume.work.id}">
           <span class="resume__cover">${cover(LIVE.resume.work.cover, LIVE.resume.work.title)}</span>
           <span class="resume__body">
             <span class="eyebrow rose" style="display:block;margin-bottom:5px">Continue reading</span>
@@ -243,7 +250,7 @@
           </span>
           <span style="color:var(--rose);display:flex;align-items:center">${icon("chev",20)}</span>
         </button>` : ""}
-        ${works.length ? `<div class="section-head"><h2>Latest works</h2><button class="btn--link" data-nav="browse">Browse all &rsaquo;</button></div>` : ""}
+        ${works.length ? `<div class="section-head"><h2>${following ? "From authors you follow" : "Latest works"}</h2>${!following ? '<button class="btn--link" data-nav="browse">Browse all &rsaquo;</button>' : ""}</div>` : ""}
         ${grid}
       </div>`;
   }
@@ -487,7 +494,7 @@
             <span class="tag-row"><span class="pill">${w.type === "fan" ? "Fanwork" : "Original"}</span><span class="pill">${esc(w.source)}</span>${w.format === "comic" ? '<span class="pill">Comic</span>' : ""}</span>
             <h1 class="work-hero__title">${esc(w.title)}</h1>
             <div class="soft" style="font-size:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-              <span>by <a href="#/profile">${esc(w.author)}</a></span>
+              <span>by <a href="#/${w._db && w.authorId ? "user/" + (w.authorHandle || w.authorId) : "profile"}">${esc(w.author)}</a></span>
               ${(w._db && w.authorId && !(WispDB.profile && WispDB.profile.id === w.authorId))
                 ? `<button class="btn btn--quiet btn--sm ${userState.following.has(w.authorId) ? "is-on-quiet" : ""}" data-follow="${w.authorId}" aria-pressed="${userState.following.has(w.authorId)}">${userState.following.has(w.authorId) ? "Following" : "Follow"}</button>`
                 : ""}
@@ -722,7 +729,7 @@
         <div class="reader__wrap" id="readerWrap">
           <div class="reader__crumbs"><a href="#/work/${w.id}">${esc(w.title)}</a> ${icon("chev",12)} <span>Chapter ${ch ? ch.number : 1}${readable.length > 1 ? " of " + readable.length : ""}</span></div>
           <h1 class="reader__title">${esc(w.title)}</h1>
-          <div class="reader__by">by <a href="#/work/${w.id}">${esc(w.author)}</a></div>
+          <div class="reader__by">by <a href="#/${w.authorId ? "user/" + (w.authorHandle || w.authorId) : "work/" + w.id}">${esc(w.author)}</a></div>
           ${ch ? `<div class="reader__chapter">Chapter ${ch.number}</div>${ch.title ? `<div class="reader__chapter-title">${esc(ch.title)}</div>` : ""}` : ""}
           <div class="prose" id="prose" data-justify="${settings.justify ? "on" : "off"}" data-hyphen="${settings.justify ? "on" : "off"}">
             ${proseHTML}
@@ -1734,7 +1741,8 @@
           </div>
           <div style="display:flex;flex-direction:column;gap:8px">
             <button class="btn btn--quiet btn--sm" id="themeBtn2">${icon("gear",15)} Customize theme</button>
-            <button class="btn btn--quiet btn--sm" data-nav="write">${icon("edit",15)} Your works</button>
+            <button class="btn btn--quiet btn--sm" data-edit-profile>${icon("edit",15)} Edit profile</button>
+            <button class="btn btn--quiet btn--sm" data-nav="write">${icon("book",15)} Your works</button>
           </div>
         </div>
         <div class="shelf">
@@ -1755,6 +1763,72 @@
       ]);
       renderProfileLive(works, counts);
     } catch (e) { console.error("[wisp] profile load failed:", e); renderProfileLive([]); }
+  }
+  function openEditProfile() {
+    const p = WispDB.profile || {};
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <h2 style="font-size:20px">Edit profile</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <div class="field"><label>Display name</label><input type="text" id="ep-name" value="${esc(p.display_name || "")}"></div>
+      <div class="field"><label>Handle</label><input type="text" id="ep-handle" value="${esc(p.handle || "")}" placeholder="yourname"></div>
+      <div class="field"><label>Bio</label><textarea id="ep-bio" rows="3" placeholder="Reader first, writer on the good days.">${esc(p.bio || "")}</textarea></div>
+      <div class="modal-actions">
+        <button class="btn btn--quiet" data-modal-cancel>Cancel</button>
+        <button class="btn btn--primary" data-ep-save>Save</button>
+      </div>`, "Edit profile");
+    $("#modalCard [data-ep-save]").addEventListener("click", async () => {
+      const name = $("#ep-name").value.trim();
+      const handle = $("#ep-handle").value.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+      const bio = $("#ep-bio").value.trim();
+      if (!name) { toast("Give yourself a display name."); return; }
+      try { await WispDB.updateProfile({ display_name: name, handle: handle || null, bio }); closeModal(); toast("Profile saved."); loadProfile(); }
+      catch (e) { toast(/duplicate|unique/i.test((e && e.message) || "") ? "That handle is taken." : ((e && e.message) || "Could not save.")); }
+    });
+  }
+  // Another reader's public profile: their works and a follow button.
+  async function loadUserProfile(idOrHandle) {
+    loadingScreen("#screen-profile");
+    try {
+      const p = await WispDB.getProfile(idOrHandle);
+      if (!p) { $("#screen-profile").innerHTML = `<div class="page page--wide"><p style="padding:40px 0;color:var(--ink3)">That reader could not be found.</p></div>`; return; }
+      if (WispDB.profile && WispDB.profile.id === p.id) { navigate("profile"); return; }   // it's you
+      const [works, counts, following] = await Promise.all([
+        WispDB.worksByAuthor(p.id).catch(() => []),
+        WispDB.followCounts(p.id).catch(() => ({ followers: 0, following: 0 })),
+        WispDB.signedIn ? WispDB.amFollowing(p.id).catch(() => false) : false
+      ]);
+      renderUserProfile(p, works, counts, following);
+    } catch (e) { console.error("[wisp] user profile load failed:", e); $("#screen-profile").innerHTML = `<div class="page page--wide"><p style="padding:40px 0;color:var(--ink3)">Could not open that profile.</p></div>`; }
+  }
+  function renderUserProfile(p, works, counts, following) {
+    const name = p.display_name || "Reader";
+    const worksHTML = works.length
+      ? `<div class="work-grid">${works.map(cardGallery).join("")}</div>`
+      : `<p class="muted" style="font-size:14px;padding:16px 4px">No published works yet.</p>`;
+    $("#screen-profile").innerHTML = `
+      <div class="page page--wide">
+        <button class="btn--link" data-back style="margin-bottom:14px">&lsaquo; Back</button>
+        <div class="profile-hero">
+          <div class="profile-hero__av">${esc((name[0] || "?").toUpperCase())}</div>
+          <div style="flex:1;min-width:220px">
+            <h1 class="display" style="font-size:28px">${esc(name)}</h1>
+            <div class="muted" style="font-size:14px">${p.handle ? "@" + esc(p.handle) : ""}</div>
+            ${p.bio ? `<p class="soft" style="font-size:15px;line-height:1.6;margin:10px 0 0;max-width:560px">${esc(p.bio)}</p>` : ""}
+            <div class="profile-stats">
+              <div><b>${works.length}</b><span>Works</span></div>
+              <div><b>${WispDB.fmtCount(counts.followers)}</b><span>Followers</span></div>
+              <div><b>${WispDB.fmtCount(counts.following)}</b><span>Following</span></div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <button class="btn ${following ? "btn--quiet is-on-quiet" : "btn--primary"} btn--sm" data-follow="${p.id}" aria-pressed="${following}">${following ? "Following" : "Follow"}</button>
+          </div>
+        </div>
+        <div class="shelf"><div class="shelf__head"><span class="shelf__title">Works</span></div>${worksHTML}</div>
+      </div>`;
+    if (following) userState.following.add(p.id); else userState.following.delete(p.id);
   }
   function renderProfile() {
     if (isLive()) return loadProfile();
@@ -2371,6 +2445,7 @@
     const seg = parts[0], arg = parts[1], arg2 = parts[2];
     let screen = SCREENS.includes(seg) ? seg : "home";
     if (seg === "read") screen = "reading";
+    if (seg === "user") screen = "profile";
 
     setActive(screen);
     closeSheet();
@@ -2394,7 +2469,7 @@
     }
     else if (screen === "library") { LIVE.viewingList = null; renderLibrary(); }
     else if (screen === "community") { live ? loadCommunity() : renderCommunity(); }
-    else if (screen === "profile") { renderProfile(); }
+    else if (screen === "profile") { (seg === "user" && live) ? loadUserProfile(arg) : renderProfile(); }
   }
 
   function navigate(to) { location.hash = "#/" + to; }
@@ -2452,6 +2527,9 @@
     if (asb) { pendingSeries = asb.dataset.addSeriesBook; navigate("write/new"); return; }
     const nsr = e.target.closest("[data-new-series]");
     if (nsr) { newLiveSeries(); return; }
+    const ep = e.target.closest("[data-edit-profile]");
+    if (ep) { openEditProfile(); return; }
+
     const fol = e.target.closest("[data-follow]");
     if (fol) {
       if (isLive() && !WispDB.signedIn) { openAuth("in"); return; }
@@ -2557,6 +2635,8 @@
 
     const ht = e.target.closest("[data-hometab]");
     if (ht) { homeTab = ht.dataset.hometab; renderHome(); return; }
+    const lht = e.target.closest("[data-lhometab]");
+    if (lht) { liveHomeTab = lht.dataset.lhometab; renderHomeLive(); return; }
 
     const view = e.target.closest("[data-view]");
     if (view) { settings.view = view.dataset.view; save(); route(); return; }

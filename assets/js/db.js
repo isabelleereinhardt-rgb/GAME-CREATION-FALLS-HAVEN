@@ -133,6 +133,7 @@ window.WispDB = (function () {
   async function listWorks(opts = {}) {
     let q = client.from("works_with_author").select("*");
     q = opts.mine ? q.eq("author_id", user && user.id) : q.in("status", ["ongoing", "complete", "scheduled"]);
+    if (opts.authors) q = q.in("author_id", opts.authors.length ? opts.authors : ["00000000-0000-0000-0000-000000000000"]);
     if (opts.type && opts.type !== "all") q = q.eq("type", opts.type);
     const sort = opts.sort || "hearts";
     if (sort === "reads") q = q.order("reads_count", { ascending: false });
@@ -338,6 +339,34 @@ window.WispDB = (function () {
     return data;
   }
 
+  /* ---- profiles --------------------------------------------------------- */
+  const looksUuid = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s || "");
+  async function updateProfile(fields) {
+    if (!user) throw new Error("Sign in first.");
+    const patch = {};
+    ["display_name", "bio", "handle", "accent"].forEach(k => { if (fields[k] !== undefined) patch[k] = fields[k]; });
+    const { data, error } = await client.from("profiles").update(patch).eq("id", user.id).select().single();
+    if (error) throw error;
+    profile = data || profile;
+    emit();
+    return data;
+  }
+  async function getProfile(idOrHandle) {
+    if (!idOrHandle) return null;
+    let q = client.from("profiles").select("*");
+    q = looksUuid(idOrHandle) ? q.eq("id", idOrHandle) : q.eq("handle", idOrHandle);
+    const { data } = await q.maybeSingle();
+    return data || null;
+  }
+  async function worksByAuthor(authorId) {
+    if (!authorId) return [];
+    const { data, error } = await client.from("works_with_author").select("*").eq("author_id", authorId)
+      .in("status", ["ongoing", "complete", "scheduled"]).order("updated_at", { ascending: false });
+    if (error || !data) return [];
+    const tagMap = await tagsFor(data.map(w => w.id));
+    return data.map(w => toUi(w, tagMap[w.id] || []));
+  }
+
   /* ---- community events ------------------------------------------------- */
   async function listEvents() {
     const { data, error } = await client.from("events").select("*").order("sort");
@@ -535,6 +564,7 @@ window.WispDB = (function () {
     mySeries, findOrCreateSeries, updateSeries, deleteSeries, countInSeries,
     toggle, myRelations, getComments, postComment, getReactions, toggleReaction, uploadCover,
     toggleFollow, amFollowing, followCounts, myFollowingIds,
+    updateProfile, getProfile, worksByAuthor,
     listEvents, myEventIds, toggleEventJoin,
     getWorksByIds, myBookmarks, myHistory, clearHistory,
     myLists, createList, deleteList, listContents, addToList, removeFromList,
