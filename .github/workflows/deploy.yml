@@ -1,9 +1,10 @@
 name: Deploy to GitHub Pages
 
 # Publishes the static site to GitHub Pages on every push.
-# One-time setup: in the repository, open Settings > Pages and set
-# "Build and deployment" > "Source" to "GitHub Actions". After that this
-# workflow deploys automatically.
+# The "Setup Pages" step below enables Pages automatically (enablement: true),
+# so no manual repository setting is required. If your organization blocks
+# automatic enablement, set Settings > Pages > "Build and deployment" >
+# "Source" to "GitHub Actions" once, and the workflow takes over from there.
 
 on:
   push:
@@ -32,6 +33,8 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - name: Upload site
         uses: actions/upload-pages-artifact@v3
