@@ -237,6 +237,39 @@ window.WISP = (function () {
     ]
   };
 
+  /* The writer's own desk. Several books and several series in flight at once,
+     the way most writers actually work; drafts, scheduled, ongoing, and
+     complete all sit side by side. */
+  const WRITER = {
+    totals: { works: 6, drafts: 2, scheduled: 1, hearts: "9.4k" },
+    series: [
+      { id:"harbor", name:"The Harbor Letters", type:"original", source:"Literary",
+        note:"A town, a lighthouse, and the people who keep writing to it.",
+        books: [
+          { id:"tinroof", title:"Tin Roof, Tin Heart", cover:"hearth", rating:"T", status:"ongoing",
+            chapters:8, when:"Updated 2 days ago", hearts:"3.1k", comments:"240", reads:"48k", book:1,
+            schedule:"Sundays" },
+          { id:"saltglass", title:"Salt Glass", cover:"letters", rating:"T", status:"draft",
+            chapters:2, when:"Saved just now", book:2 }
+        ] },
+      { id:"lamplight", name:"Lamplight", type:"fan", source:"The Locked Tide",
+        note:"Fanwork. The nights nobody writes about, between the storms.",
+        books: [
+          { id:"lantern1", title:"Lantern, Unlit", cover:"tide", rating:"M", status:"complete",
+            chapters:12, when:"Completed 3 weeks ago", hearts:"5.6k", comments:"610", reads:"92k", book:1 },
+          { id:"lantern2", title:"Lantern, Relit", cover:"ash", rating:"M", status:"scheduled",
+            chapters:1, when:"First chapter posts Friday, 9am", book:2 }
+        ] }
+    ],
+    standalone: [
+      { id:"smallrooms", title:"The Weight of Small Rooms", cover:"room9", type:"original", source:"Literary",
+        rating:"G", status:"ongoing", chapters:5, when:"Updated 5 days ago", hearts:"1.4k", comments:"90", reads:"19k",
+        schedule:"When it is ready" },
+      { id:"postscript", title:"Postscript", cover:"veil", type:"original", source:"Literary",
+        rating:"T", status:"draft", chapters:1, when:"Saved 2 days ago" }
+    ]
+  };
+
   /* Profile. */
   const PROFILE = {
     name:"Rowan",
@@ -247,5 +280,5 @@ window.WISP = (function () {
     joined:"Joined 2024"
   };
 
-  return { COVERS, WORKS, byId, ACTIVITY, FOLLOWING, CHAPTER, WIDGETS, STAFF, HUBS, EVENTS, LIBRARY, PROFILE };
+  return { COVERS, WORKS, byId, ACTIVITY, FOLLOWING, CHAPTER, WIDGETS, STAFF, HUBS, EVENTS, LIBRARY, WRITER, PROFILE };
 })();

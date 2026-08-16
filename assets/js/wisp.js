@@ -22,6 +22,10 @@
 
   /* ---- small view helpers ------------------------------------------------ */
   const RATE = { G:"General", T:"Teen", M:"Mature", E:"Explicit" };
+
+  // Reader actions that persist for the session (a stand-in for the server), so
+  // a work you hearted or subscribed to still reads that way when you come back.
+  const userState = { hearted: new Set(), subscribed: new Set(), bookmarked: new Set() };
   function icon(id, size = 16) { return `<svg width="${size}" height="${size}" aria-hidden="true"><use href="#i-${id}"></use></svg>`; }
 
   function cover(key, className = "", extra = "") {
@@ -316,11 +320,12 @@
             <div style="margin:16px 0">${tagRow(w.tags, 12)}</div>
             <div class="work-actions">
               <button class="btn btn--primary" data-read="${w.id}">${icon("book",16)} Start reading</button>
-              <button class="btn btn--ghost" data-heart>${icon("heart",16)} Heart</button>
-              <button class="btn btn--quiet" data-toast="Subscribed. New chapters will land in your Activity, quietly.">Subscribe</button>
-              <button class="btn btn--quiet" data-toast="Saved to your Library.">${icon("bookmark",16)} Bookmark</button>
+              <button class="btn ${userState.hearted.has(w.id) ? "btn--primary" : "btn--ghost"}" data-toggle="heart" aria-pressed="${userState.hearted.has(w.id)}">${icon("heart",16)}<span class="toggle-label">${userState.hearted.has(w.id) ? "Hearted" : "Heart"}</span></button>
+              <button class="btn btn--quiet ${userState.subscribed.has(w.id) ? "is-on-quiet" : ""}" data-toggle="subscribe" aria-pressed="${userState.subscribed.has(w.id)}">${icon("bell",16)}<span class="toggle-label">${userState.subscribed.has(w.id) ? "Subscribed" : "Subscribe"}</span></button>
+              <button class="btn btn--quiet ${userState.bookmarked.has(w.id) ? "is-on-quiet" : ""}" data-toggle="bookmark" aria-pressed="${userState.bookmarked.has(w.id)}">${icon("bookmark",16)}<span class="toggle-label">${userState.bookmarked.has(w.id) ? "Bookmarked" : "Bookmark"}</span></button>
               <button class="btn btn--quiet" data-toast="Downloads: EPUB, PDF, and HTML are free and always will be.">${icon("download",16)} Download</button>
             </div>
+            <p class="muted" style="font-size:12px;margin:2px 0 0">Hearts are one per reader, quiet and un-gameable.</p>
             <div class="card__stats" style="border:0;max-width:420px;padding:0">
               <span class="stat stat--heart">${icon("heart",15)}${w.hearts} hearts</span>
               <span class="stat">${icon("comment",15)}${w.comments}</span>
@@ -612,23 +617,152 @@
   }
 
   /* ======================================================================= */
-  /*  SCREEN: WRITING STATION                                                 */
+  /*  SCREEN: WRITING STATION  ·  a desk of many works, editor one click in    */
   /* ======================================================================= */
-  function renderWrite() {
+  const WSTATUS = {
+    ongoing:   { t:"Ongoing",   pip:"amber" },
+    complete:  { t:"Complete",  pip:"sage" },
+    draft:     { t:"Draft",     pip:"draft" },
+    scheduled: { t:"Scheduled", pip:"rose" }
+  };
+  function findWriterWork(id) {
+    for (const s of W.WRITER.series) {
+      const b = s.books.find(x => x.id === id);
+      if (b) return Object.assign({}, b, { series: s });
+    }
+    const st = W.WRITER.standalone.find(x => x.id === id);
+    return st ? Object.assign({}, st, { series: null }) : null;
+  }
+
+  function renderWrite(arg) {
+    if (!arg) return renderWriteDashboard();
+    if (arg === "new") return renderWriteEditor(null);
+    const w = findWriterWork(arg);
+    return w ? renderWriteEditor(w) : renderWriteDashboard();
+  }
+
+  function msRow(b) {
+    const st = WSTATUS[b.status];
+    const isPublic = b.status === "ongoing" || b.status === "complete";
+    const stats = isPublic
+      ? `<span class="ms-stats"><span class="stat stat--heart">${icon("heart",13)}${b.hearts}</span><span class="stat">${icon("comment",13)}${b.comments}</span><span class="stat">${icon("eye",13)}${b.reads}</span></span>`
+      : `<span class="ms-stats muted">${b.status === "scheduled" ? "Queued, not visible to readers yet" : "Draft, only you can see this"}</span>`;
+    return `<button class="ms-row" data-edit="${b.id}">
+      <span class="ms-cover">${cover(b.cover)}${rate(b.rating)}</span>
+      <span class="ms-main">
+        <span class="ms-title">${esc(b.title)}${b.book ? `<span class="ms-book">Book ${b.book}</span>` : ""}</span>
+        <span class="ms-meta">
+          <span class="ms-status"><span class="pip pip--${st.pip}"></span>${st.t}</span>
+          <span class="muted">${b.chapters} ${b.chapters === 1 ? "chapter" : "chapters"}</span>
+          <span class="muted">${esc(b.when)}</span>
+        </span>
+        ${stats}
+      </span>
+      <span class="ms-go">${b.status === "draft" ? "Continue" : "Edit"} ${icon("chev",15)}</span>
+    </button>`;
+  }
+
+  function renderWriteDashboard() {
+    const t = W.WRITER.totals;
+    const seriesHTML = W.WRITER.series.map(s => `
+      <section class="ms-series">
+        <div class="series-head">
+          <div class="series-head__title">
+            <span class="series-name">${esc(s.name)}</span>
+            <span class="pill">Series</span>
+            <span class="pill">${s.type === "fan" ? "Fanwork" : "Original"}</span>
+            <span class="pill">${esc(s.source)}</span>
+          </div>
+          <button class="btn--link" data-toast="Reorder the books, edit the series blurb, and manage characters shared across the series.">Manage series</button>
+        </div>
+        <p class="muted" style="font-size:13px;margin:2px 0 12px">${esc(s.note)}</p>
+        <div class="ms-list">
+          ${s.books.map(msRow).join("")}
+          <button class="ms-add" data-toast="A new book in this series inherits its characters and blurb.">${icon("plus",15)} Add a book to this series</button>
+        </div>
+      </section>`).join("");
+
+    const standaloneHTML = `
+      <section class="ms-series">
+        <div class="series-head">
+          <div class="series-head__title"><span class="series-name">Standalone works</span></div>
+          <span class="muted" style="font-size:12.5px">${W.WRITER.standalone.length} works</span>
+        </div>
+        <div class="ms-list">
+          ${W.WRITER.standalone.map(msRow).join("")}
+          <button class="ms-add" data-edit="new">${icon("plus",15)} Start a standalone work</button>
+        </div>
+      </section>`;
+
     $("#screen-write").innerHTML = `
       <div class="page page--wide">
-        <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:8px">
+        <div class="write-head">
           <div>
+            <h1 class="vh">Writing Station</h1>
             <div class="eyebrow rose" style="margin-bottom:8px">Writing Station</div>
-            <h1 class="display" style="font-size:30px">An equipped desk</h1>
+            <div class="display" style="font-size:30px">Your desk</div>
+            <p class="section-lead" style="margin-bottom:0">Everything you are working on, in one place. Several books and several series can be in flight at once; drafts, scheduled chapters, and finished stories all live here together.</p>
           </div>
-          <div class="save-flag" id="saveFlag">${icon("check",14)} Saved just now, on this device and the server</div>
+          <div class="write-actions">
+            <button class="btn btn--primary" data-edit="new">${icon("plus",16)} New work</button>
+            <button class="btn btn--quiet" data-toast="A new series groups related books and shares characters and a blurb across them.">New series</button>
+          </div>
         </div>
-        <p class="section-lead">Draft here or paste clean from your editor of choice; both are first-class. Everything autosaves, and recovers if the tab closes.</p>
+
+        <div class="desk-totals">
+          <div><b>${t.works}</b><span>works</span></div>
+          <div><b>${W.WRITER.series.length}</b><span>series</span></div>
+          <div><b>${t.drafts}</b><span>drafts</span></div>
+          <div><b>${t.scheduled}</b><span>scheduled</span></div>
+          <div><b>${t.hearts}</b><span>hearts, all works</span></div>
+        </div>
+        <p class="muted" style="font-size:12px;margin:10px 2px 26px">Sober by design: hearts, comments, reads, and bookmarks, nothing more. No rankings, no leaderboards.</p>
+
+        ${seriesHTML}
+        ${standaloneHTML}
+      </div>`;
+  }
+
+  function renderWriteEditor(work) {
+    const isNew = !work;
+    const type = work ? (work.series ? work.series.type : work.type) : "fan";
+    const source = work ? (work.series ? work.series.source : (work.source || "")) : "";
+    const rating = work ? work.rating : "T";
+    const title = work ? work.title : "";
+    const chapters = work ? work.chapters : 0;
+    const seriesName = work && work.series ? work.series.name : "";
+    const st = work ? WSTATUS[work.status] : null;
+
+    const partsHTML = chapters > 0
+      ? Array.from({ length: chapters }, (_, i) => `
+          <button class="part-row ${i === chapters - 1 ? "is-current" : ""}" data-toast="Open this chapter in the editor.">
+            <span class="part-n">${i + 1}</span><span class="part-title">Chapter ${i + 1}</span>
+          </button>`).join("")
+      : `<p class="muted" style="font-size:13px;margin:0">No chapters yet. Your first one starts in the editor.</p>`;
+
+    const typeFields = type === "fan"
+      ? `<div class="field"><label>Fandom</label><input type="text" value="${esc(source)}"></div>
+         <div class="field"><label>Relationship</label><input type="text" placeholder="Character A / Character B"></div>`
+      : `<div class="field"><label>Setting or genre</label><input type="text" value="${esc(source)}"></div>
+         <div class="field"><label>Characters</label><input type="text" placeholder="Registered against your series"></div>`;
+
+    $("#screen-write").innerHTML = `
+      <div class="page page--wide">
+        <div class="write-head">
+          <div>
+            <button class="btn--link" data-nav="write" style="margin-bottom:8px">&lsaquo; All works</button>
+            <h1 class="display" style="font-size:26px">${isNew ? "New work" : esc(title)}</h1>
+            <div class="muted" style="font-size:13.5px;margin-top:5px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              ${seriesName ? `<span>In series <b style="color:var(--ink2)">${esc(seriesName)}</b>${work.book ? `, book ${work.book}` : ""}</span><span>&middot;</span>` : ""}
+              ${st ? `<span class="ms-status"><span class="pip pip--${st.pip}"></span>${st.t}</span>` : "<span>Not published yet</span>"}
+            </div>
+          </div>
+          <div class="save-flag">${icon("check",14)} Saved just now, on this device and the server</div>
+        </div>
 
         <div class="writer">
           <div>
-            <input class="title-input" placeholder="Title your work" value="Tin Roof, Tin Heart">
+            <input class="title-input" placeholder="Title your work" value="${esc(title)}">
             <div class="toolbar" role="toolbar" aria-label="Formatting">
               <button title="Heading">H</button>
               <button title="Bold"><b>B</b></button>
@@ -644,35 +778,42 @@
               <span style="margin-left:auto;font-size:12px;color:var(--ink3);padding:0 8px">Markdown shortcuts on</span>
             </div>
             <div class="editor" contenteditable="true" spellcheck="true" aria-label="Chapter body">
-              <h2>Chapter 1: The First Cold Morning</h2>
-              <p>The tin roof kept the rain honest. It let nothing in and nothing be forgotten; every drop announced itself, and by the third night I had stopped pretending to sleep through them.</p>
-              <p>Type here as you would anywhere. A slash brings up blocks; two dashes make nothing, because we do not use them. Colons and semicolons carry the weight.</p>
+              <h2>Chapter ${chapters + 1}${isNew ? ": Untitled" : ""}</h2>
+              <p>${isNew ? "Start typing, or paste clean from your editor of choice; both are first-class." : "Pick up where you left off. Everything you write autosaves as you go, on this device and the server."}</p>
+              <p>A slash brings up blocks; two dashes make nothing, because we do not use them. Colons and semicolons carry the weight.</p>
             </div>
-            <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+            <div class="write-actions" style="margin-top:16px">
               <button class="btn btn--primary" data-toast="Chapter published. It will appear in your subscribers' Activity, quietly.">Publish chapter</button>
               <button class="btn btn--quiet" data-toast="Saved as a draft.">Save draft</button>
-              <button class="btn btn--quiet" data-toast="Scheduled. It will post itself on the date you set.">Schedule &hellip;</button>
+              <button class="btn btn--quiet" data-toast="Scheduled. It will post itself on the date you set; backdating is here too.">Schedule &hellip;</button>
               <button class="btn btn--link">Preview</button>
             </div>
           </div>
 
           <aside>
             <div class="panel">
+              <h4>Chapters</h4>
+              <div class="parts">${partsHTML}</div>
+              <button class="btn--link" style="margin-top:10px" data-toast="A new chapter is added to this work.">${icon("plus",13)} New chapter</button>
+            </div>
+
+            <div class="panel">
               <h4>Work details</h4>
+              <div class="field"><label>Series</label><input type="text" value="${esc(seriesName)}" placeholder="Standalone, or start a series"></div>
               <div class="field"><label>Work type</label>
-                <div class="seg"><button class="is-on">Fanwork</button><button>Original</button></div>
+                <div class="seg" role="group" aria-label="Work type">
+                  <button class="${type === "fan" ? "is-on" : ""}" aria-pressed="${type === "fan"}">Fanwork</button>
+                  <button class="${type === "original" ? "is-on" : ""}" aria-pressed="${type === "original"}">Original</button>
+                </div>
               </div>
-              <div class="field"><label>Fandom</label><input type="text" value="The Locked Tide"></div>
-              <div class="field"><label>Relationship</label><input type="text" value="Harbor Witch / Smuggler"></div>
+              ${typeFields}
               <div class="field"><label>Additional tags</label><input type="text" placeholder="Slow burn, found family, ..."></div>
               <p class="muted" style="font-size:11.5px;margin-top:2px">Up to 50. House tags get a one-line description; the long tail is freeform, gently canonicalized later.</p>
             </div>
 
             <div class="panel">
               <h4>Rating</h4>
-              <div class="rate-choice">
-                <button>G</button><button class="is-on">T</button><button>M</button><button>E</button>
-              </div>
+              <div class="rate-choice">${["G","T","M","E"].map(r => `<button class="${r === rating ? "is-on" : ""}" aria-pressed="${r === rating}">${r}</button>`).join("")}</div>
               <div class="field" style="margin-top:12px"><label>Warnings</label>
                 <label class="check"><input type="checkbox"> Graphic violence</label>
                 <label class="check"><input type="checkbox"> Major character death</label>
@@ -682,7 +823,13 @@
 
             <div class="panel">
               <h4>Cover</h4>
-              <div class="cover-drop" data-toast="Covers are upload-only: no in-app maker, no auto-fallback. A cover is required to publish.">${icon("plus",18)}<div style="margin-top:6px">Upload a cover</div><div style="font-size:11px;margin-top:2px">Required to publish</div></div>
+              <div class="cover-drop" data-toast="Covers are upload-only: no in-app maker, no auto-fallback. A cover is required to publish.">${icon("plus",18)}<div style="margin-top:6px">${isNew ? "Upload a cover" : "Replace cover"}</div><div style="font-size:11px;margin-top:2px">Required to publish</div></div>
+            </div>
+
+            <div class="panel">
+              <h4>Serialization</h4>
+              <div class="field"><label>Update schedule, shown to readers</label><input type="text" value="${work && work.schedule ? esc(work.schedule) : ""}" placeholder="e.g. Sundays"></div>
+              <p class="muted" style="font-size:12px;margin:0;line-height:1.55">Scheduled auto-publishing and backdating live here. A visible schedule tells subscribers when to expect you.</p>
             </div>
 
             <div class="panel">
@@ -1063,7 +1210,7 @@
     else if (screen === "work") { renderWork(arg); }
     else if (screen === "browse") { renderBrowse(); }
     else if (screen === "home") { renderHome(); }
-    else if (screen === "write") { renderWrite(); }
+    else if (screen === "write") { renderWrite(arg); }
     else if (screen === "library") { renderLibrary(); }
     else if (screen === "community") { renderCommunity(); }
     else if (screen === "profile") { renderProfile(); }
@@ -1108,6 +1255,35 @@
     const back = e.target.closest("[data-back]");
     if (back) { history.length > 1 ? history.back() : navigate("home"); return; }
 
+    const edit = e.target.closest("[data-edit]");
+    if (edit) { navigate("write/" + edit.dataset.edit); return; }
+
+    const tog = e.target.closest("[data-toggle]");
+    if (tog) {
+      const kind = tog.dataset.toggle;
+      const wid = (location.hash.match(/#\/(?:work|read)\/([^/]+)/) || [])[1];
+      const set = userState[kind === "heart" ? "hearted" : kind === "subscribe" ? "subscribed" : "bookmarked"];
+      const on = tog.getAttribute("aria-pressed") !== "true";
+      tog.setAttribute("aria-pressed", String(on));
+      if (wid) { on ? set.add(wid) : set.delete(wid); }
+      const label = tog.querySelector(".toggle-label");
+      if (kind === "heart") {
+        tog.classList.toggle("btn--primary", on);
+        tog.classList.toggle("btn--ghost", !on);
+        if (label) label.textContent = on ? "Hearted" : "Heart";
+        toast(on ? "This work has been hearted." : "Heart removed.");
+      } else if (kind === "subscribe") {
+        tog.classList.toggle("is-on-quiet", on);
+        if (label) label.textContent = on ? "Subscribed" : "Subscribe";
+        toast(on ? "Subscribed. New chapters will land in your Activity, quietly." : "Unsubscribed. No more chapter alerts for this work.");
+      } else {
+        tog.classList.toggle("is-on-quiet", on);
+        if (label) label.textContent = on ? "Bookmarked" : "Bookmark";
+        toast(on ? "Saved to your Library." : "Removed from your Library.");
+      }
+      return;
+    }
+
     if (e.target.closest("#introDismiss")) { settings.introSeen = true; save(); const bar = $("#introBar"); if (bar) bar.remove(); return; }
 
     if (e.target.closest("[data-lucky]")) {
@@ -1122,9 +1298,6 @@
 
     const tst = e.target.closest("[data-toast]");
     if (tst) { toast(tst.dataset.toast); return; }
-
-    const heart = e.target.closest("[data-heart]");
-    if (heart) { heart.classList.toggle("btn--ghost"); heart.style.color = "var(--rose-ink)"; toast("Hearted. One per reader, quiet and un-gameable."); return; }
 
     const ht = e.target.closest("[data-hometab]");
     if (ht) { homeTab = ht.dataset.hometab; renderHome(); return; }
