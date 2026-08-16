@@ -57,6 +57,8 @@ window.WispDB = (function () {
       words: "",
       read: "",
       format: row.format || "prose",
+      seriesId: row.series_id || null,
+      bookNumber: row.book_number || null,
       _dbStatus: row.status,
       _db: true
     };
@@ -160,12 +162,17 @@ window.WispDB = (function () {
   /* ---- writes ----------------------------------------------------------- */
   async function createWork(f) {
     if (!user) throw new Error("Sign in to publish.");
-    const { data, error } = await client.from("works").insert({
+    const row = {
       author_id: user.id, title: f.title || "Untitled", type: f.type || "original",
       source: f.source || "", summary: f.summary || "", rating: f.rating || "G",
       warnings: f.warnings || [], status: f.status || "draft",
       cover_color: f.cover_color || randomCover()
-    }).select().single();
+    };
+    if (f.cover_image_url) row.cover_image_url = f.cover_image_url;
+    if (f.series_id !== undefined) row.series_id = f.series_id;
+    if (f.book_number !== undefined) row.book_number = f.book_number;
+    if (f.schedule !== undefined) row.schedule = f.schedule;
+    const { data, error } = await client.from("works").insert(row).select().single();
     if (error) throw error;
     if (f.chapterBody != null) {
       const published = (f.status || "draft") !== "draft";
@@ -182,6 +189,90 @@ window.WispDB = (function () {
     if (!user) throw new Error("Sign in first.");
     const { error } = await client.from("works").delete().eq("id", workId).eq("author_id", user.id);
     if (error) throw error;
+  }
+
+  // Update the editable fields of a work the signed-in user owns.
+  async function updateWork(id, fields) {
+    if (!user) throw new Error("Sign in first.");
+    const patch = {};
+    ["title","type","source","summary","rating","status","cover_color","cover_image_url",
+     "warnings","series_id","book_number","schedule","format"].forEach(k => {
+      if (fields[k] !== undefined) patch[k] = fields[k];
+    });
+    patch.updated_at = new Date().toISOString();
+    const { data, error } = await client.from("works").update(patch).eq("id", id).eq("author_id", user.id).select().single();
+    if (error) throw error;
+    return data;
+  }
+
+  async function firstChapter(workId) {
+    const { data, error } = await client.from("chapters").select("*").eq("work_id", workId).order("number").limit(1);
+    if (error) throw error;
+    return (data && data[0]) || null;
+  }
+
+  // Insert a new chapter or update an existing one (pass f.id to update).
+  async function saveChapter(workId, f) {
+    if (!user) throw new Error("Sign in first.");
+    const published = !!f.published;
+    if (f.id) {
+      const patch = { title: f.title || "", body: f.body || "", updated_at: new Date().toISOString(), published };
+      if (published) patch.published_at = new Date().toISOString();
+      const { error } = await client.from("chapters").update(patch).eq("id", f.id);
+      if (error) throw error;
+      return f.id;
+    }
+    const { data, error } = await client.from("chapters").insert({
+      work_id: workId, number: f.number || 1, title: f.title || "", body: f.body || "",
+      published, published_at: published ? new Date().toISOString() : null
+    }).select("id").single();
+    if (error) throw error;
+    return data.id;
+  }
+
+  // Replace a work's tags with exactly the given set.
+  async function setTags(workId, names) {
+    await client.from("work_tags").delete().eq("work_id", workId);
+    if (names && names.length) await addTags(workId, names);
+  }
+
+  /* ---- series ----------------------------------------------------------- */
+  async function mySeries() {
+    if (!user) return [];
+    const { data, error } = await client.from("series").select("*").eq("author_id", user.id).order("created_at");
+    if (error) throw error;
+    return data || [];
+  }
+  async function findOrCreateSeries(name, opts = {}) {
+    if (!user) throw new Error("Sign in first.");
+    const clean = String(name || "").trim();
+    if (!clean) return null;
+    const { data: found } = await client.from("series").select("*").eq("author_id", user.id).ilike("name", clean).maybeSingle();
+    if (found) return found;
+    const { data, error } = await client.from("series").insert({
+      author_id: user.id, name: clean, description: opts.description || "",
+      type: opts.type || "original", source: opts.source || ""
+    }).select().single();
+    if (error) throw error;
+    return data;
+  }
+  async function updateSeries(id, fields) {
+    if (!user) throw new Error("Sign in first.");
+    const patch = {};
+    ["name","description","type","source"].forEach(k => { if (fields[k] !== undefined) patch[k] = fields[k]; });
+    const { error } = await client.from("series").update(patch).eq("id", id).eq("author_id", user.id);
+    if (error) throw error;
+  }
+  // Deleting a series detaches its works automatically (works.series_id is
+  // "on delete set null"), so the books stay and become standalone.
+  async function deleteSeries(id) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("series").delete().eq("id", id).eq("author_id", user.id);
+    if (error) throw error;
+  }
+  async function countInSeries(seriesId) {
+    const { count } = await client.from("works").select("id", { count: "exact", head: true }).eq("series_id", seriesId);
+    return count || 0;
   }
 
   async function addTags(workId, names) {
@@ -247,7 +338,9 @@ window.WispDB = (function () {
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     init, signUp, signIn, signOut,
     listWorks, getWork, getChapters, myWorks,
-    createWork, deleteWork, toggle, myRelations, getComments, postComment, uploadCover,
+    createWork, updateWork, deleteWork, firstChapter, saveChapter, setTags,
+    mySeries, findOrCreateSeries, updateSeries, deleteSeries, countInSeries,
+    toggle, myRelations, getComments, postComment, uploadCover,
     fmtCount, relTime
   };
 })();

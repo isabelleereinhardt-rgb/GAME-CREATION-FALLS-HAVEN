@@ -34,7 +34,10 @@
      which the loaders below fill from the database. In demo mode they stay
      empty and every accessor falls back to the bundled demo dataset, so the
      demo behaves exactly as before. */
-  const LIVE = { works: [], byId: {}, chapters: {}, comments: {} };
+  const LIVE = { works: [], byId: {}, chapters: {}, comments: {}, series: [] };
+  let liveEditor = null;   // { work, chapter } when editing a real work, else null
+  let editorCover = null;  // uploaded cover URL for the current editor session
+  let pendingSeries = null; // series name to prefill when starting a new book in a series
   function isLive() { return !!(window.WispDB && WispDB.enabled); }
   function activeWorks() { return isLive() ? LIVE.works : W.WORKS; }
   function activeById(id) { return LIVE.byId[id] || W.byId[id]; }   // live wins; demo fills curated links
@@ -1052,15 +1055,36 @@
       </div>`;
   }
 
+  // Turn a plain-text chapter body into editor paragraphs.
+  function bodyToEditorHTML(body) {
+    const parts = splitParagraphs(body);
+    return parts.length ? parts.map(p => `<p>${esc(p)}</p>`).join("") : "<p></p>";
+  }
+
   function renderWriteEditor(work) {
     const isNew = !work;
+    const editingLive = !!(work && work._db);
     const type = work ? (work.series ? work.series.type : work.type) : "fan";
     const source = work ? (work.series ? work.series.source : (work.source || "")) : "";
     const rating = work ? work.rating : "T";
     const title = work ? work.title : "";
     const chapters = work ? work.chapters : 0;
-    const seriesName = work && work.series ? work.series.name : "";
-    const st = work ? WSTATUS[work.status] : null;
+    const seriesName = editingLive
+      ? (liveEditor && liveEditor.seriesName ? liveEditor.seriesName : "")
+      : (isNew && pendingSeries ? pendingSeries : (work && work.series ? work.series.name : ""));
+    pendingSeries = null;
+    const st = work ? WSTATUS[work._dbStatus || work.status] : null;
+    const tagsValue = editingLive ? (work.tags || []).join(", ") : "";
+    const coverIsImage = editingLive && work.cover && /^https?:/.test(work.cover);
+    editorCover = coverIsImage ? work.cover : null;
+
+    // The editor holds one chapter at a time. Live edits load the real text;
+    // otherwise the editor opens on a fresh chapter.
+    const bodyHTML = editingLive && liveEditor && liveEditor.chapter
+      ? bodyToEditorHTML(liveEditor.chapter.body)
+      : `<h2>Chapter ${chapters + 1}${isNew ? ": Untitled" : ""}</h2>
+         <p>${isNew ? "Start typing, or paste from another editor." : "Pick up where you left off. Your writing saves automatically."}</p>
+         <p>Format with the toolbar above, or use Markdown shortcuts.</p>`;
 
     const partsHTML = chapters > 0
       ? Array.from({ length: chapters }, (_, i) => `
@@ -1106,11 +1130,7 @@
               <button title="Horizontal rule"><span style="display:inline-block;width:16px;height:2px;background:currentColor;border-radius:2px"></span></button>
               <span style="margin-left:auto;font-size:12px;color:var(--ink3);padding:0 8px">Markdown shortcuts on</span>
             </div>
-            <div class="editor" id="we-body" contenteditable="true" spellcheck="true" aria-label="Chapter body">
-              <h2>Chapter ${chapters + 1}${isNew ? ": Untitled" : ""}</h2>
-              <p>${isNew ? "Start typing, or paste from another editor." : "Pick up where you left off. Your writing saves automatically."}</p>
-              <p>Format with the toolbar above, or use Markdown shortcuts.</p>
-            </div>
+            <div class="editor" id="we-body" contenteditable="true" spellcheck="true" aria-label="Chapter body">${bodyHTML}</div>
             <div class="write-actions" style="margin-top:16px">
               <button class="btn btn--primary" data-publish="publish">Publish chapter</button>
               <button class="btn btn--quiet" data-publish="draft">Save draft</button>
@@ -1128,7 +1148,7 @@
 
             <div class="panel">
               <h4>Work details</h4>
-              <div class="field"><label>Series</label><input type="text" value="${esc(seriesName)}" placeholder="Standalone, or start a series"></div>
+              <div class="field"><label>Series</label><input type="text" id="we-series" value="${esc(seriesName)}" placeholder="Standalone, or start a series"></div>
               <div class="field"><label>Work type</label>
                 <div class="seg" role="group" aria-label="Work type">
                   <button data-wtype="fan" class="${type === "fan" ? "is-on" : ""}" aria-pressed="${type === "fan"}">Fanwork</button>
@@ -1152,7 +1172,12 @@
 
             <div class="panel">
               <h4>Cover</h4>
-              <div class="cover-drop" data-toast="Upload a cover image. A cover is required to publish.">${icon("plus",18)}<div style="margin-top:6px">${isNew ? "Upload a cover" : "Replace cover"}</div><div style="font-size:11px;margin-top:2px">Required to publish</div></div>
+              <label class="cover-drop" id="coverDrop" for="we-cover-file">
+                <input type="file" id="we-cover-file" accept="image/*" hidden>
+                ${icon("plus",18)}<div style="margin-top:6px">${coverIsImage ? "Replace cover" : "Upload a cover"}</div>
+                <div style="font-size:11px;margin-top:2px">Required to publish</div>
+              </label>
+              <div id="coverPreview" style="margin-top:10px">${coverIsImage ? `<img src="${esc(work.cover)}" alt="Cover preview" style="width:100%;border-radius:10px;display:block">` : ""}</div>
             </div>
 
             <div class="panel">
@@ -1178,6 +1203,24 @@
           </aside>
         </div>
       </div>`;
+
+    // Real cover upload (live mode only; demo mode explains it needs a backend).
+    const coverInput = $("#we-cover-file");
+    if (coverInput) coverInput.addEventListener("change", async () => {
+      const file = coverInput.files && coverInput.files[0];
+      if (!file) return;
+      if (!isLive()) { toast("Connect Supabase to upload a cover."); coverInput.value = ""; return; }
+      if (!WispDB.signedIn) { openAuth("in"); return; }
+      const drop = $("#coverDrop"); if (drop) drop.style.opacity = "0.6";
+      try {
+        const url = await WispDB.uploadCover(file);
+        editorCover = url;
+        const prev = $("#coverPreview");
+        if (prev) prev.innerHTML = `<img src="${esc(url)}" alt="Cover preview" style="width:100%;border-radius:10px;display:block">`;
+        toast("Cover uploaded.");
+      } catch (e) { toast((e && e.message) || "Could not upload the cover."); }
+      finally { if (drop) drop.style.opacity = ""; }
+    });
   }
 
   /* ======================================================================= */
@@ -1596,19 +1639,20 @@
       hearts: WispDB.fmtCount(r.hearts_count), comments: WispDB.fmtCount(r.comments_count),
       reads: WispDB.fmtCount(r.reads_count),
       when: "Updated " + WispDB.relTime(r.updated_at),
-      book: r.book_number || null
+      book: r.book_number || null,
+      seriesId: r.series_id || null
     };
   }
   function liveMsRow(b) {
-    const st = WSTATUS[b.status];
+    const st = WSTATUS[b.status] || WSTATUS.draft;
     const isPublic = b.status === "ongoing" || b.status === "complete";
     const stats = isPublic
       ? `<span class="ms-stats"><span class="stat stat--heart">${icon("heart",13)}${b.hearts}</span><span class="stat">${icon("comment",13)}${b.comments}</span><span class="stat">${icon("eye",13)}${b.reads}</span></span>`
       : `<span class="ms-stats muted">${b.status === "scheduled" ? "Scheduled, not visible to readers yet" : "Draft, only you can see it"}</span>`;
-    return `<div class="ms-row" data-work="${b.id}">
+    return `<div class="ms-row" data-edit="${b.id}">
       <span class="ms-cover">${cover(b.cover, b.title)}${rate(b.rating)}</span>
       <span class="ms-main">
-        <span class="ms-title">${esc(b.title)}</span>
+        <span class="ms-title">${esc(b.title)}${b.book ? `<span class="ms-book">Book ${b.book}</span>` : ""}</span>
         <span class="ms-meta">
           <span class="ms-status"><span class="pip pip--${st.pip}"></span>${st.t}</span>
           <span class="muted">${b.chapters} ${b.chapters === 1 ? "chapter" : "chapters"}</span>
@@ -1618,18 +1662,54 @@
       </span>
       <span class="ms-row__actions">
         <button class="ms-menu" data-live-menu="${b.id}" aria-label="More actions for ${esc(b.title)}">${icon("more",18)}</button>
-        <button class="ms-go-btn" data-work="${b.id}">Open ${icon("chev",15)}</button>
+        <button class="ms-go-btn" data-edit="${b.id}">Edit ${icon("chev",15)}</button>
       </span>
     </div>`;
   }
-  function renderLiveDashboard(rows) {
+  function renderLiveDashboard(rows, series) {
     const books = rows.map(dbToDeskRow);
+    LIVE.desk = books;                        // manage-series reads this back
+    LIVE.series = series || [];
     const drafts = books.filter(b => b.status === "draft").length;
     const scheduled = books.filter(b => b.status === "scheduled").length;
     const hearts = rows.reduce((n, r) => n + (+r.hearts_count || 0), 0);
-    const listHTML = books.length
-      ? books.map(liveMsRow).join("")
-      : `<p class="muted" style="padding:20px 4px">You have not posted anything yet. Start your first work below.</p>`;
+
+    const seriesSections = (series || []).map(s => {
+      const inSeries = books.filter(b => b.seriesId === s.id).sort((a, b) => (a.book || 0) - (b.book || 0));
+      return `
+        <section class="ms-series">
+          <div class="series-head">
+            <div class="series-head__title">
+              <span class="series-name">${esc(s.name)}</span>
+              <span class="pill">Series</span>
+              <span class="pill">${s.type === "fan" ? "Fanwork" : "Original"}</span>
+              ${s.source ? `<span class="pill">${esc(s.source)}</span>` : ""}
+            </div>
+            <button class="btn--link" data-live-series="${s.id}">Manage series</button>
+          </div>
+          ${s.description ? `<p class="muted" style="font-size:13px;margin:2px 0 12px">${esc(s.description)}</p>` : ""}
+          <div class="ms-list">
+            ${inSeries.length ? inSeries.map(liveMsRow).join("") : `<p class="muted" style="font-size:13px;padding:8px 4px">No books in this series yet.</p>`}
+            <button class="ms-add" data-add-series-book="${esc(s.name)}">${icon("plus",15)} Add a book to this series</button>
+          </div>
+        </section>`;
+    }).join("");
+
+    const standalone = books.filter(b => !b.seriesId);
+    const standaloneSection = `
+      <section class="ms-series">
+        <div class="series-head">
+          <div class="series-head__title"><span class="series-name">Standalone works</span></div>
+          <span class="muted" style="font-size:12.5px">${standalone.length} ${standalone.length === 1 ? "work" : "works"}</span>
+        </div>
+        <div class="ms-list">
+          ${standalone.length ? standalone.map(liveMsRow).join("") : `<p class="muted" style="font-size:13px;padding:8px 4px">No standalone works yet.</p>`}
+          <button class="ms-add" data-edit="new">${icon("plus",15)} Start a standalone work</button>
+        </div>
+      </section>`;
+
+    const empty = books.length === 0 && (series || []).length === 0;
+
     $("#screen-write").innerHTML = `
       <div class="page page--wide">
         <div class="write-head">
@@ -1641,20 +1721,18 @@
           </div>
           <div class="write-actions">
             <button class="btn btn--primary" data-edit="new">${icon("plus",16)} New work</button>
+            <button class="btn btn--quiet" data-new-series>New series</button>
           </div>
         </div>
         <div class="desk-totals">
           <div><b>${books.length}</b><span>works</span></div>
+          <div><b>${(series || []).length}</b><span>series</span></div>
           <div><b>${drafts}</b><span>drafts</span></div>
-          <div><b>${scheduled}</b><span>scheduled</span></div>
           <div><b>${WispDB.fmtCount(hearts)}</b><span>hearts</span></div>
         </div>
-        <section class="ms-series">
-          <div class="ms-list">
-            ${listHTML}
-            <button class="ms-add" data-edit="new">${icon("plus",15)} Start a new work</button>
-          </div>
-        </section>
+        ${empty ? `<p class="muted" style="padding:20px 4px">You have not posted anything yet. Start your first work below.</p>` : ""}
+        ${seriesSections}
+        ${standaloneSection}
       </div>`;
   }
   function renderWriteSignedOut() {
@@ -1673,12 +1751,37 @@
   async function loadWriteDashboard() {
     if (!WispDB.signedIn) { renderWriteSignedOut(); return; }
     loadingScreen("#screen-write");
-    try { renderLiveDashboard(await WispDB.myWorks()); }
-    catch (e) { console.error("[wisp] my-works load failed:", e); renderLiveDashboard([]); }
+    try {
+      const [works, series] = await Promise.all([
+        WispDB.myWorks(),
+        WispDB.mySeries().catch(() => [])
+      ]);
+      LIVE.series = series;
+      renderLiveDashboard(works, series);
+    } catch (e) { console.error("[wisp] my-works load failed:", e); renderLiveDashboard([], []); }
+  }
+
+  async function loadWriteEditor(id) {
+    if (!WispDB.signedIn) { renderWriteSignedOut(); return; }
+    loadingScreen("#screen-write");
+    try {
+      const [work, chapter, series] = await Promise.all([
+        WispDB.getWork(id),
+        WispDB.firstChapter(id).catch(() => null),
+        WispDB.mySeries().catch(() => [])
+      ]);
+      LIVE.series = series;
+      const s = work.seriesId ? series.find(x => x.id === work.seriesId) : null;
+      liveEditor = { work, chapter, seriesName: s ? s.name : "" };
+      renderWriteEditor(work);
+    } catch (e) { liveEditor = null; toast("Could not open that work."); loadWriteDashboard(); }
   }
   function liveWorkMenu(id) {
-    const w = LIVE.byId[id]; const title = (w && w.title) || "this work";
+    const b = (LIVE.desk || []).find(x => x.id === id) || LIVE.byId[id] || {};
+    const title = b.title || "this work";
     menuDialog(title, [
+      { icon: "edit", label: "Edit", run: () => navigate("write/" + id) },
+      { icon: "book", label: "View as reader", run: () => navigate("work/" + id) },
       { icon: "share", label: "Copy link", run: () => copyLink(id) },
       { icon: "trash", label: "Delete work", danger: true, run: () => confirmDialog({
           title: "Delete this work?",
@@ -1689,6 +1792,97 @@
           catch (e) { toast((e && e.message) || "Could not delete."); }
         }) }
     ]);
+  }
+
+  /* ---- manage a live series ---------------------------------------------- */
+  async function reorderLiveBook(seriesId, bookId, dir) {
+    const books = (LIVE.desk || []).filter(b => b.seriesId === seriesId).sort((a, b) => (a.book || 0) - (b.book || 0));
+    const i = books.findIndex(b => b.id === bookId); const j = i + (dir === "up" ? -1 : 1);
+    if (i < 0 || j < 0 || j >= books.length) return;
+    const a = books[i], b = books[j];
+    try {
+      // Swap their book numbers (fall back to positions if unset).
+      const an = a.book || (i + 1), bn = b.book || (j + 1);
+      await WispDB.updateWork(a.id, { book_number: bn });
+      await WispDB.updateWork(b.id, { book_number: an });
+      await loadWriteDashboard();
+      const s = (LIVE.series || []).find(x => x.id === seriesId);
+      if (s) liveManageSeries(seriesId);
+    } catch (e) { toast((e && e.message) || "Could not reorder."); }
+  }
+  function liveManageSeries(id) {
+    const s = (LIVE.series || []).find(x => x.id === id); if (!s) return;
+    const books = (LIVE.desk || []).filter(b => b.seriesId === id).sort((a, b) => (a.book || 0) - (b.book || 0));
+    const arrow = (deg) => `<span style="display:inline-flex;transform:rotate(${deg}deg)">${icon("chev", 13)}</span>`;
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <h2 style="font-size:20px">Manage series</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <div class="field"><label>Series name</label><input type="text" id="ms-name" value="${esc(s.name)}"></div>
+      <div class="field"><label>Description</label><textarea id="ms-note" rows="2">${esc(s.description || "")}</textarea></div>
+      ${books.length ? `<div class="field"><label>Order of books</label>
+        <div class="reorder">
+          ${books.map((b, i) => `
+            <div class="reorder-row">
+              <span>${esc(b.title)}</span>
+              <span class="reorder-ctrls">
+                <button data-lmove="up|${b.id}" ${i === 0 ? "disabled" : ""} aria-label="Move ${esc(b.title)} up">${arrow(-90)}</button>
+                <button data-lmove="down|${b.id}" ${i === books.length - 1 ? "disabled" : ""} aria-label="Move ${esc(b.title)} down">${arrow(90)}</button>
+              </span>
+            </div>`).join("")}
+        </div>
+      </div>` : ""}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px">
+        <button class="btn--link" data-ldelete-series style="color:#a2444f">Delete series</button>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn--quiet" data-modal-cancel>Cancel</button>
+          <button class="btn btn--primary" data-lsave-series>Save</button>
+        </div>
+      </div>`, "Manage series");
+    $$("#modalCard [data-lmove]").forEach(btn => btn.addEventListener("click", () => {
+      const [dir, bid] = btn.dataset.lmove.split("|");
+      reorderLiveBook(id, bid, dir);
+    }));
+    $("#modalCard [data-lsave-series]").addEventListener("click", async () => {
+      const name = $("#ms-name").value.trim();
+      try {
+        await WispDB.updateSeries(id, { name: name || s.name, description: $("#ms-note").value.trim() });
+        closeModal(); toast("Series saved."); loadWriteDashboard();
+      } catch (e) { toast((e && e.message) || "Could not save the series."); }
+    });
+    $("#modalCard [data-ldelete-series]").addEventListener("click", () => {
+      const n = books.length;
+      confirmDialog({
+        title: "Delete this series?",
+        body: `The series grouping is removed. Its ${n} ${n === 1 ? "book stays" : "books stay"} in your works as standalone.`,
+        confirmText: "Delete series", danger: true
+      }, async () => {
+        try { await WispDB.deleteSeries(id); closeModal(); toast("Series deleted. The books were kept."); loadWriteDashboard(); }
+        catch (e) { toast((e && e.message) || "Could not delete the series."); }
+      });
+    });
+  }
+  function newLiveSeries() {
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <h2 style="font-size:20px">New series</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <p class="muted" style="font-size:13px;margin-bottom:14px">A series groups related books together. You can also create one just by typing its name in a work's Series field.</p>
+      <div class="field"><label>Series name</label><input type="text" id="ns-name" placeholder="The Locked Tide"></div>
+      <div class="field"><label>Description</label><textarea id="ns-note" rows="2" placeholder="What ties these books together"></textarea></div>
+      <div class="modal-actions">
+        <button class="btn btn--quiet" data-modal-cancel>Cancel</button>
+        <button class="btn btn--primary" data-ns-create>Create series</button>
+      </div>`, "New series");
+    $("#modalCard [data-ns-create]").addEventListener("click", async () => {
+      const name = $("#ns-name").value.trim(); if (!name) { toast("Give the series a name."); return; }
+      try {
+        await WispDB.findOrCreateSeries(name, { description: $("#ns-note").value.trim() });
+        closeModal(); toast("Series created."); loadWriteDashboard();
+      } catch (e) { toast((e && e.message) || "Could not create the series."); }
+    });
   }
 
   function route() {
@@ -1712,9 +1906,10 @@
     else if (screen === "browse") { live ? loadBrowse() : renderBrowse(); }
     else if (screen === "home") { renderHome(); }
     else if (screen === "write") {
-      if (live && arg === "new") renderWrite("new");
-      else if (live) loadWriteDashboard();
-      else renderWrite(arg);
+      if (!live) renderWrite(arg);
+      else if (!arg) loadWriteDashboard();
+      else if (arg === "new") { liveEditor = null; editorCover = null; renderWriteEditor(null); }
+      else loadWriteEditor(arg);
     }
     else if (screen === "library") { renderLibrary(); }
     else if (screen === "community") { renderCommunity(); }
@@ -1764,6 +1959,12 @@
 
     const lm = e.target.closest("[data-live-menu]");
     if (lm) { liveWorkMenu(lm.dataset.liveMenu); return; }
+    const lsr = e.target.closest("[data-live-series]");
+    if (lsr) { liveManageSeries(lsr.dataset.liveSeries); return; }
+    const asb = e.target.closest("[data-add-series-book]");
+    if (asb) { pendingSeries = asb.dataset.addSeriesBook; navigate("write/new"); return; }
+    const nsr = e.target.closest("[data-new-series]");
+    if (nsr) { newLiveSeries(); return; }
     const au = e.target.closest("[data-auth]");
     if (au) { openAuth(au.dataset.auth || "in"); return; }
 
@@ -1939,9 +2140,44 @@
     const typeBtn = $("#screen-write [data-wtype].is-on"); const type = typeBtn ? typeBtn.dataset.wtype : "original";
     const rateBtn = $("#screen-write [data-wrate].is-on"); const rating = rateBtn ? rateBtn.dataset.wrate : "G";
     const tags = val("#we-tags").split(",").map(s => s.trim()).filter(Boolean);
+    const source = val("#we-source");
+    const seriesName = val("#we-series");
+    // "Save draft" on an already-published work saves changes without pulling it
+    // back to draft; only new works and existing drafts actually become drafts.
+    const wasPublished = liveEditor && liveEditor.work &&
+      (liveEditor.work._dbStatus === "ongoing" || liveEditor.work._dbStatus === "complete");
+    const status = kind === "draft" ? (wasPublished ? liveEditor.work._dbStatus : "draft") : "ongoing";
     try {
-      await WispDB.createWork({ title, type, source: val("#we-source"), rating, tags, chapterBody: body, status: kind === "draft" ? "draft" : "ongoing" });
-      toast(kind === "draft" ? "Draft saved to your account." : "Published. It is now in your works.");
+      // Resolve the series field to an id (find-or-create), or standalone.
+      let series_id = null;
+      if (seriesName) {
+        const s = await WispDB.findOrCreateSeries(seriesName, { type, source });
+        series_id = s ? s.id : null;
+      }
+
+      if (liveEditor && liveEditor.work) {
+        // Editing an existing work: update its fields, its first chapter, and tags.
+        const id = liveEditor.work.id;
+        const fields = { title, type, source, rating, status, series_id };
+        if (editorCover) fields.cover_image_url = editorCover;
+        await WispDB.updateWork(id, fields);
+        await WispDB.saveChapter(id, {
+          id: liveEditor.chapter ? liveEditor.chapter.id : null,
+          number: liveEditor.chapter ? liveEditor.chapter.number : 1,
+          title: liveEditor.chapter ? liveEditor.chapter.title : "",
+          body, published: status !== "draft"
+        });
+        await WispDB.setTags(id, tags);
+        toast(kind === "draft" ? (wasPublished ? "Changes saved." : "Draft saved.") : "Changes published.");
+      } else {
+        // New work.
+        let book_number;
+        if (series_id) book_number = (await WispDB.countInSeries(series_id).catch(() => 0)) + 1;
+        await WispDB.createWork({ title, type, source, rating, tags, chapterBody: body, status,
+          cover_image_url: editorCover, series_id, book_number });
+        toast(kind === "draft" ? "Draft saved to your account." : "Published. It is now in your works.");
+      }
+      liveEditor = null; editorCover = null;
       navigate("write");
     } catch (e) { toast((e && e.message) || "Could not save."); }
   }

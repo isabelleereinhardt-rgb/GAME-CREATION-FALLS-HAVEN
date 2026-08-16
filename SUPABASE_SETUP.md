@@ -72,13 +72,13 @@ Leave it on for a real launch, and set up an email sender under
   post, and the comment is saved to your database.
 - Hearts, subscriptions, and bookmarks are saved to your account and come back
   the way you left them.
-- The Writing Station lists your own works with their real stats, and you can
-  delete a work.
+- The Writing Station lists your own works with their real stats. You can edit a
+  posted work's text, upload a cover image, group works into a series, and delete
+  a work.
 
-The Home page stays a curated showcase until your own works fill it in. Editing
-an already-posted work's text, series grouping, reactions, reading progress, and
-cover-image uploads use the same data layer (`assets/js/db.js`) and get wired to
-the screens next.
+The Home page stays a curated showcase until your own works fill it in.
+Reactions, reading progress, scheduling, and comic (image) pages use the same
+data layer (`assets/js/db.js`) and get wired to the screens next.
 
 ## How it is secured
 
