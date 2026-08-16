@@ -338,6 +338,28 @@ window.WispDB = (function () {
     return data;
   }
 
+  /* ---- community events ------------------------------------------------- */
+  async function listEvents() {
+    const { data, error } = await client.from("events").select("*").order("sort");
+    if (error) return [];
+    return data || [];
+  }
+  async function myEventIds() {
+    if (!user) return new Set();
+    const { data } = await client.from("event_participants").select("event_id").eq("user_id", user.id);
+    return new Set((data || []).map(r => r.event_id));
+  }
+  async function toggleEventJoin(eventId, on) {
+    if (!user) throw new Error("Sign in to join.");
+    if (on) {
+      const { error } = await client.from("event_participants").insert({ user_id: user.id, event_id: eventId });
+      if (error && error.code !== "23505") throw error;
+    } else {
+      const { error } = await client.from("event_participants").delete().eq("user_id", user.id).eq("event_id", eventId);
+      if (error) throw error;
+    }
+  }
+
   /* ---- following -------------------------------------------------------- */
   async function toggleFollow(authorId, on) {
     if (!user) throw new Error("Sign in to follow.");
@@ -414,6 +436,7 @@ window.WispDB = (function () {
     mySeries, findOrCreateSeries, updateSeries, deleteSeries, countInSeries,
     toggle, myRelations, getComments, postComment, getReactions, toggleReaction, uploadCover,
     toggleFollow, amFollowing, followCounts, myFollowingIds,
+    listEvents, myEventIds, toggleEventJoin,
     toCard: toUi, fmtCount, relTime
   };
 })();

@@ -30,8 +30,10 @@ Supabase's free tier.
    per-work settings.
 5. Run [`supabase/migrations/003_scheduling.sql`](supabase/migrations/003_scheduling.sql)
    to add scheduled chapter releases (a locked chapter with a live countdown
-   that releases itself when its time comes). Run new migration files in order
-   as they are added.
+   that releases itself when its time comes).
+6. Run [`supabase/migrations/004_events.sql`](supabase/migrations/004_events.sql)
+   to make Community events real, so joining and leaving them persists. Run new
+   migration files in order as they are added.
 
 All of these are safe to re-run if you ever need to.
 

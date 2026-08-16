@@ -37,7 +37,7 @@
      which the loaders below fill from the database. In demo mode they stay
      empty and every accessor falls back to the bundled demo dataset, so the
      demo behaves exactly as before. */
-  const LIVE = { works: [], byId: {}, chapters: {}, comments: {}, reactions: {}, upcoming: {}, series: [] };
+  const LIVE = { works: [], byId: {}, chapters: {}, comments: {}, reactions: {}, upcoming: {}, series: [], events: [], myEvents: new Set() };
   let liveEditor = null;   // { work, chapter } when editing a real work, else null
   let editorCover = null;  // uploaded cover URL for the current editor session
   let coverCleared = false; // true when the author removed an existing cover
@@ -1389,6 +1389,18 @@
   /* ======================================================================= */
   /*  SCREEN: COMMUNITY SPACE                                                 */
   /* ======================================================================= */
+  async function loadCommunity() {
+    loadingScreen("#screen-community");
+    try {
+      const [events, mine] = await Promise.all([
+        WispDB.listEvents(),
+        WispDB.myEventIds().catch(() => new Set())
+      ]);
+      LIVE.events = events;
+      LIVE.myEvents = mine;
+    } catch (e) { console.error("[wisp] community load failed:", e); }
+    renderCommunity();
+  }
   function renderCommunity() {
     $("#screen-community").innerHTML = `
       <div class="page page--wide">
@@ -1398,15 +1410,19 @@
 
         <div class="shelf">
           <div class="shelf__head"><span class="shelf__title">Events and challenges</span><span class="muted" style="font-size:13px">Only events you have joined show up on Home</span></div>
-          ${W.EVENTS.map((e, i) => `
-            <div class="event">
-              <div class="event__date"><b>${e.d}</b><span class="muted" style="font-size:12px">${e.m}</span></div>
+          ${(isLive() ? LIVE.events : W.EVENTS).map((e, i) => {
+            const live = isLive();
+            const joined = live ? LIVE.myEvents.has(e.id) : e.joined;
+            const btnAttr = live ? `data-event-join="${e.id}"` : `data-event="${i}"`;
+            return `<div class="event">
+              <div class="event__date"><b>${esc(e.d || e.day || "")}</b><span class="muted" style="font-size:12px">${esc(e.m || e.month || "")}</span></div>
               <div style="flex:1">
                 <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="font:600 18px var(--font-display);color:var(--ink)">${esc(e.title)}</span><span class="pill">${esc(e.kind)}</span></div>
                 <p class="soft" style="font-size:14px;margin:6px 0 0;line-height:1.6">${esc(e.note)}</p>
               </div>
-              <button class="btn ${e.joined ? "btn--quiet" : "btn--ghost"} btn--sm" data-event="${i}" aria-pressed="${e.joined}">${e.joined ? "Joined" : "Join"}</button>
-            </div>`).join("")}
+              <button class="btn ${joined ? "btn--quiet" : "btn--ghost"} btn--sm" ${btnAttr} aria-pressed="${joined}">${joined ? "Joined" : "Join"}</button>
+            </div>`;
+          }).join("")}
           <p class="muted" style="font-size:12.5px;margin-top:10px">Collections now; full gift exchanges will come as the community grows.</p>
         </div>
 
@@ -2095,7 +2111,7 @@
       else loadWriteEditor(arg);
     }
     else if (screen === "library") { renderLibrary(); }
-    else if (screen === "community") { renderCommunity(); }
+    else if (screen === "community") { live ? loadCommunity() : renderCommunity(); }
     else if (screen === "profile") { renderProfile(); }
   }
 
@@ -2150,6 +2166,20 @@
     if (asb) { pendingSeries = asb.dataset.addSeriesBook; navigate("write/new"); return; }
     const nsr = e.target.closest("[data-new-series]");
     if (nsr) { newLiveSeries(); return; }
+    const evj = e.target.closest("[data-event-join]");
+    if (evj) {
+      if (!WispDB.signedIn) { openAuth("in"); return; }
+      const id = evj.dataset.eventJoin;
+      const on = !LIVE.myEvents.has(id);
+      on ? LIVE.myEvents.add(id) : LIVE.myEvents.delete(id);   // optimistic + persistent
+      renderCommunity();
+      toast(on ? "Joined. It'll show on your home." : "Left the event.");
+      WispDB.toggleEventJoin(id, on).catch(err => {
+        on ? LIVE.myEvents.delete(id) : LIVE.myEvents.add(id); renderCommunity();
+        toast((err && err.message) || "Could not update that.");
+      });
+      return;
+    }
     const ev = e.target.closest("[data-event]");
     if (ev) {
       const i = +ev.dataset.event; const evt = W.EVENTS[i]; if (!evt) return;
