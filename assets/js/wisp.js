@@ -470,7 +470,6 @@
               <button class="btn btn--quiet" data-toast="Download as EPUB, PDF, or HTML. Downloads are free.">${icon("download",16)} Download</button>
               <button class="btn btn--quiet" data-work-overflow="${w.id}" aria-label="More options">${icon("more",16)}</button>
             </div>
-            <p class="muted" style="font-size:12px;margin:2px 0 0">One heart per reader.</p>
             <div class="card__stats" style="border:0;max-width:420px;padding:0">
               <span class="stat stat--heart">${icon("heart",15)}${w.hearts} hearts</span>
               <span class="stat">${icon("comment",15)}${w.comments}</span>
@@ -481,11 +480,6 @@
 
         <h2 class="shelf__title" style="margin-bottom:14px">Chapters</h2>
         <div class="chapter-list">${rows}</div>
-
-        <div class="editorial" style="margin-top:30px">
-          <div class="eyebrow rose" style="margin-bottom:6px">This work's settings</div>
-          <p class="soft" style="font-size:14px;margin:0;line-height:1.7">Comments are on, and anyone can read this work. You can mute a tag, block a user, or turn off the author's skin. Your settings always win over the author's.</p>
-        </div>
       </div>`;
     startCountdowns();
   }
@@ -1154,7 +1148,6 @@
           <div><b>${scheduled}</b><span>scheduled</span></div>
           <div><b>${W.WRITER.totals.hearts}</b><span>hearts</span></div>
         </div>
-        <p class="muted" style="font-size:12px;margin:10px 2px 26px">Your stats: hearts, comments, reads, and bookmarks.</p>
 
         ${seriesHTML}
         ${standaloneHTML}
