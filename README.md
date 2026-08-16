@@ -8,8 +8,10 @@ writers you love, keep control of what you see, and never meet an ad. This
 repository is the front-end for that product, built from the discovery-session
 design plan and the brand asset kit.
 
-This is a self-contained static site. No build step, no framework, no backend;
-open `index.html` and it runs.
+It runs two ways from the same code, with no build step and no framework. On its
+own it is a self-contained static site: open `index.html` and it runs on demo
+data. Connect a Supabase project (see below) and the same site becomes a real
+multi-user app with accounts, a database, and image storage.
 
 ## Live site
 
@@ -50,8 +52,30 @@ assets/js/data.js     The demo dataset: works, activity, widgets, community,
                       library, and the reading-page chapter with seeded threads.
 assets/js/wisp.js     The app: hash router, screen rendering, the reading-page
                       conversation, the theming engine, and persistence.
+assets/js/config.js   Where you paste your Supabase URL and anon key. Blank by
+                      default, which keeps the site in demo mode.
+assets/js/db.js       The data layer: accounts, works, chapters, comments,
+                      hearts, subscriptions, bookmarks, and cover uploads.
+supabase/             The database: schema.sql (tables, security, triggers),
+                      storage.sql (image buckets), seed.sql (starter tags).
+SUPABASE_SETUP.md     Step-by-step for connecting your own project.
 wisp-standalone.html  The entire site bundled into one file, fonts embedded.
 ```
+
+## Accounts and data (optional)
+
+Leave `assets/js/config.js` blank and the site runs on the bundled demo data,
+which is how the screenshots and the standalone file look. To make it a real
+site, create a free Supabase project, run the SQL in `supabase/`, and paste your
+project URL and anon key into `config.js`. Then sign-up and sign-in create real
+accounts, posting a work saves it to your database, Browse and the reader show
+what people actually post, and per-line comments, hearts, subscriptions, and
+bookmarks all persist. The full walkthrough is in
+[`SUPABASE_SETUP.md`](SUPABASE_SETUP.md).
+
+Security is enforced in the database with Row Level Security, so the anon key is
+safe to commit: it only lets the browser attempt actions, and the database
+decides what is allowed.
 
 ## The screens
 
