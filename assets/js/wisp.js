@@ -32,12 +32,33 @@
                       mutedTags: new Set(), blockedUsers: new Set(), following: new Set() };
   function markVisited(id) { if (id) userState.visited.add(id); }
 
+  // Muted tags/sources and blocked authors persist across reloads (localStorage
+  // via settings) and are honored in filteredWorks(), so they actually hide works.
+  function persistPrefs() {
+    settings.muted = Array.from(userState.mutedTags);
+    settings.blocked = Array.from(userState.blockedUsers);
+    save();
+  }
+  function muteTag(tag) {
+    if (!tag) return;
+    userState.mutedTags.add(tag); persistPrefs();
+    toast("Muted " + tag + ". You won't see works tagged with it.");
+    if (currentScreen === "browse") renderBrowse();
+  }
+  function blockUser(author) {
+    if (!author) return;
+    userState.blockedUsers.add(author); persistPrefs();
+    toast("Blocked " + author + ".");
+    if (currentScreen === "browse") renderBrowse();
+  }
+
   /* ---- live data cache ---------------------------------------------------
      When Supabase is connected, the content screens read from these caches,
      which the loaders below fill from the database. In demo mode they stay
      empty and every accessor falls back to the bundled demo dataset, so the
      demo behaves exactly as before. */
-  const LIVE = { works: [], byId: {}, chapters: {}, comments: {}, reactions: {}, upcoming: {}, series: [], events: [], myEvents: new Set() };
+  const LIVE = { works: [], byId: {}, chapters: {}, comments: {}, reactions: {}, upcoming: {}, series: [], events: [], myEvents: new Set(),
+                 lib: { bookmarks: null, history: null, lists: null, things: null }, viewingList: null };
   let liveEditor = null;   // { work, chapter } when editing a real work, else null
   let editorCover = null;  // uploaded cover URL for the current editor session
   let coverCleared = false; // true when the author removed an existing cover
@@ -310,6 +331,8 @@
     if (filterState.ratings.size) list = list.filter(w => filterState.ratings.has(w.rating));
     if (filterState.tagsInc.size) list = list.filter(w => Array.from(filterState.tagsInc).every(t => w.tags.includes(t)));
     if (filterState.tagsExc.size) list = list.filter(w => !w.tags.some(t => filterState.tagsExc.has(t)));
+    if (userState.mutedTags.size) list = list.filter(w => !userState.mutedTags.has(w.source) && !(w.tags || []).some(t => userState.mutedTags.has(t)));
+    if (userState.blockedUsers.size) list = list.filter(w => !userState.blockedUsers.has(w.author));
     if (filterState.q) {
       const q = filterState.q.toLowerCase();
       list = list.filter(w => (w.title + " " + w.author + " " + w.source + " " + w.tags.join(" ") + " " + w.summary).toLowerCase().includes(q));
@@ -1055,17 +1078,19 @@
     else toast("Link copied.");
   }
   function workOverflow(id) {
-    const w = W.byId[id]; if (!w) return;
-    menuDialog(w.title, [
-      { icon: "share", label: "Copy link", run: () => copyLink(id) },
-      { icon: "mute", label: "Mute " + w.source, run: () => { userState.mutedTags.add(w.source); toast("Muted " + w.source + ". You won't see works tagged with it."); } },
-      { icon: "user", label: "Block " + w.author, run: () => { userState.blockedUsers.add(w.author); toast("Blocked " + w.author + "."); } },
+    const w = activeById(id); if (!w) return;
+    const items = [{ icon: "share", label: "Copy link", run: () => copyLink(id) }];
+    if (w._db && isUuid(id)) items.push({ icon: "book", label: "Add to reading list", run: () => openAddToList(id) });
+    items.push(
+      { icon: "mute", label: "Mute " + w.source, run: () => { muteTag(w.source); } },
+      { icon: "user", label: "Block " + w.author, run: () => { blockUser(w.author); } },
       { icon: "flag", label: "Report", run: () => confirmDialog({
           title: "Report this work?",
           body: "Reports go to the moderation team. Use this for illegal content, harassment, or spam.",
           confirmText: "Send report"
         }, () => toast("Report sent to the moderation team.")) }
-    ]);
+    );
+    menuDialog(w.title, items);
   }
 
   function msRow(b) {
@@ -1338,7 +1363,145 @@
   /*  SCREEN: LIBRARY                                                         */
   /* ======================================================================= */
   let libTab = "bookmarks";
+
+  function libSubtabs() {
+    return `<div class="subtabs">${[["bookmarks","Bookmarks"],["lists","Reading lists"],["history","History"],["things","Things"]]
+      .map(([k, n]) => `<button class="subtab ${libTab === k ? "is-active" : ""}" data-libtab="${k}">${n}</button>`).join("")}</div>`;
+  }
+  function libShell(inner) {
+    $("#screen-library").innerHTML = `
+      <div class="page page--wide">
+        <div class="eyebrow rose" style="margin-bottom:8px">Library</div>
+        <h1 class="display" style="font-size:30px;margin-bottom:6px">Your library</h1>
+        <p class="section-lead">Your bookmarks, lists, history, and notes.</p>
+        ${libSubtabs()}
+        ${inner}
+      </div>`;
+  }
+  function renderLibrarySignedOut() {
+    $("#screen-library").innerHTML = `
+      <div class="page page--wide">
+        <div class="editorial" style="text-align:center;padding:50px 20px">
+          <p class="soft" style="font-size:16px;margin-bottom:16px">Sign in to see your library.</p>
+          <button class="btn btn--primary" data-auth="in">Sign in</button>
+        </div>
+      </div>`;
+  }
+  async function loadLibrary() {
+    if (!WispDB.signedIn) { renderLibrarySignedOut(); return; }
+    if (LIVE.viewingList) { renderLibraryListView(); return; }
+    loadingScreen("#screen-library");
+    try {
+      if (libTab === "bookmarks") LIVE.lib.bookmarks = await WispDB.myBookmarks();
+      else if (libTab === "history") LIVE.lib.history = await WispDB.myHistory();
+      else if (libTab === "lists") LIVE.lib.lists = await WispDB.myLists();
+      else if (libTab === "things") LIVE.lib.things = await WispDB.myHighlights();
+    } catch (e) { console.error("[wisp] library load failed:", e); }
+    renderLibraryLive();
+  }
+  function renderLibraryLive() {
+    const gridOf = (works) => `<div class="work-grid">${works.map(cardGallery).join("")}</div>`;
+    const empty = (msg) => `<p class="muted" style="padding:24px 4px">${msg}</p>`;
+    let pane = "";
+    if (libTab === "bookmarks") {
+      const bm = LIVE.lib.bookmarks || [];
+      pane = `<div class="shelf"><div class="shelf__head"><span class="shelf__title">Bookmarks</span><span class="muted" style="font-size:13px">${bm.length} ${bm.length === 1 ? "work" : "works"}</span></div>
+        ${bm.length ? gridOf(bm) : empty("No bookmarks yet. Bookmark a work and it saves here.")}</div>`;
+    } else if (libTab === "history") {
+      const h = LIVE.lib.history || [];
+      pane = `<div class="shelf"><div class="shelf__head"><span class="shelf__title">Recently read</span>${h.length ? `<button class="btn--link" data-clear-history>Clear history</button>` : ""}</div>
+        ${h.length ? gridOf(h) : empty("Nothing read yet.")}</div>`;
+    } else if (libTab === "lists") {
+      const lists = LIVE.lib.lists || [];
+      pane = `<div class="shelf">
+        <div class="shelf__head"><span class="shelf__title">Reading lists</span><button class="btn btn--quiet btn--sm" data-new-list>${icon("plus",14)} New list</button></div>
+        ${lists.length ? `<div class="list-grid">${lists.map(l => `
+          <button class="list-tile" data-open-list="${l.id}" style="text-align:left;background:none;border:0;cursor:pointer;width:100%">
+            <div style="font:600 17px var(--font-display);color:var(--ink)">${esc(l.name)}</div>
+            <div class="muted" style="font-size:12.5px;margin-top:4px">${l._count || 0} ${(l._count || 0) === 1 ? "work" : "works"} &middot; ${l.is_public ? "Public" : "Private"}</div>
+          </button>`).join("")}</div>` : empty("No lists yet. Make one to group works together.")}
+      </div>`;
+    } else if (libTab === "things") {
+      const things = LIVE.lib.things || [];
+      pane = `<div class="shelf"><div class="shelf__head"><span class="shelf__title">Things</span><span class="muted" style="font-size:13px">Your private highlights and notes</span></div>
+        ${things.length ? things.map(t => `
+          <div class="thing">
+            <div style="font:500 15px var(--font-read);color:var(--ink)">${esc(t.text)}</div>
+            ${t.note ? `<div class="soft" style="font-size:13.5px;margin-top:6px">${esc(t.note)}</div>` : ""}
+            <div class="thing__src">${t.work ? `from <a href="#/work/${t.work.id}">${esc(t.work.title)}</a> &middot; ` : ""}<button class="btn--link" data-del-highlight="${t.id}" style="color:#a2444f">Delete</button></div>
+          </div>`).join("") : empty("No highlights yet. Select text while reading and choose Highlight.")}
+      </div>`;
+    }
+    libShell(pane);
+  }
+  async function renderLibraryListView() {
+    const l = LIVE.viewingList;
+    loadingScreen("#screen-library");
+    let works = [];
+    try { works = await WispDB.listContents(l.id); } catch (e) {}
+    const rows = works.length
+      ? works.map(w => `<div class="ms-row" data-work="${w.id}">
+          <span class="ms-cover">${cover(w.cover, w.title)}${rate(w.rating)}</span>
+          <span class="ms-main"><span class="ms-title">${esc(w.title)}</span><span class="ms-meta"><span class="muted">by ${esc(w.author)}</span></span></span>
+          <span class="ms-row__actions"><button class="btn--link" data-list-remove="${w.id}" style="color:#a2444f">Remove</button></span>
+        </div>`).join("")
+      : `<p class="muted" style="padding:24px 4px">This list is empty. Add works from a work's page.</p>`;
+    $("#screen-library").innerHTML = `
+      <div class="page page--wide">
+        <button class="btn--link" data-lib-back style="margin-bottom:14px">&lsaquo; All lists</button>
+        <div class="write-head"><div>
+          <h1 class="display" style="font-size:28px">${esc(l.name)}</h1>
+          <p class="section-lead" style="margin-bottom:0">${l.is_public ? "Public" : "Private"} list</p>
+        </div>
+        <div class="write-actions"><button class="btn btn--quiet btn--sm" data-list-delete="${l.id}" style="color:#a2444f">Delete list</button></div>
+        </div>
+        <div class="ms-list">${rows}</div>
+      </div>`;
+  }
+  function openNewListDialog() {
+    if (!WispDB.signedIn) { openAuth("in"); return; }
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <h2 style="font-size:20px">New reading list</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <div class="field"><label>List name</label><input type="text" id="nl-name" placeholder="Comfort reads"></div>
+      <label class="check"><input type="checkbox" id="nl-public"> Make this list public</label>
+      <div class="modal-actions">
+        <button class="btn btn--quiet" data-modal-cancel>Cancel</button>
+        <button class="btn btn--primary" data-nl-create>Create list</button>
+      </div>`, "New reading list");
+    $("#modalCard [data-nl-create]").addEventListener("click", async () => {
+      const name = $("#nl-name").value.trim(); if (!name) { toast("Give the list a name."); return; }
+      try { await WispDB.createList(name, $("#nl-public").checked); closeModal(); toast("List created."); LIVE.lib.lists = null; libTab = "lists"; LIVE.viewingList = null; loadLibrary(); }
+      catch (e) { toast((e && e.message) || "Could not create the list."); }
+    });
+  }
+  async function openAddToList(workId) {
+    if (!WispDB.signedIn) { openAuth("in"); return; }
+    let lists = [];
+    try { lists = await WispDB.myLists(); } catch (e) {}
+    const items = lists.length
+      ? lists.map(l => `<button class="modal-menu-btn" data-add-to="${l.id}" style="display:flex;justify-content:space-between;width:100%;text-align:left;background:none;border:0;padding:10px 8px;cursor:pointer;border-radius:8px"><span>${esc(l.name)}</span><span class="muted" style="font-size:12.5px">${l._count || 0}</span></button>`).join("")
+      : `<p class="muted" style="font-size:13px;padding:6px 8px">No lists yet.</p>`;
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <h2 style="font-size:20px">Add to a reading list</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-menu">${items}</div>
+      <div class="modal-actions" style="margin-top:14px"><button class="btn btn--quiet btn--full" data-al-new>${icon("plus",14)} New list</button></div>`, "Add to a reading list");
+    $$("#modalCard [data-add-to]").forEach(b => b.addEventListener("click", async () => {
+      try { await WispDB.addToList(b.dataset.addTo, workId); closeModal(); toast("Added to the list."); LIVE.lib.lists = null; }
+      catch (e) { toast((e && e.message) || "Could not add."); }
+    }));
+    $("#modalCard [data-al-new]").addEventListener("click", async () => {
+      const name = prompt && typeof prompt === "function" ? null : null;   // avoid blocking prompt; open the create dialog instead
+      closeModal(); openNewListDialog();
+    });
+  }
   function renderLibrary() {
+    if (isLive()) { loadLibrary(); return; }
     const L = W.LIBRARY;
     const gridOf = (ids) => `<div class="work-grid">${ids.map(id => cardGallery(W.byId[id])).join("")}</div>`;
 
@@ -2119,7 +2282,7 @@
       else if (arg === "new") { liveEditor = null; editorCover = null; renderWriteEditor(null); }
       else loadWriteEditor(arg);
     }
-    else if (screen === "library") { renderLibrary(); }
+    else if (screen === "library") { LIVE.viewingList = null; renderLibrary(); }
     else if (screen === "community") { live ? loadCommunity() : renderCommunity(); }
     else if (screen === "profile") { renderProfile(); }
   }
@@ -2285,7 +2448,22 @@
     if (view) { settings.view = view.dataset.view; save(); route(); return; }
 
     const lt = e.target.closest("[data-libtab]");
-    if (lt) { libTab = lt.dataset.libtab; renderLibrary(); return; }
+    if (lt) { libTab = lt.dataset.libtab; LIVE.viewingList = null; renderLibrary(); return; }
+
+    const nl = e.target.closest("[data-new-list]");
+    if (nl) { openNewListDialog(); return; }
+    const ol = e.target.closest("[data-open-list]");
+    if (ol) { const id = ol.dataset.openList; LIVE.viewingList = (LIVE.lib.lists || []).find(l => l.id === id) || { id, name: "List", is_public: false }; renderLibraryListView(); return; }
+    const lb = e.target.closest("[data-lib-back]");
+    if (lb) { LIVE.viewingList = null; loadLibrary(); return; }
+    const lr = e.target.closest("[data-list-remove]");
+    if (lr) { const wid = lr.dataset.listRemove; WispDB.removeFromList(LIVE.viewingList.id, wid).then(() => { toast("Removed from the list."); renderLibraryListView(); }).catch(err => toast((err && err.message) || "Could not remove.")); return; }
+    const ld = e.target.closest("[data-list-delete]");
+    if (ld) { const id = ld.dataset.listDelete; confirmDialog({ title: "Delete this list?", body: "The list is removed. The works stay in your library.", confirmText: "Delete list", danger: true }, async () => { try { await WispDB.deleteList(id); LIVE.viewingList = null; LIVE.lib.lists = null; toast("List deleted."); loadLibrary(); } catch (e) { toast((e && e.message) || "Could not delete."); } }); return; }
+    const ch = e.target.closest("[data-clear-history]");
+    if (ch) { confirmDialog({ title: "Clear your history?", body: "Your recently-read list is emptied. This can't be undone.", confirmText: "Clear history", danger: true }, async () => { try { await WispDB.clearHistory(); LIVE.lib.history = []; toast("History cleared."); renderLibraryLive(); } catch (e) { toast((e && e.message) || "Could not clear."); } }); return; }
+    const dh = e.target.closest("[data-del-highlight]");
+    if (dh) { const id = dh.dataset.delHighlight; WispDB.deleteHighlight(id).then(() => { LIVE.lib.things = (LIVE.lib.things || []).filter(t => t.id !== id); toast("Highlight deleted."); renderLibraryLive(); }).catch(err => toast((err && err.message) || "Could not delete.")); return; }
   });
 
 
@@ -2585,6 +2763,8 @@
   }
 
   function boot() {
+    (settings.muted || []).forEach(t => userState.mutedTags.add(t));       // restore prefs
+    (settings.blocked || []).forEach(a => userState.blockedUsers.add(a));
     buildDrawer();
     applySettings();
     renderActivity();

@@ -389,6 +389,105 @@ window.WispDB = (function () {
     return (data || []).map(r => r.following_id);
   }
 
+  /* ---- library: bookmarks, history, lists, highlights, progress --------- */
+  async function getWorksByIds(ids) {
+    ids = [...new Set((ids || []).filter(Boolean))];
+    if (!ids.length) return [];
+    const { data, error } = await client.from("works_with_author").select("*").in("id", ids);
+    if (error || !data) return [];
+    const tagMap = await tagsFor(ids);
+    const byId = {};
+    data.forEach(w => { byId[w.id] = toUi(w, tagMap[w.id] || []); });
+    return ids.map(id => byId[id]).filter(Boolean);            // preserve caller order
+  }
+  async function myBookmarks() {
+    if (!user) return [];
+    const { data } = await client.from("bookmarks").select("work_id, created_at").eq("user_id", user.id).order("created_at", { ascending: false });
+    return getWorksByIds((data || []).map(r => r.work_id));
+  }
+  async function myHistory() {
+    if (!user) return [];
+    const { data } = await client.from("reading_progress").select("work_id, updated_at").eq("user_id", user.id).order("updated_at", { ascending: false }).limit(40);
+    return getWorksByIds((data || []).map(r => r.work_id));
+  }
+  async function clearHistory() {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("reading_progress").delete().eq("user_id", user.id);
+    if (error) throw error;
+  }
+  async function myLists() {
+    if (!user) return [];
+    const { data } = await client.from("reading_lists").select("*").eq("user_id", user.id).order("created_at");
+    const lists = data || [];
+    for (const l of lists) {
+      const { data: items } = await client.from("reading_list_items").select("work_id").eq("list_id", l.id).limit(4);
+      l._workIds = (items || []).map(r => r.work_id);
+      const { count } = await client.from("reading_list_items").select("work_id", { count: "exact", head: true }).eq("list_id", l.id);
+      l._count = count || 0;
+    }
+    return lists;
+  }
+  async function createList(name, isPublic) {
+    if (!user) throw new Error("Sign in first.");
+    const { data, error } = await client.from("reading_lists").insert({ user_id: user.id, name: name || "Untitled list", is_public: !!isPublic }).select().single();
+    if (error) throw error;
+    return data;
+  }
+  async function deleteList(id) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("reading_lists").delete().eq("id", id).eq("user_id", user.id);
+    if (error) throw error;
+  }
+  async function listContents(listId) {
+    const { data } = await client.from("reading_list_items").select("work_id").eq("list_id", listId);
+    return getWorksByIds((data || []).map(r => r.work_id));
+  }
+  async function addToList(listId, workId) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("reading_list_items").insert({ list_id: listId, work_id: workId });
+    if (error && error.code !== "23505") throw error;
+  }
+  async function removeFromList(listId, workId) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("reading_list_items").delete().eq("list_id", listId).eq("work_id", workId);
+    if (error) throw error;
+  }
+  async function myHighlights() {
+    if (!user) return [];
+    const { data } = await client.from("highlights").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
+    const rows = data || [];
+    const works = await getWorksByIds(rows.map(r => r.work_id));
+    const byId = {}; works.forEach(w => { byId[w.id] = w; });
+    return rows.map(r => Object.assign({}, r, { work: byId[r.work_id] || null }));
+  }
+  async function saveHighlight(f) {
+    if (!user) throw new Error("Sign in to save highlights.");
+    const { data, error } = await client.from("highlights").insert({
+      user_id: user.id, work_id: f.work_id, chapter_id: f.chapter_id || null,
+      paragraph_index: f.paragraph_index == null ? null : f.paragraph_index, text: f.text, note: f.note || ""
+    }).select().single();
+    if (error) throw error;
+    return data;
+  }
+  async function deleteHighlight(id) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("highlights").delete().eq("id", id).eq("user_id", user.id);
+    if (error) throw error;
+  }
+  async function saveProgress(workId, chapterNumber, percent) {
+    if (!user) return;
+    try {
+      await client.from("reading_progress").upsert({
+        user_id: user.id, work_id: workId, chapter_number: chapterNumber || 1, percent: percent || 0, updated_at: new Date().toISOString()
+      }, { onConflict: "user_id,work_id" });
+    } catch (e) { /* progress is best-effort */ }
+  }
+  async function latestProgress() {
+    if (!user) return null;
+    const { data } = await client.from("reading_progress").select("work_id, chapter_number, percent, updated_at").eq("user_id", user.id).order("updated_at", { ascending: false }).limit(1);
+    return (data && data[0]) || null;
+  }
+
   // Per-line emoji reactions, grouped by paragraph index for a chapter.
   async function getReactions(chapterId) {
     const { data, error } = await client.from("reactions").select("paragraph_index, emoji, user_id").eq("chapter_id", chapterId);
@@ -437,6 +536,9 @@ window.WispDB = (function () {
     toggle, myRelations, getComments, postComment, getReactions, toggleReaction, uploadCover,
     toggleFollow, amFollowing, followCounts, myFollowingIds,
     listEvents, myEventIds, toggleEventJoin,
+    getWorksByIds, myBookmarks, myHistory, clearHistory,
+    myLists, createList, deleteList, listContents, addToList, removeFromList,
+    myHighlights, saveHighlight, deleteHighlight, saveProgress, latestProgress,
     toCard: toUi, fmtCount, relTime
   };
 })();
