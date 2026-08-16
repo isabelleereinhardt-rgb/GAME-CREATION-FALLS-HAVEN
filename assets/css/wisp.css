@@ -578,9 +578,15 @@ a.card__title:hover { color: var(--rose-ink); }
 .list-card__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
 .stack-list { display: flex; flex-direction: column; gap: 14px; }
 
-/* Cover paint helpers (upload-only in the real product; these stand in). */
-.cv { position: absolute; inset: 0; overflow: hidden; }
-.cv i { position: absolute; display: block; }
+/* Covers stand in for the upload-only cover in the real product: the work's
+   colour plus the first meaningful letter of its title, scaled to the cover. */
+.cv { position: absolute; inset: 0; overflow: hidden; container-type: size; }
+.cv__letter {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-weight: 600; line-height: 1;
+  color: rgba(248, 242, 231, .95); user-select: none;
+  font-size: 66cqmin;
+}
 
 /* Editorial strip. */
 .editorial {

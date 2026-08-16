@@ -68,9 +68,25 @@
   }
   function icon(id, size = 16) { return `<svg width="${size}" height="${size}" aria-hidden="true"><use href="#i-${id}"></use></svg>`; }
 
-  function cover(key, className = "", extra = "") {
-    const c = W.COVERS[key] || { bg:"#6d5566", deco:"" };
-    return `<span class="cv ${className}" style="background:${c.bg}">${c.deco}${extra}</span>`;
+  // A cover shows the first meaningful letter of the title, skipping a leading
+  // filler word: "The Salt and the Season" becomes S, not T.
+  const COVER_STOPWORDS = new Set(["the", "a", "an", "and", "or", "of", "to", "in", "on"]);
+  function coverLetter(title) {
+    if (!title) return "";
+    for (const word of String(title).trim().split(/\s+/)) {
+      const first = (word.match(/[A-Za-z0-9]/) || [""])[0];
+      if (!first) continue;                                   // pure punctuation, skip
+      const clean = word.replace(/[^A-Za-z0-9]/g, "").toLowerCase();
+      if (COVER_STOPWORDS.has(clean)) continue;               // leading filler word, skip
+      return first.toUpperCase();
+    }
+    const m = String(title).match(/[A-Za-z0-9]/);             // fallback: first character
+    return m ? m[0].toUpperCase() : "";
+  }
+  function cover(key, title) {
+    const bg = W.COVERS[key] || "#6d5566";
+    const letter = coverLetter(title);
+    return `<span class="cv" style="background:${bg}">${letter ? `<span class="cv__letter">${esc(letter)}</span>` : ""}</span>`;
   }
   function rate(r) { return `<span class="rate rate--${r.toLowerCase()}" title="${RATE[r]}">${r}</span>`; }
 
@@ -93,7 +109,7 @@
       : `<span class="stat">${icon("eye",14)}${esc(w.reads)}</span>`;
     const readMark = userState.visited.has(w.id) ? `<span class="read-badge">${icon("check",11)} Read</span>` : "";
     return `<article class="card" data-work="${w.id}">
-      <span class="card__cover">${cover(w.cover)}${rate(w.rating)}${flag}${readMark}</span>
+      <span class="card__cover">${cover(w.cover, w.title)}${rate(w.rating)}${flag}${readMark}</span>
       <span class="card__body">
         <span class="tag-row"><span class="pill">${w.type === "fan" ? "Fanwork" : "Original"}</span><span class="pill">${esc(w.source)}</span></span>
         <a class="card__title" href="#/work/${w.id}">${esc(w.title)}</a>
@@ -112,7 +128,7 @@
 
   function cardList(w) {
     return `<article class="list-card" data-work="${w.id}">
-      <span class="list-card__cover">${cover(w.cover)}${rate(w.rating)}${userState.visited.has(w.id) ? `<span class="read-badge">${icon("check",11)} Read</span>` : ""}</span>
+      <span class="list-card__cover">${cover(w.cover, w.title)}${rate(w.rating)}${userState.visited.has(w.id) ? `<span class="read-badge">${icon("check",11)} Read</span>` : ""}</span>
       <span class="list-card__main">
         <span class="tag-row"><span class="pill">${w.type === "fan" ? "Fanwork" : "Original"}</span><span class="pill">${esc(w.source)}</span>${w.format === "comic" ? '<span class="pill">Comic</span>' : ""}</span>
         <a class="card__title" href="#/work/${w.id}" style="font-size:22px">${esc(w.title)}</a>
@@ -153,7 +169,7 @@
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px">
           ${W.STAFF.map(s => { const w = W.byId[s.work]; return `
             <button class="list-tile" data-work="${w.id}" style="display:flex;gap:12px;align-items:flex-start;text-align:left">
-              <span class="mini-cover" style="width:44px;height:60px">${cover(w.cover)}</span>
+              <span class="mini-cover" style="width:44px;height:60px">${cover(w.cover, w.title)}</span>
               <span>
                 <span class="mini-work__title" style="display:block">${esc(w.title)}</span>
                 <span class="muted" style="font-size:12.5px;display:block;margin:5px 0 0;line-height:1.5">${esc(s.note)}</span>
@@ -206,7 +222,7 @@
         </div>
 
         <button class="resume" data-read="amber">
-          <span class="resume__cover">${cover("amber")}</span>
+          <span class="resume__cover">${cover("amber", "A Study in Amber")}</span>
           <span class="resume__body">
             <span class="eyebrow rose" style="display:block;margin-bottom:5px">Continue reading</span>
             <span class="resume__title">A Study in Amber</span>
@@ -346,7 +362,7 @@
       <div class="page">
         <button class="btn--link" data-back style="margin-bottom:18px">&lsaquo; Back</button>
         <div class="work-hero">
-          <span class="work-hero__cover">${cover(w.cover)}</span>
+          <span class="work-hero__cover">${cover(w.cover, w.title)}</span>
           <div class="work-hero__main">
             <span class="tag-row"><span class="pill">${w.type === "fan" ? "Fanwork" : "Original"}</span><span class="pill">${esc(w.source)}</span>${w.format === "comic" ? '<span class="pill">Comic</span>' : ""}</span>
             <h1 class="work-hero__title">${esc(w.title)}</h1>
@@ -810,7 +826,7 @@
       ? `<span class="ms-stats"><span class="stat stat--heart">${icon("heart",13)}${b.hearts}</span><span class="stat">${icon("comment",13)}${b.comments}</span><span class="stat">${icon("eye",13)}${b.reads}</span></span>`
       : `<span class="ms-stats muted">${b.status === "scheduled" ? "Scheduled, not visible to readers yet" : "Draft, only you can see it"}</span>`;
     return `<div class="ms-row" data-edit="${b.id}">
-      <span class="ms-cover">${cover(b.cover)}${rate(b.rating)}</span>
+      <span class="ms-cover">${cover(b.cover, b.title)}${rate(b.rating)}</span>
       <span class="ms-main">
         <span class="ms-title">${esc(b.title)}${b.book ? `<span class="ms-book">Book ${b.book}</span>` : ""}</span>
         <span class="ms-meta">
@@ -1034,7 +1050,7 @@
           <div class="list-grid">
             ${L.lists.map(l => `
               <div class="list-tile">
-                <div class="stack-cvrs" style="margin-bottom:12px">${l.covers.map(cv => `<span>${cover(cv)}</span>`).join("")}</div>
+                <div class="stack-cvrs" style="margin-bottom:12px">${l.covers.map(id => { const w = W.byId[id]; return `<span>${cover(w ? w.cover : id, w ? w.title : "")}</span>`; }).join("")}</div>
                 <div style="font:600 17px var(--font-display);color:var(--ink)">${esc(l.name)}</div>
                 <div class="muted" style="font-size:12.5px;margin-top:4px">${l.count} works &middot; ${l.public ? "Public" : "Private"}</div>
               </div>`).join("")}
@@ -1179,7 +1195,7 @@
       <div class="widget">
         <div class="widget__label">Staff picks</div>
         <button class="mini-work" data-work="room9" style="background:none;border:0;text-align:left;cursor:pointer;width:100%">
-          <span class="mini-cover">${cover("room9")}</span>
+          <span class="mini-cover">${cover("room9", wd.staffPick.title)}</span>
           <span><span class="mini-work__title">${esc(wd.staffPick.title)}</span><span class="mini-work__by">by ${esc(wd.staffPick.author)}</span></span>
         </button>
         <p class="muted" style="font-size:12.5px;line-height:1.5;margin-top:12px">Chosen by the Wisp editors. <a href="#/community">See who picks &rsaquo;</a></p>

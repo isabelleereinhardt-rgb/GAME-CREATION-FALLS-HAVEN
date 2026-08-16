@@ -6,23 +6,23 @@
    ==========================================================================*/
 window.WISP = (function () {
 
-  /* Cover paints: a background plus a little decorative geometry. Hairlines
-     and washes only, never ornaments. */
+  /* Each work's cover colour. The cover shows this colour with the first
+     meaningful letter of the title over it (see coverLetter in wisp.js). */
   const COVERS = {
-    tide:    { bg: "#9e5560", deco: '<i style="width:150px;height:150px;border-radius:50%;background:rgba(247,230,207,.14);right:-46px;bottom:-52px"></i><i style="width:1px;height:70px;background:rgba(247,230,207,.4);left:26px;top:26px"></i>' },
-    letters: { bg: "#6a7385", deco: '<i style="left:0;right:0;top:44px;height:1px;background:rgba(247,240,225,.35)"></i><i style="left:0;right:0;top:74px;height:1px;background:rgba(247,240,225,.28)"></i><i style="left:0;right:0;top:104px;height:1px;background:rgba(247,240,225,.2)"></i>' },
-    amber:   { bg: "#2c2620", deco: '<i style="width:90px;height:90px;border-radius:50%;background:rgba(214,163,140,.28);left:50%;top:50%;transform:translate(-50%,-50%)"></i><i style="width:130px;height:130px;border-radius:50%;border:1px solid rgba(214,163,140,.22);left:50%;top:50%;transform:translate(-50%,-50%)"></i>' },
-    law:     { bg: "#a9743f", deco: '<i style="width:2px;height:100%;background:rgba(44,38,32,.16);left:34px"></i><i style="width:2px;height:100%;background:rgba(44,38,32,.12);left:44px"></i><i style="width:40px;height:40px;border-radius:50%;background:rgba(247,240,225,.2);right:24px;top:28px"></i>' },
-    marrow:  { bg: "#566b4e", deco: '<i style="width:60px;height:60px;border-radius:50%;background:rgba(247,240,225,.16);left:24px;bottom:-18px"></i><i style="width:34px;height:34px;border-radius:50%;background:rgba(247,240,225,.14);left:70px;bottom:14px"></i>' },
-    stage:   { bg: "#6d5566", deco: '<i style="inset:20px;border:1px solid rgba(247,240,225,.22);border-radius:4px"></i><i style="left:50%;top:20px;bottom:20px;width:1px;background:rgba(247,240,225,.18)"></i>' },
-    room9:   { bg: "#4c5a63", deco: '<i style="width:34px;height:34px;border:1px solid rgba(247,240,225,.3);left:50%;top:50%;transform:translate(-50%,-50%);border-radius:4px"></i>' },
-    frost:   { bg: "#748a97", deco: '<i style="width:120px;height:1px;background:rgba(255,255,255,.3);left:20px;top:60px;transform:rotate(-8deg)"></i><i style="width:90px;height:1px;background:rgba(255,255,255,.22);left:40px;top:96px;transform:rotate(-8deg)"></i>' },
-    ash:     { bg: "#7a4a44", deco: '<i style="width:120px;height:120px;border-radius:50%;background:rgba(0,0,0,.18);right:-30px;top:-30px"></i>' },
-    ledger:  { bg: "#59614f", deco: '<i style="left:24px;right:24px;top:40px;height:1px;background:rgba(247,240,225,.28)"></i><i style="left:24px;right:24px;top:70px;height:1px;background:rgba(247,240,225,.2)"></i><i style="left:24px;right:24px;top:100px;height:1px;background:rgba(247,240,225,.14)"></i>' },
-    orbit:   { bg: "#3f4a6b", deco: '<i style="width:110px;height:110px;border-radius:50%;border:1px solid rgba(214,200,247,.3);left:50%;top:50%;transform:translate(-50%,-50%)"></i><i style="width:12px;height:12px;border-radius:50%;background:rgba(214,200,247,.6);left:50%;top:16%;transform:translateX(-50%)"></i>' },
-    hearth:  { bg: "#b06a44", deco: '<i style="width:70px;height:70px;border-radius:50%;background:rgba(247,240,225,.2);left:50%;bottom:-30px;transform:translateX(-50%)"></i>' },
-    veil:    { bg: "#575170", deco: '<i style="left:30%;top:0;bottom:0;width:1px;background:rgba(247,240,225,.24)"></i><i style="left:60%;top:0;bottom:0;width:1px;background:rgba(247,240,225,.16)"></i>' },
-    quill:   { bg: "#8a6d3f", deco: '<i style="width:1px;height:110px;background:rgba(44,38,32,.3);left:40px;top:22px;transform:rotate(18deg)"></i>' }
+    tide:    "#9e5560",
+    letters: "#6a7385",
+    amber:   "#2c2620",
+    law:     "#a9743f",
+    marrow:  "#566b4e",
+    stage:   "#6d5566",
+    room9:   "#4c5a63",
+    frost:   "#748a97",
+    ash:     "#7a4a44",
+    ledger:  "#59614f",
+    orbit:   "#3f4a6b",
+    hearth:  "#b06a44",
+    veil:    "#575170",
+    quill:   "#8a6d3f"
   };
 
   /* Works. type: fan | original. rating: G/T/M/E. format: prose | comic. */
