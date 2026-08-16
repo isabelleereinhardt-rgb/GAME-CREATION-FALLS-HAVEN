@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="cream">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Wisp: read stories together instead of alone. Talk line by line, follow the writers you love, keep control of what you see, and never meet an ad.">
+  <meta name="theme-color" content="#f4efe4">
+  <title>Wisp</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..600&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="assets/css/wisp.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23f4efe4'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Georgia,serif' font-size='18' font-weight='600' fill='%23ab5a67'%3EW%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<!-- Icon sprite ---------------------------------------------------------- -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path fill="currentColor" d="M12 21s-7.5-4.6-10-9.2C.6 8.9 2 5.4 5.2 5.05 7.2 4.85 9 6 12 9c3-3 4.8-4.15 6.8-3.95C22 5.4 23.4 8.9 22 11.8 19.5 16.4 12 21 12 21z"></path></symbol>
+  <symbol id="i-comment" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" d="M21 11.4a7.5 7.5 0 0 1-10.9 6.7L4 19.4l1.35-4.8A7.5 7.5 0 1 1 21 11.4z"></path></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M1.6 12S5.6 5.6 12 5.6 22.4 12 22.4 12 18.4 18.4 12 18.4 1.6 12 1.6 12z"></path><circle cx="12" cy="12" r="2.7" fill="currentColor"></circle></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4" fill="none" stroke="currentColor" stroke-width="1.7"></circle><path d="M12 7.4v4.8l3.2 1.9" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.4" fill="none" stroke="currentColor" stroke-width="1.7"></circle><path d="M15.8 15.8 21 21" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7 7 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.43h-3.84a.5.5 0 0 0-.5.43l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.65 8.8a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.13.24.42.34.67.22l2.39-.96c.49.38 1.03.7 1.62.94l.36 2.54c.05.25.26.43.5.43h3.84c.24 0 .45-.18.5-.43l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.25.12.54.02.67-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"></path></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z"></path><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M10 20a2 2 0 0 0 4 0"></path></symbol>
+  <symbol id="i-shuffle" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5v5h-5M2 19.5v-5h5"></path><path d="M4.4 9a8 8 0 0 1 13.2-2.6L22 9.5M2 14.5l4.4 4.1A8 8 0 0 0 19.6 15"></path></g></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M12 5v14M5 12h14"></path></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="m9 6 6 6-6 6"></path></symbol>
+  <symbol id="i-reply" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M9 7 4 12l5 5M4 12h9a7 7 0 0 1 7 7"></path></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M12 6C10 4.5 7 4 4 4.5v14C7 18 10 18.5 12 20c2-1.5 5-2 8-1.5v-14C17 4 14 4.5 12 6z"></path><path fill="none" stroke="currentColor" stroke-width="1.6" d="M12 6v14"></path></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.6" fill="none" stroke="currentColor" stroke-width="1.6"></circle><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M5.5 19.5a6.5 6.5 0 0 1 13 0"></path></symbol>
+  <symbol id="i-tag" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M4 4h7l9 9-7 7-9-9z"></path><circle cx="8" cy="8" r="1.4" fill="currentColor"></circle></symbol>
+  <symbol id="i-bookmark" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" d="M6 4h12v16l-6-4-6 4z"></path></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M4 7h16M4 12h16M4 17h16"></path></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"></path></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M5 12h14"></path></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m5 12 4.5 4.5L19 7"></path></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3z"></path></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M5 21V4h11l-2 4 2 4H5"></path></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path fill="currentColor" d="m12 3 2.6 5.5 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.3l6-.8z"></path></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M12 4v11m0 0 4-4m-4 4-4-4M5 20h14"></path></symbol>
+</defs></svg>
+
+<div id="app">
+
+  <!-- ================= HEADER ================= -->
+  <header class="header">
+    <div class="header__row">
+      <div class="header__lead">
+        <button class="hamburger icon-btn" id="menuBtn" title="Menu" aria-label="Open menu"><svg width="20" height="20"><use href="#i-menu"></use></svg></button>
+        <button class="link-btn" id="signOutBtn">Sign out</button>
+      </div>
+      <button class="wordmark" data-nav="home" aria-label="Wisp home">Wisp</button>
+      <div class="header__actions">
+        <button class="icon-btn" id="notifBtn" title="Notifications" aria-label="Notifications"><svg width="19" height="19"><use href="#i-bell"></use></svg><span class="dot"></span></button>
+        <button class="icon-btn" id="themeBtn" title="Settings and theme" aria-label="Settings and theme"><svg width="19" height="19"><use href="#i-gear"></use></svg></button>
+        <button class="avatar-btn" data-nav="profile" title="Your profile" aria-label="Your profile">R</button>
+      </div>
+    </div>
+    <div class="header__row header__row--nav">
+      <label class="searchbar">
+        <svg width="16" height="16" aria-hidden="true"><use href="#i-search"></use></svg>
+        <input id="searchInput" type="search" placeholder="Search works, tags, and people" aria-label="Search">
+      </label>
+      <nav class="nav" aria-label="Primary">
+        <button class="nav__item" data-nav="home">Home</button>
+        <button class="nav__item" data-nav="write">Writing Station</button>
+        <button class="nav__item" data-nav="library">Library</button>
+        <button class="nav__item" data-nav="community">Community Space</button>
+      </nav>
+      <div class="mode-flag"><span class="pip"></span>Safe mode on</div>
+    </div>
+  </header>
+
+  <!-- ================= BODY: THREE COLUMNS ================= -->
+  <div class="shell-body">
+
+    <!-- LEFT: Activity feed -->
+    <aside class="rail rail-left col" id="railLeft" aria-label="Activity feed">
+      <div class="rail__head">
+        <h2 class="rail__title">Activity</h2>
+        <button class="btn--link" data-nav="library">See all</button>
+      </div>
+      <p class="rail__note">Your quiet stream. No pushes.</p>
+      <div id="activityMount"></div>
+    </aside>
+
+    <!-- CENTER: routed screens -->
+    <main class="center col" id="main" tabindex="-1">
+      <section class="screen" data-screen="home" id="screen-home"></section>
+      <section class="screen" data-screen="browse" id="screen-browse"></section>
+      <section class="screen" data-screen="reading" id="screen-reading"></section>
+      <section class="screen" data-screen="work" id="screen-work"></section>
+      <section class="screen" data-screen="write" id="screen-write"></section>
+      <section class="screen" data-screen="library" id="screen-library"></section>
+      <section class="screen" data-screen="community" id="screen-community"></section>
+      <section class="screen" data-screen="profile" id="screen-profile"></section>
+    </main>
+
+    <!-- RIGHT: Widget station -->
+    <aside class="rail rail-right col" id="railRight" aria-label="Widget station">
+      <div class="rail__head" style="margin-bottom:16px">
+        <h2 class="rail__title">Widgets</h2>
+        <button class="btn--link" id="customizeWidgets">Customize</button>
+      </div>
+      <div id="widgetMount"></div>
+      <button class="btn-add" id="addWidget"><svg width="15" height="15"><use href="#i-plus"></use></svg>Add a widget</button>
+      <p style="margin:12px 4px 0;font-size:11.5px;color:var(--ink3);text-align:center">50+ widgets in the tray</p>
+    </aside>
+
+  </div>
+</div>
+
+<!-- ================= THEME DRAWER ================= -->
+<div class="scrim" id="themeScrim" aria-hidden="true">
+  <div class="drawer col" role="dialog" aria-modal="true" aria-label="Theme and settings">
+    <div class="drawer__head">
+      <h2>Theme</h2>
+      <button class="drawer__close" id="themeClose" aria-label="Close">&times;</button>
+    </div>
+    <p style="font-size:14px;line-height:1.6;color:var(--ink2);margin:0">Your look follows you across every device. Nothing here touches anyone else's view.</p>
+
+    <h3>Preset looks</h3>
+    <div class="swatches" id="presetSwatches"></div>
+
+    <h3>Accent</h3>
+    <div class="accent-row" id="accentRow"></div>
+
+    <h3>Reading size</h3>
+    <div class="slider-row">
+      <span class="muted" style="font-size:13px">A</span>
+      <input type="range" id="sizeSlider" min="15" max="26" step="1" value="19" aria-label="Reading text size">
+      <span class="val" id="sizeVal">19px</span>
+    </div>
+
+    <h3>Reading width</h3>
+    <div class="slider-row">
+      <input type="range" id="measureSlider" min="52" max="86" step="2" value="66" aria-label="Reading column width">
+      <span class="val" id="measureVal">66ch</span>
+    </div>
+
+    <h3>Reading face</h3>
+    <div class="seg" id="faceSeg">
+      <button data-face="humanist" class="is-on">Newsreader</button>
+      <button data-face="grotesk">Inter</button>
+    </div>
+
+    <h3>Comfort and access</h3>
+    <div class="opt-row"><span>Dyslexia-friendly font</span><label class="switch"><input type="checkbox" id="optDyslexia"><span class="track"></span><span class="knob"></span></label></div>
+    <div class="opt-row"><span>Reduce motion</span><label class="switch"><input type="checkbox" id="optMotion"><span class="track"></span><span class="knob"></span></label></div>
+    <div class="opt-row"><span>Justify and hyphenate prose</span><label class="switch"><input type="checkbox" id="optJustify"><span class="track"></span><span class="knob"></span></label></div>
+    <div class="opt-row"><span>Show margin comment counts</span><label class="switch"><input type="checkbox" id="optMargins" checked><span class="track"></span><span class="knob"></span></label></div>
+
+    <button class="btn btn--quiet btn--full" id="resetTheme" style="margin-top:22px">Reset to defaults</button>
+    <p class="reset-note">Full per-heading control (Title, Subtitle, H1 through H7, Normal Text, Caption, each with its own font, size, and color) lives one layer deeper. The reset above is always one tap away.</p>
+  </div>
+</div>
+
+<!-- ================= MOBILE NAV SHEET ================= -->
+<div class="sheet" id="navSheet" aria-hidden="true">
+  <div class="sheet__panel" role="dialog" aria-modal="true" aria-label="Menu">
+    <div class="wordmark" style="justify-self:start;text-align:left;margin-bottom:22px">Wisp</div>
+    <label class="searchbar" style="width:100%;margin-bottom:18px">
+      <svg width="16" height="16"><use href="#i-search"></use></svg>
+      <input type="search" placeholder="Search Wisp" aria-label="Search">
+    </label>
+    <nav class="sheet__nav">
+      <button data-nav="home"><svg width="18" height="18"><use href="#i-book"></use></svg>Home</button>
+      <button data-nav="browse"><svg width="18" height="18"><use href="#i-search"></use></svg>Browse</button>
+      <button data-nav="write"><svg width="18" height="18"><use href="#i-edit"></use></svg>Writing Station</button>
+      <button data-nav="library"><svg width="18" height="18"><use href="#i-bookmark"></use></svg>Library</button>
+      <button data-nav="community"><svg width="18" height="18"><use href="#i-user"></use></svg>Community Space</button>
+      <button data-nav="profile"><svg width="18" height="18"><use href="#i-user"></use></svg>Your profile</button>
+    </nav>
+  </div>
+</div>
+
+<!-- ================= GATE / INTERSTITIAL MOUNT ================= -->
+<div id="gateMount"></div>
+
+<!-- ================= TOAST ================= -->
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="assets/js/data.js"></script>
+<script src="assets/js/wisp.js"></script>
+</body>
+</html>

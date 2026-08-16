@@ -1,0 +1,87 @@
+# Wisp
+
+*Read stories together instead of alone.*
+
+Wisp is a warm, quiet, literary home for fanfiction and original fiction where
+the point is the conversation: talk line by line in the margins, follow the
+writers you love, keep control of what you see, and never meet an ad. This
+repository is the front-end for that product, built from the discovery-session
+design plan and the brand asset kit.
+
+This is a self-contained static site. No build step, no framework, no backend;
+open `index.html` and it runs.
+
+## Running it
+
+Because the app fetches its own scripts, open it through a static server rather
+than the `file://` protocol for the cleanest result:
+
+```
+python3 -m http.server 8000
+# then visit http://localhost:8000
+```
+
+Opening `index.html` directly in a browser also works.
+
+## What is here
+
+```
+index.html            The app shell: header, three-column layout, screen mounts,
+                      theme drawer, mobile sheet, icon sprite.
+assets/css/wisp.css   The whole design system: theme tokens, components, every
+                      screen, responsive collapse, reduced-motion and print.
+assets/js/data.js     The demo dataset: works, activity, widgets, community,
+                      library, and the reading-page chapter with seeded threads.
+assets/js/wisp.js     The app: hash router, screen rendering, the reading-page
+                      conversation, the theming engine, and persistence.
+```
+
+## The screens
+
+- **Home** with For You (personalized, the default) and Following (plain
+  chronological) tabs, a continue-reading resume, and a picked-for-you grid.
+- **Browse** with a progressive filter sidebar (Basic open, Tags and Exclude
+  collapsed, a persistent exclude count), gallery and list views, and one
+  search across fanwork and original mixed together.
+- **The reading page**, the soul of Wisp: a calm centered column with faint
+  per-paragraph markers that open a public thread and one-tap emoji reactions on
+  the exact line that got you, collapsible author and content notes, Kindle-style
+  highlighting, and a floating toolbar for text size, theme, margins, and
+  read-aloud.
+- **Work detail** with cover, rating and warnings, tags, chapter index, and the
+  full set of reader actions.
+- **The Writing Station**, an equipped desk: a formatting toolbar with markdown
+  underneath, autosave, work details, rating and warnings, upload-only cover,
+  per-work controls, and publish or schedule.
+- **Library**: bookmarks, reading lists (private by default), history, and
+  Things, your private highlights and notes.
+- **Community Space**: async fandom and tag hubs, plus events and challenges.
+- **Profile**, expressive through the same theme system.
+
+## The theming system, which is also the accessibility engine
+
+The gear opens a drawer with six preset looks (Warm cream is the default, then
+Sepia, Slate, Midnight, OLED black, and High contrast), an accent picker,
+reading size and width sliders, a reading-face choice, a dyslexia-friendly
+font, reduce-motion, justify-and-hyphenate, and a margin-comment toggle. Every
+setting saves to the browser, standing in for the server-side per-account sync
+the real product would use, and a reset is always one tap away.
+
+## Design commitments carried through
+
+- Warm cream, serif, muted rose; hairline rules only, no ornaments.
+- No em dashes anywhere in the copy; colons and semicolons carry the weight.
+- Adult content sits behind a soft, self-attested gate that collects nothing and
+  is remembered once you pass it.
+- No direct messages and no on-platform resharing; the conversation stays local
+  and public.
+- Hearts are one per reader, quiet and un-gameable; no streaks, no ranks.
+- Personalization points at the reader for better discovery, never at an
+  advertiser; your data is never sold.
+
+## Notes on the demo
+
+The content is stand-in data for a static build. Covers are painted in CSS; the
+real product requires an uploaded cover to publish. Read-aloud uses the
+browser's built-in speech synthesis in place of the neural voices planned for
+launch. Web fonts load from Google Fonts with a serif fallback.
