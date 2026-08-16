@@ -171,7 +171,43 @@
   /*  SCREEN: HOME                                                            */
   /* ======================================================================= */
   let homeTab = "foryou";
+  async function loadHome() {
+    loadingScreen("#screen-home");
+    try {
+      LIVE.works = await WispDB.listWorks({ sort: "recent", limit: 30 });
+      LIVE.works.forEach(w => { LIVE.byId[w.id] = w; });
+    } catch (e) { console.error("[wisp] home load failed:", e); LIVE.works = LIVE.works || []; }
+    renderHomeLive();
+  }
+  function renderHomeLive() {
+    const works = LIVE.works || [];
+    const grid = works.length
+      ? (settings.view === "list"
+          ? `<div class="stack-list">${works.map(cardList).join("")}</div>`
+          : `<div class="work-grid">${works.map(cardGallery).join("")}</div>`)
+      : `<div style="text-align:center;padding:64px 0;color:var(--ink3)">
+           <p style="font-size:16px;color:var(--ink2)">No works have been posted yet.</p>
+           <p style="font-size:14px">Be the first: write something in the Writing Station.</p>
+           <p style="margin-top:16px"><button class="btn btn--primary btn--sm" data-nav="write">Go to the Writing Station</button></p>
+         </div>`;
+    $("#screen-home").innerHTML = `
+      <div class="page">
+        <h1 class="vh">Your reading home</h1>
+        <div class="home-tabs">
+          <button class="home-tab is-active">Latest</button>
+          <div class="home-tabs__meta">
+            <div class="view-toggle" role="group" aria-label="View mode">
+              <button data-view="gallery" class="${settings.view === "gallery" ? "is-active" : ""}" aria-pressed="${settings.view === "gallery"}">Gallery</button>
+              <button data-view="list" class="${settings.view === "list" ? "is-active" : ""}" aria-pressed="${settings.view === "list"}">List</button>
+            </div>
+          </div>
+        </div>
+        ${works.length ? `<div class="section-head"><h2>Latest works</h2><button class="btn--link" data-nav="browse">Browse all &rsaquo;</button></div>` : ""}
+        ${grid}
+      </div>`;
+  }
   function renderHome() {
+    if (isLive()) return renderHomeLive();
     const feat = ["salt","letters","amber","law","marrow","understudy"].map(id => W.byId[id]);
     const grid = settings.view === "list"
       ? `<div class="stack-list">${feat.map(cardList).join("")}</div>`
@@ -1335,7 +1371,59 @@
   /* ======================================================================= */
   /*  SCREEN: PROFILE                                                         */
   /* ======================================================================= */
+  function renderProfileSignedOut() {
+    $("#screen-profile").innerHTML = `
+      <div class="page page--wide">
+        <div class="editorial" style="text-align:center;padding:50px 20px">
+          <p class="soft" style="font-size:16px;margin-bottom:16px">Sign in to see your profile.</p>
+          <button class="btn btn--primary" data-auth="in">Sign in</button>
+        </div>
+      </div>`;
+  }
+  function renderProfileLive(works) {
+    const p = WispDB.profile || {};
+    const name = p.display_name || "You";
+    const handle = p.handle ? "@" + p.handle : "";
+    const published = (works || []).filter(w => w.status === "ongoing" || w.status === "complete");
+    const hearts = (works || []).reduce((n, w) => n + (+w.hearts_count || 0), 0);
+    const pinnedCards = published.length
+      ? `<div class="work-grid">${published.map(w => cardGallery(WispDB.toCard(w))).join("")}</div>`
+      : `<p class="muted" style="font-size:14px;padding:16px 4px">Nothing published yet. Your posted works will show here.</p>`;
+    $("#screen-profile").innerHTML = `
+      <div class="page page--wide">
+        <div class="profile-hero">
+          <div class="profile-hero__av">${esc((name[0] || "?").toUpperCase())}</div>
+          <div style="flex:1;min-width:220px">
+            <h1 class="display" style="font-size:28px">${esc(name)}</h1>
+            <div class="muted" style="font-size:14px">${esc(handle)}</div>
+            ${p.bio ? `<p class="soft" style="font-size:15px;line-height:1.6;margin:10px 0 0;max-width:560px">${esc(p.bio)}</p>` : ""}
+            <div class="profile-stats">
+              <div><b>${published.length}</b><span>Works</span></div>
+              <div><b>${WispDB.fmtCount(hearts)}</b><span>Hearts</span></div>
+              <div><b>0</b><span>Followers</span></div>
+              <div><b>0</b><span>Following</span></div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <button class="btn btn--quiet btn--sm" id="themeBtn2">${icon("gear",15)} Customize theme</button>
+            <button class="btn btn--quiet btn--sm" data-nav="write">${icon("edit",15)} Your works</button>
+          </div>
+        </div>
+        <div class="shelf">
+          <div class="shelf__head"><span class="shelf__title">Published works</span></div>
+          ${pinnedCards}
+        </div>
+      </div>`;
+    $("#themeBtn2") && $("#themeBtn2").addEventListener("click", openTheme);
+  }
+  async function loadProfile() {
+    if (!WispDB.signedIn) { renderProfileSignedOut(); return; }
+    loadingScreen("#screen-profile");
+    try { renderProfileLive(await WispDB.myWorks()); }
+    catch (e) { console.error("[wisp] profile load failed:", e); renderProfileLive([]); }
+  }
   function renderProfile() {
+    if (isLive()) return loadProfile();
     const P = W.PROFILE;
     $("#screen-profile").innerHTML = `
       <div class="page page--wide">
@@ -1373,6 +1461,9 @@
 
   /* ---- rails ------------------------------------------------------------- */
   function activityHTML() {
+    if (isLive()) {
+      return `<div class="act-list"><p class="muted" style="font-size:13px;padding:10px 4px;line-height:1.6">No activity yet. When people heart, comment on, or follow your work, it shows up here.</p></div>`;
+    }
     return Object.entries(W.ACTIVITY).map(([g, items]) => `
       <div class="rail__group">${g}</div>
       <div class="act-list">
@@ -1387,6 +1478,18 @@
 
   let luckyIdx = 0;
   function widgetHTML() {
+    if (isLive()) {
+      return `
+        <div class="widget">
+          <div class="widget__label" style="margin-bottom:10px">Lucky</div>
+          <p class="muted" style="font-size:12.5px;margin:6px 0 12px">Once there are works to draw from, this picks a random one for you.</p>
+          <button class="btn btn--ghost btn--full" data-nav="browse">${icon("shuffle",15)} Browse works</button>
+        </div>
+        <div class="widget">
+          <div class="widget__label">Your week</div>
+          <div style="font:15px/1.5 var(--font-read);color:var(--ink2)">Reading stats show up here as you read.</div>
+        </div>`;
+    }
     const wd = W.WIDGETS;
     return `
       <div class="widget">
@@ -1919,7 +2022,7 @@
     }
     else if (screen === "work") { live ? loadWork(arg || "") : renderWork(arg); }
     else if (screen === "browse") { live ? loadBrowse() : renderBrowse(); }
-    else if (screen === "home") { renderHome(); }
+    else if (screen === "home") { live ? loadHome() : renderHome(); }
     else if (screen === "write") {
       if (!live) renderWrite(arg);
       else if (!arg) loadWriteDashboard();
@@ -2129,6 +2232,7 @@
     const link = $("#signOutBtn"); const avatar = $(".avatar-btn");
     if (!window.WispDB || !WispDB.enabled) return;             // demo mode: leave the header as-is
     updateAuthGate();
+    renderActivity(); renderWidgets();                         // rails reflect the connected state
     if (WispDB.signedIn) {
       const name = (WispDB.profile && WispDB.profile.display_name) || "You";
       if (link) link.textContent = "Sign out";

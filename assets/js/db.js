@@ -347,6 +347,6 @@ window.WispDB = (function () {
     createWork, updateWork, deleteWork, firstChapter, saveChapter, setTags,
     mySeries, findOrCreateSeries, updateSeries, deleteSeries, countInSeries,
     toggle, myRelations, getComments, postComment, uploadCover,
-    fmtCount, relTime
+    toCard: toUi, fmtCount, relTime
   };
 })();
