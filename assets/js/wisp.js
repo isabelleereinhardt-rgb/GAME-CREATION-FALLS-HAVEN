@@ -160,7 +160,7 @@
               </span>
             </button>`; }).join("")}
         </div>
-        <p class="muted" style="font-size:12.5px;margin-top:14px">Nominated by readers and chosen by the editors, often smaller works. <a href="#/community">See who picks &rsaquo;</a></p>
+        <p class="muted" style="font-size:12.5px;margin-top:14px">Nominated by readers and chosen by the editors. <a href="#/community">See who picks &rsaquo;</a></p>
       </div>`;
 
     const following = `<div class="stack-list" style="gap:0">
@@ -260,7 +260,7 @@
         <div style="margin-bottom:24px">
           <div class="eyebrow rose" style="margin-bottom:8px">Browse</div>
           <h1 class="display" style="font-size:32px">Browse fanfiction and original fiction</h1>
-          <p class="section-lead">Search both at once. Most filters apply to everything; a few, like fandom or genre, apply to one type.</p>
+          <p class="section-lead">Search both at once.</p>
         </div>
         <div class="browse">
           <aside class="filters">
@@ -383,7 +383,7 @@
 
         <div class="editorial" style="margin-top:30px">
           <div class="eyebrow rose" style="margin-bottom:6px">This work's settings</div>
-          <p class="soft" style="font-size:14px;margin:0;line-height:1.7">Comments are on, and anyone can read it, including logged-out visitors. You can mute a tag, block a user, or turn off the author's skin from the button above or your own settings. Your settings always win over the author's.</p>
+          <p class="soft" style="font-size:14px;margin:0;line-height:1.7">Comments are on, and anyone can read this work. You can mute a tag, block a user, or turn off the author's skin. Your settings always win over the author's.</p>
         </div>
       </div>`;
   }
@@ -868,7 +868,7 @@
             <h1 class="vh">Writing Station</h1>
             <div class="eyebrow rose" style="margin-bottom:8px">Writing Station</div>
             <div class="display" style="font-size:30px">Your works</div>
-            <p class="section-lead" style="margin-bottom:0">All of your works in one place. You can have several books and several series going at once.</p>
+            <p class="section-lead" style="margin-bottom:0">All of your works in one place.</p>
           </div>
           <div class="write-actions">
             <button class="btn btn--primary" data-edit="new">${icon("plus",16)} New work</button>
@@ -883,7 +883,7 @@
           <div><b>${scheduled}</b><span>scheduled</span></div>
           <div><b>${W.WRITER.totals.hearts}</b><span>hearts</span></div>
         </div>
-        <p class="muted" style="font-size:12px;margin:10px 2px 26px">Stats stay simple: hearts, comments, reads, and bookmarks. No rankings.</p>
+        <p class="muted" style="font-size:12px;margin:10px 2px 26px">Your stats: hearts, comments, reads, and bookmarks. No rankings.</p>
 
         ${seriesHTML}
         ${standaloneHTML}
@@ -996,7 +996,7 @@
             <div class="panel">
               <h4>Serialization</h4>
               <div class="field"><label>Update schedule, shown to readers</label><input type="text" value="${work && work.schedule ? esc(work.schedule) : ""}" placeholder="e.g. Sundays"></div>
-              <p class="muted" style="font-size:12px;margin:0;line-height:1.55">Schedule chapters to post automatically, or backdate them. Readers can see your schedule.</p>
+              <p class="muted" style="font-size:12px;margin:0;line-height:1.55">Schedule chapters to post automatically, or backdate them.</p>
             </div>
 
             <div class="panel">
@@ -1058,7 +1058,7 @@
       <div class="page page--wide">
         <div class="eyebrow rose" style="margin-bottom:8px">Library</div>
         <h1 class="display" style="font-size:30px;margin-bottom:6px">Your library</h1>
-        <p class="section-lead">Your bookmarks, lists, history, and notes. Bookmarks and history are private. Lists stay private until you share them.</p>
+        <p class="section-lead">Your bookmarks, lists, history, and notes.</p>
 
         <div class="subtabs">
           ${[["bookmarks","Bookmarks"],["lists","Reading lists"],["history","History"],["things","Things"]].map(([k, n]) =>
@@ -1076,7 +1076,7 @@
       <div class="page page--wide">
         <div class="eyebrow rose" style="margin-bottom:8px">Community Space</div>
         <h1 class="display" style="font-size:30px;margin-bottom:6px">Community</h1>
-        <p class="section-lead">Hubs for fandoms and tags, plus events you can join. Everything here is public. There's no live chat or direct messages.</p>
+        <p class="section-lead">Hubs for fandoms and tags, plus events you can join.</p>
 
         <div class="shelf">
           <div class="shelf__head"><span class="shelf__title">Events and challenges</span><span class="muted" style="font-size:13px">Only events you have joined show up on Home</span></div>
@@ -1145,7 +1145,7 @@
 
         <div class="editorial">
           <div class="eyebrow rose" style="margin-bottom:6px">Your profile</div>
-          <p class="soft" style="font-size:14px;margin:0;line-height:1.7">Style your profile with the same theme system as the rest of the site: accent, fonts, background, pinned works, and widgets. There's no raw HTML, and reset is one tap away. Your theme only changes your own view.</p>
+          <p class="soft" style="font-size:14px;margin:0;line-height:1.7">Style your profile with the same theme system as the rest of the site: accent, fonts, background, pinned works, and widgets. Your theme only changes your own view.</p>
         </div>
       </div>`;
     $("#themeBtn2") && $("#themeBtn2").addEventListener("click", openTheme);
@@ -1182,7 +1182,7 @@
           <span class="mini-cover">${cover("room9")}</span>
           <span><span class="mini-work__title">${esc(wd.staffPick.title)}</span><span class="mini-work__by">by ${esc(wd.staffPick.author)}</span></span>
         </button>
-        <p class="muted" style="font-size:12.5px;line-height:1.5;margin-top:12px">Chosen by the editors, often smaller works. <a href="#/community">See who picks &rsaquo;</a></p>
+        <p class="muted" style="font-size:12.5px;line-height:1.5;margin-top:12px">Chosen by the Wisp editors. <a href="#/community">See who picks &rsaquo;</a></p>
       </div>
 
       <div class="widget">
@@ -1452,7 +1452,7 @@
       } else if (kind === "subscribe") {
         tog.classList.toggle("is-on-quiet", on);
         if (label) label.textContent = on ? "Subscribed" : "Subscribe";
-        toast(on ? "Subscribed. New chapters will land in your Activity, quietly." : "Unsubscribed. No more chapter alerts for this work.");
+        toast(on ? "Subscribed. You'll see new chapters in your activity." : "Unsubscribed. You won't get chapter alerts.");
       } else {
         tog.classList.toggle("is-on-quiet", on);
         if (label) label.textContent = on ? "Bookmarked" : "Bookmark";
