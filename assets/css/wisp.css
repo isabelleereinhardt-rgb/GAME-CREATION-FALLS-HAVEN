@@ -283,7 +283,9 @@ img { max-width: 100%; display: block; }
 .icon-btn .dot {
   position: absolute; top: 7px; right: 8px; width: 6px; height: 6px;
   border-radius: 50%; background: var(--rose);
+  display: none;
 }
+#notifBtn.has-unread .dot { display: block; }
 
 .avatar-btn {
   width: 34px; height: 34px; margin-left: 4px; border-radius: 50%;
@@ -375,6 +377,12 @@ img { max-width: 100%; display: block; }
 .act__body { font-size: 14px; line-height: 1.4; color: var(--ink2); }
 .act__body b { color: var(--ink); font-weight: 600; }
 .act__time { font-size: 12px; color: var(--ink3); margin-top: 3px; }
+.act--new { position: relative; }
+.act--new::before {
+  content: ""; position: absolute; left: 2px; top: 50%; transform: translateY(-50%);
+  width: 5px; height: 5px; border-radius: 50%; background: var(--rose);
+}
+.act__body .soft { color: var(--ink3); }
 
 /* ---------------------------------------------------------------------------
    6. Widget station (right)

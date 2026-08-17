@@ -450,6 +450,88 @@ window.WispDB = (function () {
     return (data || []).map(r => r.following_id);
   }
 
+  /* ---- notifications ---------------------------------------------------- */
+  // A real activity feed, computed from existing tables: new chapters in works
+  // you subscribe to, comments on works you wrote, and people who followed you.
+  // Each source is independent, so one failing still shows the others.
+  async function getNotifications() {
+    if (!user || !client) return [];
+    const uid = user.id;
+    const items = [];
+    const nameOf = (p) => (p && (p.display_name || p.handle)) || "A reader";
+    async function profilesByIds(ids) {
+      const uniq = [...new Set((ids || []).filter(Boolean))];
+      if (!uniq.length) return {};
+      const { data } = await client.from("profiles").select("id, handle, display_name").in("id", uniq);
+      const m = {}; (data || []).forEach(p => { m[p.id] = p; });
+      return m;
+    }
+
+    // 1. New chapters in works I subscribe to.
+    try {
+      const { data: subs } = await client.from("subscriptions").select("work_id").eq("user_id", uid);
+      const subIds = (subs || []).map(s => s.work_id);
+      if (subIds.length) {
+        const { data: chs } = await client.from("chapters")
+          .select("work_id, number, title, published, published_at, scheduled_for, created_at")
+          .in("work_id", subIds)
+          .order("created_at", { ascending: false }).limit(50);
+        const now = Date.now();
+        const visible = (chs || []).filter(c => c.published || (c.scheduled_for && new Date(c.scheduled_for).getTime() <= now));
+        const works = await getWorksByIds(subIds).catch(() => []);
+        const wById = {}; works.forEach(w => { wById[w.id] = w; });
+        visible.forEach(c => items.push({
+          type: "chapter",
+          at: c.published_at || c.scheduled_for || c.created_at,
+          workId: c.work_id,
+          workTitle: wById[c.work_id] ? wById[c.work_id].title : "a work you follow",
+          number: c.number,
+          chapterTitle: c.title || ""
+        }));
+      }
+    } catch (e) { /* one source failing must not sink the rest */ }
+
+    // 2. Comments on works I authored, from other readers.
+    try {
+      const { data: mine } = await client.from("works").select("id, title").eq("author_id", uid);
+      const myIds = (mine || []).map(w => w.id);
+      const titleById = {}; (mine || []).forEach(w => { titleById[w.id] = w.title; });
+      if (myIds.length) {
+        const { data: cs } = await client.from("comments")
+          .select("id, work_id, body, user_id, created_at")
+          .in("work_id", myIds).neq("user_id", uid)
+          .order("created_at", { ascending: false }).limit(50);
+        const profs = await profilesByIds((cs || []).map(c => c.user_id));
+        (cs || []).forEach(c => items.push({
+          type: "comment",
+          at: c.created_at,
+          workId: c.work_id,
+          workTitle: titleById[c.work_id] || "your work",
+          who: nameOf(profs[c.user_id]),
+          excerpt: (c.body || "").replace(/\s+/g, " ").slice(0, 90)
+        }));
+      }
+    } catch (e) { /* ignore */ }
+
+    // 3. New followers.
+    try {
+      const { data: fs } = await client.from("follows")
+        .select("follower_id, created_at").eq("following_id", uid)
+        .order("created_at", { ascending: false }).limit(50);
+      const profs = await profilesByIds((fs || []).map(f => f.follower_id));
+      (fs || []).forEach(f => items.push({
+        type: "follow",
+        at: f.created_at,
+        who: nameOf(profs[f.follower_id]),
+        whoId: f.follower_id,
+        handle: profs[f.follower_id] ? profs[f.follower_id].handle : null
+      }));
+    } catch (e) { /* ignore */ }
+
+    items.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+    return items.slice(0, 50);
+  }
+
   /* ---- library: bookmarks, history, lists, highlights, progress --------- */
   async function getWorksByIds(ids) {
     ids = [...new Set((ids || []).filter(Boolean))];
@@ -610,7 +692,7 @@ window.WispDB = (function () {
     createWork, updateWork, deleteWork, firstChapter, saveChapter, getUpcoming, setTags,
     mySeries, findOrCreateSeries, updateSeries, deleteSeries, countInSeries,
     toggle, myRelations, getComments, postComment, getReactions, toggleReaction, uploadCover,
-    toggleFollow, amFollowing, followCounts, myFollowingIds,
+    toggleFollow, amFollowing, followCounts, myFollowingIds, getNotifications,
     updateProfile, getProfile, worksByAuthor,
     listEvents, myEventIds, toggleEventJoin,
     getWorksByIds, myBookmarks, myHistory, clearHistory,

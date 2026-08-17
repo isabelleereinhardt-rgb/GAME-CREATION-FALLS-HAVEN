@@ -58,7 +58,7 @@
      empty and every accessor falls back to the bundled demo dataset, so the
      demo behaves exactly as before. */
   const LIVE = { works: [], byId: {}, chapters: {}, comments: {}, reactions: {}, upcoming: {}, series: [], events: [], myEvents: new Set(),
-                 lib: { bookmarks: null, history: null, lists: null, things: null }, viewingList: null, resume: null, followingWorks: [] };
+                 lib: { bookmarks: null, history: null, lists: null, things: null }, viewingList: null, resume: null, followingWorks: [], notifications: null };
   let liveEditor = null;   // { work, chapter } when editing a real work, else null
   let editorCover = null;  // uploaded cover URL for the current editor session
   let coverCleared = false; // true when the author removed an existing cover
@@ -2291,7 +2291,22 @@
   /* ---- rails ------------------------------------------------------------- */
   function activityHTML() {
     if (isLive()) {
-      return `<div class="act-list"><p class="muted" style="font-size:13px;padding:10px 4px;line-height:1.6">No activity yet. When people heart, comment on, or follow your work, it shows up here.</p></div>`;
+      if (!WispDB.signedIn) {
+        return `<div class="act-list"><p class="muted" style="font-size:13px;padding:10px 4px;line-height:1.6">Sign in to see new chapters, comments, and followers here.</p></div>`;
+      }
+      const items = LIVE.notifications;
+      if (items === null) {
+        return `<div class="act-list"><p class="muted" style="font-size:13px;padding:10px 4px;line-height:1.6">Gathering your activity...</p></div>`;
+      }
+      if (!items.length) {
+        return `<div class="act-list"><p class="muted" style="font-size:13px;padding:10px 4px;line-height:1.6">No activity yet. New chapters from works you follow, comments on your work, and new followers show up here.</p></div>`;
+      }
+      const order = ["Today", "This week", "Earlier"];
+      const groups = {};
+      items.forEach(n => { const b = notifBucket(n.at); (groups[b] = groups[b] || []).push(n); });
+      return order.filter(b => groups[b]).map(b => `
+        <div class="rail__group">${b}</div>
+        <div class="act-list">${groups[b].map(notifItemHTML).join("")}</div>`).join("");
     }
     return Object.entries(W.ACTIVITY).map(([g, items]) => `
       <div class="rail__group">${g}</div>
@@ -2304,6 +2319,91 @@
       </div>`).join("");
   }
   function renderActivity() { $("#activityMount").innerHTML = activityHTML(); }
+
+  // ---- Live notifications feed ---------------------------------------------
+  const NOTIF_SEEN_KEY = "wisp.notif.seen";
+  function notifSeen() { try { return localStorage.getItem(NOTIF_SEEN_KEY) || ""; } catch (e) { return ""; } }
+  function setNotifSeen(iso) { try { localStorage.setItem(NOTIF_SEEN_KEY, iso); } catch (e) {} }
+
+  function timeAgoShort(iso) {
+    const d = new Date(iso).getTime();
+    if (!d) return "";
+    const s = Math.max(1, Math.floor((Date.now() - d) / 1000));
+    if (s < 60) return "just now";
+    const m = Math.floor(s / 60); if (m < 60) return m + "m ago";
+    const h = Math.floor(m / 60); if (h < 24) return h + "h ago";
+    const dd = Math.floor(h / 24); if (dd < 7) return dd + "d ago";
+    const w = Math.floor(dd / 7); if (w < 5) return w + "w ago";
+    return Math.floor(dd / 30) + "mo ago";
+  }
+  function notifBucket(iso) {
+    const dd = (Date.now() - new Date(iso).getTime()) / 86400000;
+    if (dd < 1) return "Today";
+    if (dd < 7) return "This week";
+    return "Earlier";
+  }
+  function notifItemHTML(n) {
+    const seen = notifSeen();
+    const isNew = seen && new Date(n.at).getTime() > new Date(seen).getTime();
+    let ic, body, attrs;
+    if (n.type === "chapter") {
+      ic = "book";
+      body = `New chapter in <b>${esc(n.workTitle)}</b>: chapter ${n.number}${n.chapterTitle ? ", " + esc(n.chapterTitle) : ""}`;
+      attrs = `data-read="${esc(n.workId)}/${n.number}"`;
+    } else if (n.type === "comment") {
+      ic = "comment";
+      body = `<b>${esc(n.who)}</b> commented on <b>${esc(n.workTitle)}</b>${n.excerpt ? `: <span class="soft">${esc(n.excerpt)}</span>` : ""}`;
+      attrs = `data-work="${esc(n.workId)}"`;
+    } else {
+      ic = "user";
+      body = `<b>${esc(n.who)}</b> started following you`;
+      attrs = (n.handle || n.whoId) ? `data-nav-user="${esc(n.handle || n.whoId)}"` : "";
+    }
+    return `<button class="act${isNew ? " act--new" : ""}" ${attrs}>
+      <span class="act__icon ${n.type === "follow" ? "rose" : ""}">${icon(ic, 14)}</span>
+      <span class="act__body">${body}<span class="act__time">${timeAgoShort(n.at)}</span></span>
+    </button>`;
+  }
+  function unreadCount() {
+    const seen = notifSeen();
+    if (!seen) return 0;
+    const t = new Date(seen).getTime();
+    return (LIVE.notifications || []).filter(n => new Date(n.at).getTime() > t).length;
+  }
+  function updateNotifBadge() {
+    const btn = $("#notifBtn");
+    if (!btn) return;
+    const n = isLive() && WispDB.signedIn ? unreadCount() : 0;
+    btn.classList.toggle("has-unread", n > 0);
+    btn.setAttribute("aria-label", n > 0 ? `Notifications, ${n} new` : "Notifications");
+  }
+  function markNotificationsSeen() {
+    const items = LIVE.notifications || [];
+    setNotifSeen(items.length ? items[0].at : new Date().toISOString());
+    updateNotifBadge();
+    renderActivity();   // clears the per-item "new" marks
+  }
+  async function loadNotifications(force) {
+    if (!isLive() || !WispDB.signedIn) { LIVE.notifications = null; updateNotifBadge(); return; }
+    if (LIVE.notifications !== null && !force) { updateNotifBadge(); return; }
+    try {
+      const items = await WispDB.getNotifications();
+      LIVE.notifications = items;
+      // First ever visit: treat what is already there as seen, so the badge
+      // only lights up for things that arrive from now on.
+      if (!notifSeen()) setNotifSeen(items.length ? items[0].at : new Date().toISOString());
+    } catch (e) {
+      LIVE.notifications = LIVE.notifications || [];
+    }
+    renderActivity();
+    updateNotifBadge();
+  }
+  // Small handle so the feed's pure view logic can be exercised by tests.
+  window.WispNotif = {
+    itemHTML: notifItemHTML, bucket: notifBucket, ago: timeAgoShort,
+    seen: notifSeen, setSeen: setNotifSeen, unread: unreadCount,
+    inject(items) { LIVE.notifications = items; }
+  };
 
   let luckyIdx = 0;
   function widgetHTML() {
@@ -2911,6 +3011,7 @@
     if (kind === "activity") body.innerHTML = `<h2 class="rail__title" style="margin-bottom:4px">Activity</h2><p class="rail__note">Recent activity from the people and works you follow.</p>${activityHTML()}`;
     else body.innerHTML = `<h2 class="rail__title" style="margin-bottom:16px">Widgets</h2>${widgetHTML()}`;
     openOverlay($("#railSheet"));
+    if (kind === "activity" && isLive() && WispDB.signedIn) markNotificationsSeen();
   }
 
   // Keep the caret in the editor when a formatting button is pressed: without
@@ -3002,6 +3103,8 @@
     const guest = e.target.closest("[data-guest]");
     if (guest) { guestBrowsing = true; hideAuthGate(); navigate("home"); return; }
 
+    const navUser = e.target.closest("[data-nav-user]");
+    if (navUser) { closeOverlay($("#railSheet")); navigate("user/" + navUser.dataset.navUser); return; }
     const work = e.target.closest("[data-work]");
     if (work && !e.target.closest("[data-read]")) { navigate("work/" + work.dataset.work); return; }
 
@@ -3175,9 +3278,11 @@
       const name = (WispDB.profile && WispDB.profile.display_name) || "You";
       if (link) link.textContent = "Sign out";
       if (avatar) { avatar.textContent = name[0].toUpperCase(); avatar.title = name; }
+      loadNotifications();                                     // fetch the activity feed once signed in
     } else {
       if (link) link.textContent = "Sign in";
       if (avatar) { avatar.textContent = "?"; avatar.title = "Sign in"; }
+      LIVE.notifications = null; updateNotifBadge();           // drop any feed from a previous session
     }
   }
 
@@ -3541,7 +3646,16 @@
       else openAuth("in");
     });
     $("#notifBtn").addEventListener("click", () => {
-      if (window.matchMedia("(max-width:1040px)").matches) openRailSheet("activity");
+      const narrow = window.matchMedia("(max-width:1040px)").matches;
+      if (isLive() && WispDB.signedIn) {
+        // On a wide screen the feed already lives in the left rail, so the bell
+        // just marks it read; on a narrow screen it opens the activity sheet.
+        if (narrow) openRailSheet("activity");   // this also marks seen
+        else markNotificationsSeen();
+        return;
+      }
+      if (narrow) openRailSheet("activity");
+      else if (isLive()) openAuth("in");
       else toast("Notifications show up in your activity feed. Most are off by default.");
     });
     $("#railSheet").addEventListener("click", (e) => { if (e.target.id === "railSheet" || e.target.closest("[data-railclose]")) closeOverlay($("#railSheet")); });
