@@ -421,6 +421,35 @@ window.WispDB = (function () {
     }
   }
 
+  /* ---- hubs ------------------------------------------------------------- */
+  async function listHubs() {
+    const { data, error } = await client.from("hubs").select("*").order("sort");
+    if (error) return [];
+    return data || [];
+  }
+  async function myHubIds() {
+    if (!user) return new Set();
+    const { data } = await client.from("hub_members").select("hub_id").eq("user_id", user.id);
+    return new Set((data || []).map(r => r.hub_id));
+  }
+  // Real follower count per hub, from the public membership rows.
+  async function hubMemberCounts() {
+    const { data } = await client.from("hub_members").select("hub_id");
+    const counts = {};
+    (data || []).forEach(r => { counts[r.hub_id] = (counts[r.hub_id] || 0) + 1; });
+    return counts;
+  }
+  async function toggleHubMembership(hubId, on) {
+    if (!user) throw new Error("Sign in to follow a hub.");
+    if (on) {
+      const { error } = await client.from("hub_members").insert({ user_id: user.id, hub_id: hubId });
+      if (error && error.code !== "23505") throw error;
+    } else {
+      const { error } = await client.from("hub_members").delete().eq("user_id", user.id).eq("hub_id", hubId);
+      if (error) throw error;
+    }
+  }
+
   /* ---- following -------------------------------------------------------- */
   async function toggleFollow(authorId, on) {
     if (!user) throw new Error("Sign in to follow.");
@@ -695,6 +724,7 @@ window.WispDB = (function () {
     toggleFollow, amFollowing, followCounts, myFollowingIds, getNotifications,
     updateProfile, getProfile, worksByAuthor,
     listEvents, myEventIds, toggleEventJoin,
+    listHubs, myHubIds, hubMemberCounts, toggleHubMembership,
     getWorksByIds, myBookmarks, myHistory, clearHistory,
     myLists, createList, deleteList, listContents, addToList, removeFromList,
     myHighlights, saveHighlight, deleteHighlight, submitReport, saveProgress, latestProgress,

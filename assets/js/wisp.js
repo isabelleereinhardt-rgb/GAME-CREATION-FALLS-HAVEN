@@ -58,7 +58,8 @@
      empty and every accessor falls back to the bundled demo dataset, so the
      demo behaves exactly as before. */
   const LIVE = { works: [], byId: {}, chapters: {}, comments: {}, reactions: {}, upcoming: {}, series: [], events: [], myEvents: new Set(),
-                 lib: { bookmarks: null, history: null, lists: null, things: null }, viewingList: null, resume: null, followingWorks: [], notifications: null };
+                 lib: { bookmarks: null, history: null, lists: null, things: null }, viewingList: null, resume: null, followingWorks: [], notifications: null,
+                 hubs: [], myHubs: new Set(), hubCounts: {} };
   let liveEditor = null;   // { work, chapter } when editing a real work, else null
   let editorCover = null;  // uploaded cover URL for the current editor session
   let coverCleared = false; // true when the author removed an existing cover
@@ -2000,12 +2001,18 @@
   async function loadCommunity() {
     loadingScreen("#screen-community");
     try {
-      const [events, mine] = await Promise.all([
+      const [events, mine, hubs, myHubs, hubCounts] = await Promise.all([
         WispDB.listEvents(),
-        WispDB.myEventIds().catch(() => new Set())
+        WispDB.myEventIds().catch(() => new Set()),
+        WispDB.listHubs().catch(() => []),
+        WispDB.myHubIds().catch(() => new Set()),
+        WispDB.hubMemberCounts().catch(() => ({}))
       ]);
       LIVE.events = events;
       LIVE.myEvents = mine;
+      LIVE.hubs = hubs;
+      LIVE.myHubs = myHubs;
+      LIVE.hubCounts = hubCounts;
     } catch (e) { console.error("[wisp] community load failed:", e); }
     renderCommunity();
   }
@@ -2035,15 +2042,25 @@
         </div>
 
         <div class="shelf">
-          <div class="shelf__head"><span class="shelf__title">Hubs</span><button class="btn--link">Browse all hubs &rsaquo;</button></div>
+          <div class="shelf__head"><span class="shelf__title">Hubs</span></div>
           <div class="hub-grid">
-            ${W.HUBS.map(h => `
-              <div class="hub">
+            ${(isLive() ? LIVE.hubs : W.HUBS).map(h => {
+              const live = isLive();
+              const following = live ? LIVE.myHubs.has(h.id) : false;
+              const count = live ? (LIVE.hubCounts[h.id] || 0) : null;
+              const meta = live
+                ? `${esc(h.kind)} &middot; ${count === 0 ? "no followers yet" : count + (count === 1 ? " follower" : " followers")}`
+                : `${esc(h.kind)} &middot; ${esc(h.members)} readers`;
+              const btn = live
+                ? `<button class="btn btn--sm ${following ? "btn--quiet" : "btn--ghost"}" data-hub-follow="${h.id}" aria-pressed="${following}" style="margin-top:12px">${following ? "Following" : "Follow"}</button>`
+                : `<button class="btn--link" style="margin-top:10px" data-toast="Following a hub keeps its new works close. This turns on once the site is connected.">Follow &rsaquo;</button>`;
+              return `<div class="hub">
                 <div class="hub__name"><span style="color:var(--rose)">${icon(h.icon,16)}</span>${esc(h.name)}</div>
-                <div class="muted" style="font-size:12px;margin:3px 0 8px">${esc(h.kind)} &middot; ${esc(h.members)} readers</div>
+                <div class="muted" style="font-size:12px;margin:3px 0 8px">${meta}</div>
                 <p class="soft" style="font-size:13.5px;margin:0;line-height:1.55">${esc(h.note)}</p>
-                <button class="btn--link" style="margin-top:10px" data-toast="Followed the hub.">Follow &rsaquo;</button>
-              </div>`).join("")}
+                ${btn}
+              </div>`;
+            }).join("")}
           </div>
         </div>
 
@@ -3075,6 +3092,24 @@
       fol.classList.toggle("is-on-quiet", on);
       toast(on ? "Following. New works show in your Following feed." : "Unfollowed.");
       if (isLive()) WispDB.toggleFollow(aid, on).catch(err => toast((err && err.message) || "Could not update."));
+      return;
+    }
+    const hbf = e.target.closest("[data-hub-follow]");
+    if (hbf) {
+      if (!WispDB.signedIn) { openAuth("in"); return; }
+      const id = hbf.dataset.hubFollow;
+      const on = !LIVE.myHubs.has(id);
+      // Optimistic + persistent, and keep the real follower count honest.
+      on ? LIVE.myHubs.add(id) : LIVE.myHubs.delete(id);
+      LIVE.hubCounts[id] = Math.max(0, (LIVE.hubCounts[id] || 0) + (on ? 1 : -1));
+      renderCommunity();
+      toast(on ? "Following. New works from this hub come to you." : "Unfollowed.");
+      WispDB.toggleHubMembership(id, on).catch(err => {
+        on ? LIVE.myHubs.delete(id) : LIVE.myHubs.add(id);
+        LIVE.hubCounts[id] = Math.max(0, (LIVE.hubCounts[id] || 0) + (on ? -1 : 1));
+        renderCommunity();
+        toast((err && err.message) || "Could not update that.");
+      });
       return;
     }
     const evj = e.target.closest("[data-event-join]");

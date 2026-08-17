@@ -37,8 +37,10 @@ Supabase's free tier.
    to add the per-work "hide my numbers" control.
 8. Run [`supabase/migrations/006_reports.sql`](supabase/migrations/006_reports.sql)
    to make the in-app report button real, so reports are written to a table
-   only you (as the project owner) can read. Run new migration files in order
-   as they are added.
+   only you (as the project owner) can read.
+9. Run [`supabase/migrations/007_hubs.sql`](supabase/migrations/007_hubs.sql)
+   to make community hubs real, so following a hub persists and each hub shows
+   its true follower count. Run new migration files in order as they are added.
 
 All of these are safe to re-run if you ever need to.
 
