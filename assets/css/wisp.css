@@ -755,6 +755,13 @@ body.hide-margins .para__marker { display: none; }
 .comment__acts { display: flex; gap: 12px; margin-top: 5px; font-size: 12px; color: var(--ink3); }
 .comment__acts button { background: none; border: 0; color: var(--ink3); cursor: pointer; font: 12px var(--font-text); }
 .comment__acts button:hover { color: var(--rose-ink); }
+.comment__edit {
+  width: 100%; margin: 4px 0 8px; min-height: 60px; resize: vertical;
+  border: 1px solid var(--line); border-radius: var(--radius-s); padding: 8px 10px;
+  font: 14px var(--font-text); color: var(--ink); background: var(--card); outline: none;
+}
+.comment__edit:focus { border-color: var(--rose); }
+.comment__editacts { display: flex; gap: 8px; }
 
 .thread__compose { display: flex; gap: 9px; margin-top: 12px; }
 .thread__compose textarea {

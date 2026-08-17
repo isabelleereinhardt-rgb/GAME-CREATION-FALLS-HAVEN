@@ -40,7 +40,10 @@ Supabase's free tier.
    only you (as the project owner) can read.
 9. Run [`supabase/migrations/007_hubs.sql`](supabase/migrations/007_hubs.sql)
    to make community hubs real, so following a hub persists and each hub shows
-   its true follower count. Run new migration files in order as they are added.
+   its true follower count.
+10. Run [`supabase/migrations/008_comment_edit.sql`](supabase/migrations/008_comment_edit.sql)
+    to let readers edit their own comments (delete already works). Run new
+    migration files in order as they are added.
 
 All of these are safe to re-run if you ever need to.
 

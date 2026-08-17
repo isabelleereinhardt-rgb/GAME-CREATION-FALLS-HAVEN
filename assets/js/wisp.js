@@ -580,6 +580,7 @@
   /* ======================================================================= */
   const REACTS = ["❤️","😭","🔥","👀","😂","🥺"];
   const openThreads = new Set();
+  let editingComment = null;   // id of the comment currently being edited inline
 
   function paragraphHTML(p, i) {
     const has = !!p.thread;
@@ -1142,7 +1143,7 @@
       if (!slot) return;
       const para = slot.closest(".para");
       if (openThreads.has(i)) { openThreads.delete(i); slot.innerHTML = ""; para.classList.remove("is-open"); return; }
-      openThreads.add(i); para.classList.add("is-open");
+      openThreads.add(i); para.classList.add("is-open"); editingComment = null;
       openLiveThread(w, ch, i, slot);
     }));
   }
@@ -1179,16 +1180,54 @@
       const body = (ta.value || "").trim(); if (!body) return;
       post.disabled = true;
       try {
-        await WispDB.postComment(w.id, body, ch.id, i);
+        const saved = await WispDB.postComment(w.id, body, ch.id, i);
         const list = (LIVE.comments[ch.id] = LIVE.comments[ch.id] || {});
         (list[i] = list[i] || []).push({
-          body, created_at: new Date().toISOString(),
+          id: saved && saved.id, user_id: (saved && saved.user_id) || (WispDB.user && WispDB.user.id),
+          body, created_at: (saved && saved.created_at) || new Date().toISOString(),
           profiles: { display_name: (WispDB.profile && WispDB.profile.display_name) || "You" }
         });
         openLiveThread(w, ch, i, slot);       // re-render with the new comment
         refreshLiveCount(ch, i);
       } catch (e) { toast((e && e.message) || "Could not post."); post.disabled = false; }
     });
+
+    // Owner controls: edit or delete a comment you wrote.
+    const findComment = (id) => ((LIVE.comments[ch.id] && LIVE.comments[ch.id][i]) || []).find(c => c.id === id);
+    slot.querySelectorAll("[data-cedit]").forEach(b => b.addEventListener("click", () => {
+      editingComment = b.dataset.cedit; openLiveThread(w, ch, i, slot);
+    }));
+    slot.querySelectorAll("[data-ccancel]").forEach(b => b.addEventListener("click", () => {
+      editingComment = null; openLiveThread(w, ch, i, slot);
+    }));
+    slot.querySelectorAll("[data-csave]").forEach(b => b.addEventListener("click", async () => {
+      const id = b.dataset.csave;
+      const ta2 = slot.querySelector("[data-cedit-ta]");
+      const nb = (ta2 && ta2.value || "").trim();
+      if (!nb) return;
+      b.disabled = true;
+      try {
+        const saved = await WispDB.editComment(id, nb);
+        const c = findComment(id);
+        if (c) { c.body = nb; c.edited_at = (saved && saved.edited_at) || new Date().toISOString(); }
+        editingComment = null; openLiveThread(w, ch, i, slot);
+        toast("Comment updated.");
+      } catch (e) { b.disabled = false; toast((e && e.message) || "Could not update."); }
+    }));
+    slot.querySelectorAll("[data-cdel]").forEach(b => b.addEventListener("click", () => {
+      const id = b.dataset.cdel;
+      confirmDialog({ title: "Delete this comment?", body: "It will be removed for everyone.", confirmText: "Delete", danger: true }, async () => {
+        try {
+          await WispDB.deleteComment(id);
+          const arr = (LIVE.comments[ch.id] && LIVE.comments[ch.id][i]) || [];
+          const idx = arr.findIndex(c => c.id === id);
+          if (idx >= 0) arr.splice(idx, 1);
+          editingComment = null; openLiveThread(w, ch, i, slot);
+          refreshLiveCount(ch, i);
+          toast("Comment deleted.");
+        } catch (e) { toast((e && e.message) || "Could not delete."); }
+      });
+    }));
   }
 
   function refreshLiveCount(ch, i) {
@@ -1207,14 +1246,28 @@
     }).join("");
     const comments = (ch && LIVE.comments[ch.id] && LIVE.comments[ch.id][i]) || [];
     const who = (c) => (c.profiles && c.profiles.display_name) || "Reader";
-    const rows = comments.map(c => `
-      <div class="comment">
+    const myId = WispDB.user && WispDB.user.id;
+    const rows = comments.map(c => {
+      const mine = !!(myId && c.user_id === myId && c.id);
+      if (mine && editingComment === c.id) {
+        return `<div class="comment" data-comment="${c.id}">
+          <span class="comment__av">${esc((who(c)[0] || "R").toUpperCase())}</span>
+          <div style="flex:1">
+            <div><span class="comment__who">${esc(who(c))}</span></div>
+            <textarea class="comment__edit" data-cedit-ta>${esc(c.body)}</textarea>
+            <div class="comment__editacts"><button class="btn btn--primary btn--sm" data-csave="${c.id}">Save</button><button class="btn btn--quiet btn--sm" data-ccancel>Cancel</button></div>
+          </div>
+        </div>`;
+      }
+      return `<div class="comment" data-comment="${c.id || ""}">
         <span class="comment__av">${esc((who(c)[0] || "R").toUpperCase())}</span>
-        <div>
-          <div><span class="comment__who">${esc(who(c))}</span><span class="comment__when">${WispDB.relTime(c.created_at)}</span></div>
+        <div style="flex:1">
+          <div><span class="comment__who">${esc(who(c))}</span><span class="comment__when">${WispDB.relTime(c.created_at)}${c.edited_at ? " &middot; edited" : ""}</span></div>
           <div class="comment__text">${esc(c.body)}</div>
+          ${mine ? `<div class="comment__acts"><button class="cact" data-cedit="${c.id}">Edit</button><button class="cact" data-cdel="${c.id}">Delete</button></div>` : ""}
         </div>
-      </div>`).join("");
+      </div>`;
+    }).join("");
     return `<div class="thread">
       <div class="thread__reactions">${chips}</div>
       ${rows || '<p class="muted" style="font-size:13px;margin:2px 0 10px">No comments on this line yet.</p>'}
@@ -1224,6 +1277,13 @@
       </div>
     </div>`;
   }
+
+  // Small handle so the comment thread's owner-controls render can be tested.
+  window.WispThread = {
+    html: (w, ch, i) => liveThreadHTML(w, ch, i),
+    edit(id) { editingComment = id; },
+    inject(chId, i, arr) { (LIVE.comments[chId] = LIVE.comments[chId] || {})[i] = arr; }
+  };
 
   function readerToolsHTML() {
     return `<div class="reader-tools" role="toolbar" aria-label="Reading controls">

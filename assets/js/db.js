@@ -366,7 +366,7 @@ window.WispDB = (function () {
 
   async function getComments(workId) {
     const { data, error } = await client.from("comments")
-      .select("id, body, paragraph_index, created_at, user_id, profiles(display_name)")
+      .select("id, body, chapter_id, paragraph_index, created_at, edited_at, user_id, profiles(display_name)")
       .eq("work_id", workId).order("created_at");
     if (error) throw error;
     return data || [];
@@ -380,6 +380,19 @@ window.WispDB = (function () {
     }).select().single();
     if (error) throw error;
     return data;
+  }
+  async function editComment(id, body) {
+    if (!user) throw new Error("Sign in first.");
+    const { data, error } = await client.from("comments")
+      .update({ body, edited_at: new Date().toISOString() })
+      .eq("id", id).eq("user_id", user.id).select().single();
+    if (error) throw error;
+    return data;
+  }
+  async function deleteComment(id) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("comments").delete().eq("id", id).eq("user_id", user.id);
+    if (error) throw error;
   }
 
   /* ---- profiles --------------------------------------------------------- */
@@ -834,7 +847,7 @@ window.WispDB = (function () {
     listWorks, getWork, getChapters, myWorks,
     createWork, updateWork, deleteWork, firstChapter, saveChapter, getUpcoming, setTags,
     mySeries, findOrCreateSeries, updateSeries, deleteSeries, countInSeries,
-    toggle, myRelations, getComments, postComment, getReactions, toggleReaction, uploadCover,
+    toggle, myRelations, getComments, postComment, editComment, deleteComment, getReactions, toggleReaction, uploadCover,
     toggleFollow, amFollowing, followCounts, myFollowingIds, getNotifications,
     updateProfile, getProfile, worksByAuthor,
     listEvents, myEventIds, toggleEventJoin,
