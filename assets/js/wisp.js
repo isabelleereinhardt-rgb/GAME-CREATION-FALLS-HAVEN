@@ -369,11 +369,24 @@
     else if (filterState.sort === "recent") list.sort((a, b) => (a.complete ? 1 : 0) - (b.complete ? 1 : 0));
     return list;
   }
+  // In live mode the backend has already applied search, type, rating, and
+  // sort, so keep its order and only refine by tag include/exclude and the
+  // reader's mutes and blocks. In demo mode everything is filtered in place.
+  function browseResults() {
+    if (!isLive()) return filteredWorks();
+    let list = (LIVE.works || []).slice();
+    if (filterState.tagsInc.size) list = list.filter(w => Array.from(filterState.tagsInc).every(t => w.tags.includes(t)));
+    if (filterState.tagsExc.size) list = list.filter(w => !w.tags.some(t => filterState.tagsExc.has(t)));
+    if (userState.mutedTags.size) list = list.filter(w => !userState.mutedTags.has(w.source) && !(w.tags || []).some(t => userState.mutedTags.has(t)));
+    if (userState.blockedUsers.size) list = list.filter(w => !userState.blockedUsers.has(w.author));
+    return list;
+  }
   function renderBrowse() {
     const tags = allTags();
     const excCount = filterState.tagsExc.size;
-    const results = filteredWorks();
+    const results = browseResults();
     const applied = [
+      ...(filterState.q ? [`<button class="chip-x" data-clear="q">&ldquo;${esc(filterState.q)}&rdquo; &times;</button>`] : []),
       ...(filterState.type !== "all" ? [`<button class="chip-x" data-clear="type">${filterState.type === "fan" ? "Fanwork" : "Original"} ${icon("plus",12)}</button>`] : []),
       ...Array.from(filterState.ratings).map(r => `<button class="chip-x" data-clear="rating:${r}">${RATE[r]} &times;</button>`),
       ...Array.from(filterState.tagsInc).map(t => `<button class="chip-x" data-clear="inc:${esc(t)}">${esc(t)} &times;</button>`),
@@ -445,9 +458,11 @@
               ? (settings.view === "list"
                   ? `<div class="stack-list">${results.map(cardList).join("")}</div>`
                   : `<div class="work-grid">${results.map(cardGallery).join("")}</div>`)
-              : (activeWorks().length === 0
-                  ? `<div style="text-align:center;padding:70px 0;color:var(--ink3)"><p style="font-size:16px">No works here yet.</p><p style="font-size:14px">Post the first one from the Writing Station.</p></div>`
-                  : `<div style="text-align:center;padding:70px 0;color:var(--ink3)"><p style="font-size:16px">Nothing matches yet.</p><p style="font-size:14px">Loosen a filter, or clear the exclusions.</p></div>`)}
+              : (filterState.q
+                  ? `<div style="text-align:center;padding:70px 0;color:var(--ink3)"><p style="font-size:16px">No works match &ldquo;${esc(filterState.q)}&rdquo;.</p><p style="font-size:14px">Try a different word, or clear the search.</p></div>`
+                  : activeWorks().length === 0
+                    ? `<div style="text-align:center;padding:70px 0;color:var(--ink3)"><p style="font-size:16px">No works here yet.</p><p style="font-size:14px">Post the first one from the Writing Station.</p></div>`
+                    : `<div style="text-align:center;padding:70px 0;color:var(--ink3)"><p style="font-size:16px">Nothing matches yet.</p><p style="font-size:14px">Loosen a filter, or clear the exclusions.</p></div>`)}
           </div>
         </div>
       </div>`;
@@ -2746,12 +2761,22 @@
   async function loadBrowse() {
     loadingScreen("#screen-browse");
     try {
-      const list = await WispDB.listWorks({ sort: "recent", limit: 60 });
+      // The database applies the text search, type, rating, and sort across the
+      // whole catalog; tag include/exclude and mute/block refine the page here.
+      const list = await WispDB.listWorks({
+        q: filterState.q,
+        type: filterState.type,
+        ratings: Array.from(filterState.ratings),
+        sort: filterState.sort,
+        limit: 100
+      });
       LIVE.works = list;
       list.forEach(w => { LIVE.byId[w.id] = w; });
     } catch (e) { console.error("[wisp] browse load failed:", e); LIVE.works = []; }
     renderBrowse();
   }
+  // Live filter changes re-query the backend; demo mode filters in place.
+  function refreshBrowse() { isLive() ? loadBrowse() : renderBrowse(); }
 
   async function loadWork(id) {
     loadingScreen("#screen-work");
@@ -3348,18 +3373,18 @@
   // Browse controls (delegated separately because they use inputs/selects).
   document.addEventListener("change", (e) => {
     const r = e.target.closest("[data-rating]");
-    if (r) { r.checked ? filterState.ratings.add(r.dataset.rating) : filterState.ratings.delete(r.dataset.rating); renderBrowse(); return; }
+    if (r) { r.checked ? filterState.ratings.add(r.dataset.rating) : filterState.ratings.delete(r.dataset.rating); refreshBrowse(); return; }
     const inc = e.target.closest("[data-inc]");
     if (inc) { inc.checked ? filterState.tagsInc.add(inc.dataset.inc) : filterState.tagsInc.delete(inc.dataset.inc); if (inc.checked) filterState.tagsExc.delete(inc.dataset.inc); renderBrowse(); return; }
     const exc = e.target.closest("[data-exc]");
     if (exc) { exc.checked ? filterState.tagsExc.add(exc.dataset.exc) : filterState.tagsExc.delete(exc.dataset.exc); if (exc.checked) filterState.tagsInc.delete(exc.dataset.exc); renderBrowse(); return; }
     const sel = e.target.closest("#sortSel");
-    if (sel) { filterState.sort = sel.value; renderBrowse(); return; }
+    if (sel) { filterState.sort = sel.value; refreshBrowse(); return; }
   });
 
   document.addEventListener("click", (e) => {
     const type = e.target.closest("[data-type]");
-    if (type) { filterState.type = type.dataset.type; renderBrowse(); return; }
+    if (type) { filterState.type = type.dataset.type; refreshBrowse(); return; }
     const clr = e.target.closest("[data-clear]");
     if (clr) {
       const [k, v] = clr.dataset.clear.split(":");
@@ -3367,7 +3392,8 @@
       else if (k === "rating") filterState.ratings.delete(v);
       else if (k === "inc") filterState.tagsInc.delete(v);
       else if (k === "exc") filterState.tagsExc.delete(v);
-      renderBrowse(); return;
+      else if (k === "q") { filterState.q = ""; const si = $("#searchInput"); if (si) si.value = ""; }
+      refreshBrowse(); return;
     }
     if (e.target.closest("#saveSearch")) { toast("Search saved. It won't send notifications."); return; }
   });
@@ -3813,7 +3839,7 @@
     // Search: type and press Enter to browse.
     const si = $("#searchInput");
     si.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { filterState.q = si.value.trim(); navigate("browse"); if (location.hash.includes("browse")) renderBrowse(); }
+      if (e.key === "Enter") { filterState.q = si.value.trim(); navigate("browse"); if (location.hash.includes("browse")) refreshBrowse(); }
     });
 
     // Esc closes overlays.

@@ -165,6 +165,17 @@ window.WispDB = (function () {
     q = opts.mine ? q.eq("author_id", user && user.id) : q.in("status", ["ongoing", "complete", "scheduled"]);
     if (opts.authors) q = q.in("author_id", opts.authors.length ? opts.authors : ["00000000-0000-0000-0000-000000000000"]);
     if (opts.type && opts.type !== "all") q = q.eq("type", opts.type);
+    if (opts.ratings && opts.ratings.length) q = q.in("rating", opts.ratings);
+    if (opts.q) {
+      // Full-text-ish search over title, summary, fandom/setting, and author.
+      // Strip characters that carry meaning in a PostgREST or() filter so a
+      // stray comma or paren can't break the query or widen the match.
+      const s = String(opts.q).replace(/[%_,()*]/g, " ").replace(/\s+/g, " ").trim();
+      if (s) {
+        const like = `%${s}%`;
+        q = q.or(`title.ilike.${like},summary.ilike.${like},source.ilike.${like},author_name.ilike.${like}`);
+      }
+    }
     const sort = opts.sort || "hearts";
     if (sort === "reads") q = q.order("reads_count", { ascending: false });
     else if (sort === "recent") q = q.order("updated_at", { ascending: false });
