@@ -522,12 +522,14 @@ window.WispDB = (function () {
 
   /* ---- notifications ---------------------------------------------------- */
   // A real activity feed, computed from existing tables: new chapters in works
-  // you subscribe to, comments on works you wrote, and people who followed you.
-  // Each source is independent, so one failing still shows the others.
+  // you subscribe to or in hubs you follow, comments on works you wrote, and
+  // people who followed you. Each source is independent, so one failing still
+  // shows the others.
   async function getNotifications() {
     if (!user || !client) return [];
     const uid = user.id;
     const items = [];
+    const subscribedIds = new Set();   // works already covered by source 1, to dedup source 4
     const nameOf = (p) => (p && (p.display_name || p.handle)) || "A reader";
     async function profilesByIds(ids) {
       const uniq = [...new Set((ids || []).filter(Boolean))];
@@ -541,6 +543,7 @@ window.WispDB = (function () {
     try {
       const { data: subs } = await client.from("subscriptions").select("work_id").eq("user_id", uid);
       const subIds = (subs || []).map(s => s.work_id);
+      subIds.forEach(id => subscribedIds.add(id));
       if (subIds.length) {
         const { data: chs } = await client.from("chapters")
           .select("work_id, number, title, published, published_at, scheduled_for, created_at")
@@ -598,8 +601,55 @@ window.WispDB = (function () {
       }));
     } catch (e) { /* ignore */ }
 
-    items.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
-    return items.slice(0, 50);
+    // 4. New chapters in works that belong to hubs I follow (works I already
+    // subscribe to are skipped, since source 1 covers them).
+    try {
+      const { data: hm } = await client.from("hub_members").select("hub_id").eq("user_id", uid);
+      const hubIds = (hm || []).map(r => r.hub_id).slice(0, 10);
+      if (hubIds.length) {
+        const { data: hubRows } = await client.from("hubs").select("*").in("id", hubIds);
+        const watched = new Map();   // workId -> { title, hub }
+        for (const hub of (hubRows || [])) {
+          const works = await worksInHub(hub).catch(() => []);
+          works.forEach(w => {
+            if (!w || subscribedIds.has(w.id) || watched.has(w.id)) return;
+            watched.set(w.id, { title: w.title, hub: hub.name });
+          });
+        }
+        const workIds = [...watched.keys()];
+        if (workIds.length) {
+          const { data: chs } = await client.from("chapters")
+            .select("work_id, number, title, published, published_at, scheduled_for, created_at")
+            .in("work_id", workIds)
+            .order("created_at", { ascending: false }).limit(50);
+          const now = Date.now();
+          (chs || []).filter(c => c.published || (c.scheduled_for && new Date(c.scheduled_for).getTime() <= now))
+            .forEach(c => items.push({
+              type: "chapter",
+              at: c.published_at || c.scheduled_for || c.created_at,
+              workId: c.work_id,
+              workTitle: watched.get(c.work_id).title,
+              number: c.number,
+              chapterTitle: c.title || "",
+              hub: watched.get(c.work_id).hub
+            }));
+        }
+      }
+    } catch (e) { /* ignore */ }
+
+    // Dedup chapter items by work + number (keep the first, which respects
+    // source order: a subscribed work wins over the same work seen via a hub).
+    const seenChapters = new Set();
+    const deduped = items.filter(it => {
+      if (it.type !== "chapter") return true;
+      const key = it.workId + ":" + it.number;
+      if (seenChapters.has(key)) return false;
+      seenChapters.add(key);
+      return true;
+    });
+
+    deduped.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+    return deduped.slice(0, 50);
   }
 
   /* ---- library: bookmarks, history, lists, highlights, progress --------- */

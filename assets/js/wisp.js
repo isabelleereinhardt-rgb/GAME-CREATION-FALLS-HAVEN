@@ -2381,7 +2381,7 @@
         return `<div class="act-list"><p class="muted" style="font-size:13px;padding:10px 4px;line-height:1.6">Gathering your activity...</p></div>`;
       }
       if (!items.length) {
-        return `<div class="act-list"><p class="muted" style="font-size:13px;padding:10px 4px;line-height:1.6">No activity yet. New chapters from works you follow, comments on your work, and new followers show up here.</p></div>`;
+        return `<div class="act-list"><p class="muted" style="font-size:13px;padding:10px 4px;line-height:1.6">No activity yet. New chapters from works and hubs you follow, comments on your work, and new followers show up here.</p></div>`;
       }
       const order = ["Today", "This week", "Earlier"];
       const groups = {};
@@ -2430,7 +2430,7 @@
     let ic, body, attrs;
     if (n.type === "chapter") {
       ic = "book";
-      body = `New chapter in <b>${esc(n.workTitle)}</b>: chapter ${n.number}${n.chapterTitle ? ", " + esc(n.chapterTitle) : ""}`;
+      body = `New chapter in <b>${esc(n.workTitle)}</b>: chapter ${n.number}${n.chapterTitle ? ", " + esc(n.chapterTitle) : ""}${n.hub ? ` <span class="soft">&middot; ${esc(n.hub)} hub</span>` : ""}`;
       attrs = `data-read="${esc(n.workId)}/${n.number}"`;
     } else if (n.type === "comment") {
       ic = "comment";
