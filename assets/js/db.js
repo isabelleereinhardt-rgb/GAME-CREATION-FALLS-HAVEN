@@ -449,6 +449,47 @@ window.WispDB = (function () {
       if (error) throw error;
     }
   }
+  // One hub, with its real follower count and whether I follow it.
+  async function hubDetail(id) {
+    const { data: hub } = await client.from("hubs").select("*").eq("id", id).maybeSingle();
+    if (!hub) return null;
+    const { count } = await client.from("hub_members").select("user_id", { count: "exact", head: true }).eq("hub_id", id);
+    let following = false;
+    if (user) {
+      const { data } = await client.from("hub_members").select("hub_id").eq("hub_id", id).eq("user_id", user.id).maybeSingle();
+      following = !!data;
+    }
+    return { hub, count: count || 0, following };
+  }
+  // The works that belong to a hub: anything tagged with the hub's name, set in
+  // its fandom/setting, or (for a format hub like Webcomics) matching its format.
+  async function worksInHub(hub) {
+    if (!hub) return [];
+    const name = (hub.name || "").trim();
+    const ids = new Set();
+    if (name) {
+      try {
+        const { data: tag } = await client.from("tags").select("id").ilike("name", name).maybeSingle();
+        if (tag) {
+          const { data: wt } = await client.from("work_tags").select("work_id").eq("tag_id", tag.id);
+          (wt || []).forEach(r => ids.add(r.work_id));
+        }
+      } catch (e) { /* ignore */ }
+      try {
+        const { data } = await client.from("works_with_author").select("id").ilike("source", name).in("status", ["ongoing", "complete"]);
+        (data || []).forEach(r => ids.add(r.id));
+      } catch (e) { /* ignore */ }
+    }
+    if (/format/i.test(hub.kind || "") || /webcomic|comic/i.test(name)) {
+      try {
+        const { data } = await client.from("works_with_author").select("id").eq("format", "comic").in("status", ["ongoing", "complete"]);
+        (data || []).forEach(r => ids.add(r.id));
+      } catch (e) { /* ignore */ }
+    }
+    if (!ids.size) return [];
+    const works = await getWorksByIds([...ids]);
+    return works.filter(w => w && (w._dbStatus === "ongoing" || w._dbStatus === "complete"));
+  }
 
   /* ---- following -------------------------------------------------------- */
   async function toggleFollow(authorId, on) {
@@ -736,7 +777,7 @@ window.WispDB = (function () {
     toggleFollow, amFollowing, followCounts, myFollowingIds, getNotifications,
     updateProfile, getProfile, worksByAuthor,
     listEvents, myEventIds, toggleEventJoin,
-    listHubs, myHubIds, hubMemberCounts, toggleHubMembership,
+    listHubs, myHubIds, hubMemberCounts, toggleHubMembership, hubDetail, worksInHub,
     getWorksByIds, myBookmarks, myHistory, clearHistory,
     myLists, createList, deleteList, listContents, addToList, removeFromList,
     myHighlights, saveHighlight, deleteHighlight, submitReport, saveProgress, latestProgress, readingStats,

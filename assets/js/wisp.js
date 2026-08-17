@@ -59,7 +59,7 @@
      demo behaves exactly as before. */
   const LIVE = { works: [], byId: {}, chapters: {}, comments: {}, reactions: {}, upcoming: {}, series: [], events: [], myEvents: new Set(),
                  lib: { bookmarks: null, history: null, lists: null, things: null }, viewingList: null, resume: null, followingWorks: [], notifications: null,
-                 hubs: [], myHubs: new Set(), hubCounts: {}, readingStats: null };
+                 hubs: [], myHubs: new Set(), hubCounts: {}, readingStats: null, hubPage: null };
   let liveEditor = null;   // { work, chapter } when editing a real work, else null
   let editorCover = null;  // uploaded cover URL for the current editor session
   let coverCleared = false; // true when the author removed an existing cover
@@ -2053,13 +2053,13 @@
                 ? `${esc(h.kind)} &middot; ${count === 0 ? "no followers yet" : count + (count === 1 ? " follower" : " followers")}`
                 : `${esc(h.kind)} &middot; ${esc(h.members)} readers`;
               const btn = live
-                ? `<button class="btn btn--sm ${following ? "btn--quiet" : "btn--ghost"}" data-hub-follow="${h.id}" aria-pressed="${following}" style="margin-top:12px">${following ? "Following" : "Follow"}</button>`
-                : `<button class="btn--link" style="margin-top:10px" data-toast="Following a hub keeps its new works close. This turns on once the site is connected.">Follow &rsaquo;</button>`;
-              return `<div class="hub">
+                ? `<button class="btn btn--sm ${following ? "btn--quiet" : "btn--ghost"}" data-hub-follow="${h.id}" aria-pressed="${following}">${following ? "Following" : "Follow"}</button>`
+                : `<button class="btn--link" data-toast="Following a hub keeps its new works close. This turns on once the site is connected.">Follow &rsaquo;</button>`;
+              return `<div class="hub${live ? " hub--link" : ""}" ${live ? `data-hub-open="${h.id}"` : ""}>
                 <div class="hub__name"><span style="color:var(--rose)">${icon(h.icon,16)}</span>${esc(h.name)}</div>
                 <div class="muted" style="font-size:12px;margin:3px 0 8px">${meta}</div>
                 <p class="soft" style="font-size:13.5px;margin:0;line-height:1.55">${esc(h.note)}</p>
-                ${btn}
+                <div class="hub__foot">${btn}${live ? `<span class="hub__see">See works ${icon("chev",12)}</span>` : ""}</div>
               </div>`;
             }).join("")}
           </div>
@@ -2073,6 +2073,70 @@
             <button class="btn--link" data-legal="privacy">Privacy</button>
             <button class="btn--link" data-legal="content">Content and copyright</button>
           </div>
+        </div>
+      </div>`;
+  }
+
+  // ---- Hub landing page ----------------------------------------------------
+  async function loadHubPage(id) {
+    loadingScreen("#screen-community");
+    LIVE.hubPage = null;
+    try {
+      const detail = await WispDB.hubDetail(id);
+      if (!detail) { renderHubNotFound(); return; }
+      const works = await WispDB.worksInHub(detail.hub).catch(() => []);
+      LIVE.hubPage = { detail, works };
+    } catch (e) {
+      console.error("[wisp] hub load failed:", e);
+      renderHubNotFound(); return;
+    }
+    renderHubPage();
+  }
+  function renderHubNotFound() {
+    $("#screen-community").innerHTML = `
+      <div class="page page--wide">
+        <button class="btn--link" data-nav="community" style="margin-bottom:18px">&lsaquo; All hubs</button>
+        <div class="editorial" style="text-align:center;padding:50px 20px">
+          <p class="soft" style="font-size:16px">That hub could not be found.</p>
+        </div>
+      </div>`;
+  }
+  function renderHubUnavailable() {
+    $("#screen-community").innerHTML = `
+      <div class="page page--wide">
+        <button class="btn--link" data-nav="community" style="margin-bottom:18px">&lsaquo; All hubs</button>
+        <div class="editorial" style="text-align:center;padding:50px 20px">
+          <p class="soft" style="font-size:16px">Hub pages open once the site is connected to its backend.</p>
+        </div>
+      </div>`;
+  }
+  function renderHubPage() {
+    const hp = LIVE.hubPage;
+    if (!hp) return;
+    const { hub, count, following } = hp.detail;
+    const works = hp.works || [];
+    const countLabel = count === 0 ? "No followers yet" : count + (count === 1 ? " follower" : " followers");
+    $("#screen-community").innerHTML = `
+      <div class="page page--wide">
+        <button class="btn--link" data-nav="community" style="margin-bottom:18px">&lsaquo; All hubs</button>
+        <div class="hub-hero">
+          <div class="hub-hero__main">
+            <div class="eyebrow rose" style="margin-bottom:6px">${esc(hub.kind || "Hub")}</div>
+            <h1 class="display" style="font-size:30px;margin:0 0 6px"><span style="color:var(--rose);vertical-align:middle;margin-right:6px">${icon(hub.icon || "tag", 22)}</span>${esc(hub.name)}</h1>
+            <p class="section-lead" style="margin:0 0 10px">${esc(hub.note || "")}</p>
+            <div class="muted" style="font-size:13px">${countLabel}</div>
+          </div>
+          <button class="btn ${following ? "btn--quiet" : "btn--primary"}" data-hub-follow="${hub.id}" aria-pressed="${following}">${following ? "Following" : "Follow"}</button>
+        </div>
+
+        <div class="shelf" style="margin-top:24px">
+          <div class="shelf__head"><span class="shelf__title">Works in this hub</span>${works.length ? `<span class="muted" style="font-size:13px">${works.length} ${works.length === 1 ? "work" : "works"}</span>` : ""}</div>
+          ${works.length
+            ? `<div class="work-grid">${works.map(cardGallery).join("")}</div>`
+            : `<div class="editorial" style="text-align:center;padding:40px 20px">
+                 <p class="soft" style="font-size:15px;margin:0 0 6px">No works here yet.</p>
+                 <p class="muted" style="font-size:13px;margin:0">Tag a work &ldquo;${esc(hub.name)}&rdquo;${/format/i.test(hub.kind || "") ? " or post it as a comic" : (hub.kind === "Fandom" ? " or set it as the fandom" : "")} and it shows up here.</p>
+               </div>`}
         </div>
       </div>`;
   }
@@ -3015,6 +3079,7 @@
     let screen = SCREENS.includes(seg) ? seg : "home";
     if (seg === "read") screen = "reading";
     if (seg === "user") screen = "profile";
+    if (seg === "hub") screen = "community";   // hub pages live in the community surface
 
     setActive(screen);
     closeSheet();
@@ -3037,7 +3102,10 @@
       else loadWriteEditor(arg, arg2);
     }
     else if (screen === "library") { LIVE.viewingList = null; renderLibrary(); }
-    else if (screen === "community") { live ? loadCommunity() : renderCommunity(); }
+    else if (screen === "community") {
+      if (seg === "hub") { live ? loadHubPage(arg) : renderHubUnavailable(); }
+      else { live ? loadCommunity() : renderCommunity(); }
+    }
     else if (screen === "profile") { (seg === "user" && live) ? loadUserProfile(arg) : renderProfile(); }
   }
 
@@ -3125,20 +3193,30 @@
       if (isLive()) WispDB.toggleFollow(aid, on).catch(err => toast((err && err.message) || "Could not update."));
       return;
     }
+    const hopen = e.target.closest("[data-hub-open]");
+    if (hopen && !e.target.closest("[data-hub-follow]")) { navigate("hub/" + hopen.dataset.hubOpen); return; }
     const hbf = e.target.closest("[data-hub-follow]");
     if (hbf) {
       if (!WispDB.signedIn) { openAuth("in"); return; }
       const id = hbf.dataset.hubFollow;
-      const on = !LIVE.myHubs.has(id);
-      // Optimistic + persistent, and keep the real follower count honest.
-      on ? LIVE.myHubs.add(id) : LIVE.myHubs.delete(id);
-      LIVE.hubCounts[id] = Math.max(0, (LIVE.hubCounts[id] || 0) + (on ? 1 : -1));
-      renderCommunity();
+      const onHubPage = LIVE.hubPage && LIVE.hubPage.detail && LIVE.hubPage.detail.hub.id === id && /^#\/hub\//.test(location.hash);
+      const wasFollowing = onHubPage ? LIVE.hubPage.detail.following : LIVE.myHubs.has(id);
+      const on = !wasFollowing;
+      const apply = (follow) => {
+        if (onHubPage) {
+          LIVE.hubPage.detail.following = follow;
+          LIVE.hubPage.detail.count = Math.max(0, LIVE.hubPage.detail.count + (follow ? 1 : -1));
+          renderHubPage();
+        } else {
+          follow ? LIVE.myHubs.add(id) : LIVE.myHubs.delete(id);
+          LIVE.hubCounts[id] = Math.max(0, (LIVE.hubCounts[id] || 0) + (follow ? 1 : -1));
+          renderCommunity();
+        }
+      };
+      apply(on);   // optimistic
       toast(on ? "Following. New works from this hub come to you." : "Unfollowed.");
       WispDB.toggleHubMembership(id, on).catch(err => {
-        on ? LIVE.myHubs.delete(id) : LIVE.myHubs.add(id);
-        LIVE.hubCounts[id] = Math.max(0, (LIVE.hubCounts[id] || 0) + (on ? -1 : 1));
-        renderCommunity();
+        apply(!on);   // roll back
         toast((err && err.message) || "Could not update that.");
       });
       return;
