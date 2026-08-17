@@ -59,7 +59,7 @@
      demo behaves exactly as before. */
   const LIVE = { works: [], byId: {}, chapters: {}, comments: {}, reactions: {}, upcoming: {}, series: [], events: [], myEvents: new Set(),
                  lib: { bookmarks: null, history: null, lists: null, things: null }, viewingList: null, resume: null, followingWorks: [], notifications: null,
-                 hubs: [], myHubs: new Set(), hubCounts: {} };
+                 hubs: [], myHubs: new Set(), hubCounts: {}, readingStats: null };
   let liveEditor = null;   // { work, chapter } when editing a real work, else null
   let editorCover = null;  // uploaded cover URL for the current editor session
   let coverCleared = false; // true when the author removed an existing cover
@@ -211,6 +211,7 @@
         }
         const ids = await WispDB.myFollowingIds().catch(() => []);
         LIVE.followingWorks = ids.length ? await WispDB.listWorks({ authors: ids, sort: "recent", limit: 30 }).catch(() => []) : [];
+        loadReadingStats(true);   // refresh the week widget with anything read since
       }
     } catch (e) { console.error("[wisp] home load failed:", e); LIVE.works = LIVE.works || []; }
     renderHomeLive();
@@ -2433,7 +2434,7 @@
         </div>
         <div class="widget">
           <div class="widget__label">Your week</div>
-          <div style="font:15px/1.5 var(--font-read);color:var(--ink2)">Reading stats show up here as you read.</div>
+          ${readingStatsHTML()}
         </div>`;
     }
     const wd = W.WIDGETS;
@@ -2469,6 +2470,36 @@
       </div>`;
   }
   function renderWidgets() { $("#widgetMount").innerHTML = widgetHTML(); }
+
+  // The "Your week" widget, from real reading progress. Only counts we can
+  // actually derive: no invented word totals.
+  function readingStatsHTML() {
+    if (!WispDB.signedIn) {
+      return `<div style="font:15px/1.5 var(--font-read);color:var(--ink2)">Sign in, and your reading shows up here.</div>`;
+    }
+    const s = LIVE.readingStats;
+    if (s === null) {
+      return `<div style="font:15px/1.5 var(--font-read);color:var(--ink2)">Reading stats show up here as you read.</div>`;
+    }
+    if (!s.total) {
+      return `<div style="font:15px/1.5 var(--font-read);color:var(--ink2)">Open a work and your reading life starts filling in here.</div>`;
+    }
+    const line = (n, label) => `<div class="rstat"><span class="rstat__n">${n}</span><span class="rstat__l">${label}</span></div>`;
+    return `<div class="rstats">
+      ${line(s.thisWeek, s.thisWeek === 1 ? "work this week" : "works this week")}
+      ${line(s.inProgress, s.inProgress === 1 ? "work in progress" : "works in progress")}
+      ${line(s.total, s.total === 1 ? "work in your history" : "works in your history")}
+    </div>`;
+  }
+  async function loadReadingStats(force) {
+    if (!isLive() || !WispDB.signedIn) { LIVE.readingStats = null; return; }
+    if (LIVE.readingStats !== null && !force) return;
+    try { LIVE.readingStats = await WispDB.readingStats(); }
+    catch (e) { LIVE.readingStats = LIVE.readingStats || { total: 0, thisWeek: 0, inProgress: 0 }; }
+    renderWidgets();
+  }
+  // Small handle so the stats renderer can be exercised by tests.
+  window.WispStats = { html: readingStatsHTML, inject(s) { LIVE.readingStats = s; } };
 
   /* ======================================================================= */
   /*  THEME ENGINE  ·  the accessibility engine too                          */
@@ -3314,10 +3345,12 @@
       if (link) link.textContent = "Sign out";
       if (avatar) { avatar.textContent = name[0].toUpperCase(); avatar.title = name; }
       loadNotifications();                                     // fetch the activity feed once signed in
+      loadReadingStats();                                      // and the reading stats widget
     } else {
       if (link) link.textContent = "Sign in";
       if (avatar) { avatar.textContent = "?"; avatar.title = "Sign in"; }
       LIVE.notifications = null; updateNotifBadge();           // drop any feed from a previous session
+      LIVE.readingStats = null;
     }
   }
 

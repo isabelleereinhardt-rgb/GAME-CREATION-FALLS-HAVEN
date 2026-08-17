@@ -687,6 +687,12 @@ a.card__title:hover { color: var(--rose-ink); }
 .dl-grid .btn { justify-content: flex-start; gap: 8px; }
 @media (max-width: 480px) { .dl-grid { grid-template-columns: 1fr; } }
 
+/* Reading-stats widget ("Your week"). */
+.rstats { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+.rstat { display: flex; align-items: baseline; gap: 8px; }
+.rstat__n { font: 600 22px var(--font-display); color: var(--ink); min-width: 30px; }
+.rstat__l { font-size: 13px; color: var(--ink2); }
+
 /* Policy pages. */
 .legal-body { max-height: 60vh; overflow-y: auto; padding-right: 6px; }
 .legal-body h3 { font-family: var(--font-display); font-size: 15px; margin: 18px 0 6px; color: var(--ink); }
