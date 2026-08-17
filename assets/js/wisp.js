@@ -2143,8 +2143,9 @@
 
         <div class="editorial">
           <div class="eyebrow rose" style="margin-bottom:6px">Reporting and support</div>
-          <p class="soft" style="font-size:14px;margin:0 0 12px;line-height:1.7">Most discussion, bug reports, and support happen on the Wisp Discord. The in-app report button is for urgent cases and goes straight to the moderation team. Fiction is allowed as long as it's tagged and warned. The limits are illegal content, targeted harassment, doxxing, threats against real people, and spam.</p>
+          <p class="soft" style="font-size:14px;margin:0 0 12px;line-height:1.7">Most discussion, bug reports, and support happen on the <a href="https://discord.gg/Mk2BAfBqt" target="_blank" rel="noopener nofollow" style="text-decoration:underline;text-underline-offset:2px">Wisp Discord</a>. The in-app report button is for urgent cases and goes straight to the moderation team. Fiction is allowed as long as it's tagged and warned. The limits are illegal content, targeted harassment, doxxing, threats against real people, and spam.</p>
           <div class="legal-links">
+            <a class="btn--link" href="https://discord.gg/Mk2BAfBqt" target="_blank" rel="noopener nofollow">${icon("user",14)} Join the Discord</a>
             <button class="btn--link" data-legal="terms">Terms of use</button>
             <button class="btn--link" data-legal="privacy">Privacy</button>
             <button class="btn--link" data-legal="content">Content and copyright</button>
