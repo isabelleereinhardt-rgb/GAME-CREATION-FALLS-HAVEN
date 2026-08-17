@@ -59,7 +59,7 @@
      demo behaves exactly as before. */
   const LIVE = { works: [], byId: {}, chapters: {}, comments: {}, reactions: {}, upcoming: {}, series: [], events: [], myEvents: new Set(),
                  lib: { bookmarks: null, history: null, lists: null, things: null }, viewingList: null, resume: null, followingWorks: [], notifications: null,
-                 hubs: [], myHubs: new Set(), hubCounts: {}, readingStats: null, hubPage: null };
+                 hubs: [], myHubs: new Set(), hubCounts: {}, readingStats: null, hubPage: null, seriesPage: null };
   let liveEditor = null;   // { work, chapter } when editing a real work, else null
   let editorCover = null;  // uploaded cover URL for the current editor session
   let coverCleared = false; // true when the author removed an existing cover
@@ -510,6 +510,7 @@
           <div class="work-hero__main">
             <span class="tag-row"><span class="pill">${w.type === "fan" ? "Fanwork" : "Original"}</span><span class="pill">${esc(w.source)}</span>${w.format === "comic" ? '<span class="pill">Comic</span>' : ""}</span>
             <h1 class="work-hero__title">${esc(w.title)}</h1>
+            ${w._db && w.seriesId && w.seriesName ? `<div style="font-size:14px;margin:2px 0 4px"><a href="#/series/${w.seriesId}" class="series-crumb">${icon("book",13)} ${esc(w.seriesName)}${w.book ? `, book ${w.book}` : ""}</a></div>` : ""}
             <div class="soft" style="font-size:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
               <span>by <a href="#/${w._db && w.authorId ? "user/" + (w.authorHandle || w.authorId) : "profile"}">${esc(w.author)}</a></span>
               ${(w._db && w.authorId && !(WispDB.profile && WispDB.profile.id === w.authorId))
@@ -2216,6 +2217,74 @@
       </div>`;
   }
 
+  // ---- Series landing page -------------------------------------------------
+  async function loadSeriesPage(id) {
+    loadingScreen("#screen-browse");
+    LIVE.seriesPage = null;
+    try {
+      const series = await WispDB.getSeries(id);
+      if (!series) { renderSeriesNotFound(); return; }
+      const books = await WispDB.worksInSeries(id).catch(() => []);
+      books.forEach(w => { LIVE.byId[w.id] = w; });
+      LIVE.seriesPage = { series, books };
+    } catch (e) {
+      console.error("[wisp] series load failed:", e);
+      renderSeriesNotFound(); return;
+    }
+    renderSeriesPage();
+  }
+  function renderSeriesNotFound() {
+    $("#screen-browse").innerHTML = `
+      <div class="page page--wide">
+        <button class="btn--link" data-nav="browse" style="margin-bottom:18px">&lsaquo; Browse</button>
+        <div class="editorial" style="text-align:center;padding:50px 20px">
+          <p class="soft" style="font-size:16px">That series could not be found.</p>
+        </div>
+      </div>`;
+  }
+  function renderSeriesUnavailable() {
+    $("#screen-browse").innerHTML = `
+      <div class="page page--wide">
+        <button class="btn--link" data-nav="browse" style="margin-bottom:18px">&lsaquo; Browse</button>
+        <div class="editorial" style="text-align:center;padding:50px 20px">
+          <p class="soft" style="font-size:16px">Series pages open once the site is connected to its backend.</p>
+        </div>
+      </div>`;
+  }
+  function renderSeriesPage() {
+    const sp = LIVE.seriesPage;
+    if (!sp) return;
+    const { series, books } = sp;
+    const author = books[0] ? books[0].author : "";
+    const authorLink = books[0] && books[0].authorId ? `#/user/${books[0].authorHandle || books[0].authorId}` : "";
+    $("#screen-browse").innerHTML = `
+      <div class="page page--wide">
+        <button class="btn--link" data-nav="browse" style="margin-bottom:18px">&lsaquo; Browse</button>
+        <div class="hub-hero">
+          <div class="hub-hero__main">
+            <div class="eyebrow rose" style="margin-bottom:6px">Series${series.type === "fan" ? " &middot; Fanwork" : ""}${series.source ? " &middot; " + esc(series.source) : ""}</div>
+            <h1 class="display" style="font-size:30px;margin:0 0 6px">${esc(series.name)}</h1>
+            ${author ? `<div class="soft" style="font-size:15px;margin:0 0 8px">by ${authorLink ? `<a href="${authorLink}">${esc(author)}</a>` : esc(author)}</div>` : ""}
+            ${series.description ? `<p class="section-lead" style="margin:0">${esc(series.description)}</p>` : ""}
+          </div>
+          <div class="muted" style="font-size:13px;white-space:nowrap">${books.length} ${books.length === 1 ? "book" : "books"}</div>
+        </div>
+
+        <div class="shelf" style="margin-top:24px">
+          <div class="shelf__head"><span class="shelf__title">Books in order</span></div>
+          ${books.length
+            ? `<div class="series-books">${books.map((w, idx) => `
+                <div class="series-book">
+                  <span class="series-book__n">${w.book || idx + 1}</span>
+                  <div class="series-book__card">${cardList(w)}</div>
+                </div>`).join("")}</div>`
+            : `<div class="editorial" style="text-align:center;padding:40px 20px">
+                 <p class="soft" style="font-size:15px;margin:0">No published books in this series yet.</p>
+               </div>`}
+        </div>
+      </div>`;
+  }
+
   // Plain-language policy pages, shown in a modal. Written to match how Wisp
   // actually works; the operator can adjust the wording as the site grows.
   const LEGAL = {
@@ -2871,6 +2940,7 @@
       LIVE.byId[id] = w;
       LIVE.chapters[id] = await WispDB.getChapters(id).catch(() => []);
       LIVE.upcoming[id] = await WispDB.getUpcoming(id).catch(() => []);
+      if (w.seriesId) { const s = await WispDB.getSeries(w.seriesId).catch(() => null); if (s) w.seriesName = s.name; }
       await seedRelations(id);
       if (WispDB.signedIn && w.authorId) {
         const f = await WispDB.amFollowing(w.authorId).catch(() => false);
@@ -3191,6 +3261,7 @@
     if (seg === "read") screen = "reading";
     if (seg === "user") screen = "profile";
     if (seg === "hub") screen = "community";   // hub pages live in the community surface
+    if (seg === "series") screen = "browse";   // series pages live in the browse surface
 
     setActive(screen);
     closeSheet();
@@ -3204,7 +3275,10 @@
       renderReading(id);
     }
     else if (screen === "work") { live ? loadWork(arg || "") : renderWork(arg); }
-    else if (screen === "browse") { live ? loadBrowse() : renderBrowse(); }
+    else if (screen === "browse") {
+      if (seg === "series") { live ? loadSeriesPage(arg) : renderSeriesUnavailable(); }
+      else { live ? loadBrowse() : renderBrowse(); }
+    }
     else if (screen === "home") { live ? loadHome() : renderHome(); }
     else if (screen === "write") {
       if (!live) renderWrite(arg);

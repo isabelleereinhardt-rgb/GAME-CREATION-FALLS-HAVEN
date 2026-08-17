@@ -306,6 +306,21 @@ window.WispDB = (function () {
     if (error) throw error;
     return data || [];
   }
+  // One series (public), and the published books in it, in reading order.
+  async function getSeries(id) {
+    if (!id) return null;
+    const { data } = await client.from("series").select("*").eq("id", id).maybeSingle();
+    return data || null;
+  }
+  async function worksInSeries(seriesId) {
+    if (!seriesId) return [];
+    const { data, error } = await client.from("works_with_author").select("*")
+      .eq("series_id", seriesId).in("status", ["ongoing", "complete"])
+      .order("book_number", { ascending: true });
+    if (error || !data) return [];
+    const tagMap = await tagsFor(data.map(w => w.id));
+    return data.map(w => toUi(w, tagMap[w.id] || []));
+  }
   async function findOrCreateSeries(name, opts = {}) {
     if (!user) throw new Error("Sign in first.");
     const clean = String(name || "").trim();
@@ -846,7 +861,7 @@ window.WispDB = (function () {
     init, signUp, signIn, signOut, resetPassword, updatePassword,
     listWorks, getWork, getChapters, myWorks,
     createWork, updateWork, deleteWork, firstChapter, saveChapter, getUpcoming, setTags,
-    mySeries, findOrCreateSeries, updateSeries, deleteSeries, countInSeries,
+    mySeries, getSeries, worksInSeries, findOrCreateSeries, updateSeries, deleteSeries, countInSeries,
     toggle, myRelations, getComments, postComment, editComment, deleteComment, getReactions, toggleReaction, uploadCover,
     toggleFollow, amFollowing, followCounts, myFollowingIds, getNotifications,
     updateProfile, getProfile, worksByAuthor,

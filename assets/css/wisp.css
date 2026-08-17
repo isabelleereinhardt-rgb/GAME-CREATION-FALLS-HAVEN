@@ -1096,6 +1096,19 @@ mark.hl { background: color-mix(in srgb, var(--amber) 34%, transparent); border-
 }
 .hub-hero__main { min-width: 0; }
 @media (max-width: 620px) { .hub-hero { flex-direction: column; } }
+
+/* Series landing page. */
+.series-crumb { display: inline-flex; align-items: center; gap: 5px; color: var(--rose-ink); text-decoration: none; }
+.series-crumb:hover { text-decoration: underline; }
+.series-crumb svg { opacity: .8; }
+.series-books { display: flex; flex-direction: column; gap: 14px; }
+.series-book { display: flex; align-items: flex-start; gap: 14px; }
+.series-book__n {
+  flex: none; width: 30px; height: 30px; margin-top: 4px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--rose-wash); color: var(--rose-ink); font: 600 14px var(--font-display);
+}
+.series-book__card { flex: 1; min-width: 0; }
 .event {
   display: flex; gap: 16px; align-items: center; border: 1px solid var(--line); border-radius: var(--radius);
   background: var(--surface); padding: 16px 18px; margin-bottom: 12px;
