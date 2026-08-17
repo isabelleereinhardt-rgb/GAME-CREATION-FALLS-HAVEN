@@ -2740,7 +2740,33 @@
     if (lastFocus && lastFocus.focus) lastFocus.focus();
   }
 
-  function openTheme() { syncDrawer(); openOverlay($("#themeScrim"), "#themeClose"); }
+  // The "Muted and blocked" panel: shows what the reader has muted or blocked,
+  // each removable in one tap. Mute and block are stored on the device.
+  function syncMuteBlock() {
+    const el = $("#muteBlockSection");
+    if (!el) return;
+    const muted = Array.from(userState.mutedTags);
+    const blocked = Array.from(userState.blockedUsers);
+    if (!muted.length && !blocked.length) {
+      el.innerHTML = `<p class="muted" style="font-size:13px;margin:2px 0 0;line-height:1.6">Nothing muted or blocked. Mute a tag or block an author from the menu on any work, and it shows up here to undo.</p>`;
+      return;
+    }
+    const chips = (items, kind) => items.map(x =>
+      `<button class="mb-chip" data-unmb="${kind}:${esc(x)}" aria-label="Remove ${esc(x)}">${esc(x)} <span aria-hidden="true">&times;</span></button>`).join("");
+    el.innerHTML =
+      (muted.length ? `<div class="mb-group"><div class="mb-label">Muted tags</div><div class="mb-chips">${chips(muted, "mute")}</div></div>` : "") +
+      (blocked.length ? `<div class="mb-group"><div class="mb-label">Blocked people</div><div class="mb-chips">${chips(blocked, "block")}</div></div>` : "");
+    el.querySelectorAll("[data-unmb]").forEach(b => b.addEventListener("click", () => {
+      const raw = b.dataset.unmb; const ci = raw.indexOf(":");
+      const kind = raw.slice(0, ci), val = raw.slice(ci + 1);
+      if (kind === "mute") { userState.mutedTags.delete(val); toast("Unmuted " + val + "."); }
+      else { userState.blockedUsers.delete(val); toast("Unblocked " + val + "."); }
+      persistPrefs();
+      syncMuteBlock();
+      if (currentScreen === "browse") refreshBrowse();
+    }));
+  }
+  function openTheme() { syncDrawer(); syncMuteBlock(); openOverlay($("#themeScrim"), "#themeClose"); }
   function closeTheme() { closeOverlay($("#themeScrim")); }
 
   /* ======================================================================= */
