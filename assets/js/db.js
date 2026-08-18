@@ -460,9 +460,10 @@ window.WispDB = (function () {
     const { count } = await client.from("event_participants").select("user_id", { count: "exact", head: true }).eq("event_id", eventId);
     return count || 0;
   }
-  // The event space feed. RLS returns rows only to members (or admins).
+  // The event space feed. RLS returns rows only to members (or admins). Pinned
+  // posts float to the top, newest first within each group.
   async function listEventPosts(eventId) {
-    const { data, error } = await client.from("event_posts").select("*").eq("event_id", eventId).order("created_at", { ascending: false });
+    const { data, error } = await client.from("event_posts").select("*").eq("event_id", eventId).order("pinned", { ascending: false }).order("created_at", { ascending: false });
     if (error) return [];
     // Attach author names in one follow-up query (the posts view has no join).
     const ids = Array.from(new Set((data || []).map(r => r.user_id)));
@@ -481,6 +482,12 @@ window.WispDB = (function () {
     const { error } = await client.from("event_posts").delete().eq("id", id);
     if (error) throw error;
   }
+  // Pin or unpin a post (admin only; RLS enforces it).
+  async function pinEventPost(id, on) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("event_posts").update({ pinned: !!on }).eq("id", id);
+    if (error) throw error;
+  }
   async function toggleEventJoin(eventId, on) {
     if (!user) throw new Error("Sign in to join.");
     if (on) {
@@ -490,6 +497,17 @@ window.WispDB = (function () {
       const { error } = await client.from("event_participants").delete().eq("user_id", user.id).eq("event_id", eventId);
       if (error) throw error;
     }
+  }
+  // Whether this member wants activity notifications for an event (default on).
+  async function myEventNotify(eventId) {
+    if (!user) return true;
+    const { data } = await client.from("event_participants").select("notify").eq("user_id", user.id).eq("event_id", eventId).maybeSingle();
+    return data ? data.notify !== false : true;
+  }
+  async function setEventNotify(eventId, on) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("event_participants").update({ notify: !!on }).eq("user_id", user.id).eq("event_id", eventId);
+    if (error) throw error;
   }
 
   /* ---- hubs ------------------------------------------------------------- */
@@ -917,6 +935,32 @@ window.WispDB = (function () {
       }
     } catch (e) { /* ignore */ }
 
+    // 5. New posts in event spaces I've joined (and left notifications on for),
+    //    from other members. Joining an event opts you into its activity.
+    try {
+      const { data: parts } = await client.from("event_participants").select("event_id, notify").eq("user_id", uid);
+      const notifyEvents = (parts || []).filter(p => p.notify !== false).map(p => p.event_id);
+      if (notifyEvents.length) {
+        const { data: posts } = await client.from("event_posts")
+          .select("id, event_id, user_id, body, created_at")
+          .in("event_id", notifyEvents).neq("user_id", uid)
+          .order("created_at", { ascending: false }).limit(50);
+        if ((posts || []).length) {
+          const { data: evs } = await client.from("events").select("id, title").in("id", [...new Set(posts.map(p => p.event_id))]);
+          const evTitle = {}; (evs || []).forEach(e => { evTitle[e.id] = e.title; });
+          const profs = await profilesByIds(posts.map(p => p.user_id));
+          posts.forEach(p => items.push({
+            type: "event_post",
+            at: p.created_at,
+            eventId: p.event_id,
+            eventTitle: evTitle[p.event_id] || "an event",
+            who: nameOf(profs[p.user_id]),
+            excerpt: (p.body || "").replace(/!\[[^\]]*\]\([^)]*\)/g, "[image]").replace(/\s+/g, " ").slice(0, 90)
+          }));
+        }
+      }
+    } catch (e) { /* ignore */ }
+
     // Dedup chapter items by work + number (keep the first, which respects
     // source order: a subscribed work wins over the same work seen via a hub).
     const seenChapters = new Set();
@@ -1113,6 +1157,7 @@ window.WispDB = (function () {
     listExchanges, getExchange, createExchange, updateExchange, deleteExchange,
     mySignup, joinExchange, withdrawSignup, listSignups, signupCounts, runMatching, myAssignment, myGift, attachGift,
     listHubWidgets, createWidget, updateWidget, deleteWidget, pollTally, myPollVote, castPollVote,
+    pinEventPost, myEventNotify, setEventNotify,
     getWorksByIds, myBookmarks, myHistory, clearHistory,
     myLists, createList, deleteList, listContents, addToList, removeFromList,
     myHighlights, saveHighlight, deleteHighlight, submitReport, saveProgress, latestProgress, readingStats,

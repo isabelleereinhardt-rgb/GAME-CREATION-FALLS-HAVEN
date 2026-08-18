@@ -642,16 +642,28 @@ a.card__title:hover { color: var(--rose-ink); }
 .stat--end { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; }
 
 /* List view card. */
+/* Compact list row: denser than the gallery card, built for scanning. */
 .list-card {
-  display: flex; gap: 16px; align-items: flex-start;
-  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 15px 17px; cursor: pointer; transition: border-color .16s, box-shadow .16s; width: 100%; text-align: left;
+  display: flex; gap: 14px; align-items: center;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-s, 10px);
+  padding: 10px 14px; cursor: pointer; transition: border-color .16s, box-shadow .16s; width: 100%; text-align: left;
 }
-.list-card:hover { border-color: var(--rose); box-shadow: 0 8px 24px var(--shadow); }
-.list-card__cover { flex: none; width: 62px; height: 84px; border-radius: 8px; position: relative; overflow: hidden; }
-.list-card__cover .rate { position: absolute; top: 6px; left: 6px; width: 20px; height: 20px; }
-.list-card__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
-.stack-list { display: flex; flex-direction: column; gap: 14px; }
+.list-card:hover { border-color: var(--rose); box-shadow: 0 6px 18px var(--shadow); }
+.list-card__cover { flex: none; width: 46px; height: 62px; border-radius: 6px; position: relative; overflow: hidden; }
+.list-card__cover .rate { position: absolute; top: 4px; left: 4px; width: 18px; height: 18px; }
+.list-card__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.list-card__line { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+.list-card__title { font: 600 17px/1.25 var(--font-display); color: var(--ink); }
+a.list-card__title:hover { color: var(--rose-ink); }
+.list-card__by { font-size: 13px; color: var(--ink2); }
+.list-card__summary { font-size: 13.5px; color: var(--ink2); line-height: 1.5; overflow: hidden; text-overflow: ellipsis;
+  display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+.list-card__meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+.list-card__stats { display: inline-flex; align-items: center; gap: 12px; margin-left: auto; }
+.list-card__stats .stat { font-size: 12.5px; color: var(--ink3); }
+.pill--sm { font-size: 11px; padding: 1px 8px; }
+.stack-list { display: flex; flex-direction: column; gap: 9px; }
+@media (max-width: 560px) { .list-card__stats { margin-left: 0; } }
 
 /* Covers stand in for the upload-only cover in the real product: the work's
    colour plus the first meaningful letter of its title, scaled to the cover. */
@@ -1628,3 +1640,17 @@ mark.hl { background: color-mix(in srgb, var(--amber) 34%, transparent); border-
 .hubw__poll-label { position: relative; z-index: 1; display: flex; align-items: center; gap: 6px; }
 .hubw__poll-label svg { color: var(--rose-ink); }
 .hubw__poll-pct { position: relative; z-index: 1; font-size: 12.5px; color: var(--ink3); font-variant-numeric: tabular-nums; }
+
+/* Events: sort toggle (Soonest / Latest) and the ended tag. */
+.event-sort { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--surface, #fff); }
+.event-sort__btn { border: none; background: transparent; color: var(--ink3); font: 600 12.5px var(--font-text); padding: 5px 13px; cursor: pointer; transition: background 0.15s, color 0.15s; }
+.event-sort__btn:not(:last-child) { border-right: 1px solid var(--line); }
+.event-sort__btn.is-on { background: var(--rose-wash); color: var(--rose-ink); }
+.event-sort__note { font-size: 12.5px; margin: -6px 0 14px; }
+.event__ended-tag { font: 600 12.5px var(--font-text); color: var(--ink3); padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface, #fff); }
+
+/* Pinned event posts and the pinned badge. */
+.event-post--pinned { border-color: var(--rose); background: var(--rose-wash); }
+.event-post__pinned { display: inline-flex; align-items: center; gap: 4px; font: 600 11px var(--font-text); text-transform: uppercase; letter-spacing: 0.06em; color: var(--rose-ink); }
+.event-post__pinned svg { color: var(--rose-ink); }
+.event-post__pin { color: var(--link); }

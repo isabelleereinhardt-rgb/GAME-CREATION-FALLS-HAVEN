@@ -218,21 +218,29 @@
     </article>`;
   }
 
+  // A compact, scannable row: a small cover, the title and author on one line,
+  // a one-line summary, then tight inline metadata. Denser than the gallery
+  // card on purpose, so more works fit on screen at once.
   function cardList(w) {
+    const flag = w.format === "comic" ? "Comic" : (w.warnings[0] ? w.warnings[0] : "");
     return `<article class="list-card" data-work="${w.id}">
       <span class="list-card__cover">${cover(w.cover, w.title)}${rate(w.rating)}${userState.visited.has(w.id) ? `<span class="read-badge">${icon("check",11)} Read</span>` : ""}</span>
       <span class="list-card__main">
-        <span class="tag-row"><span class="pill">${w.type === "fan" ? "Fanwork" : "Original"}</span><span class="pill">${esc(w.source)}</span>${w.format === "comic" ? '<span class="pill">Comic</span>' : ""}</span>
-        <a class="card__title" href="#/work/${w.id}" style="font-size:22px">${esc(w.title)}</a>
-        <span class="card__by">by ${esc(w.author)}</span>
-        <span class="card__summary" style="-webkit-line-clamp:3">${esc(w.summary)}</span>
-        ${tagRow(w.tags, 4)}
-        <span class="card__stats" style="border-top:0;padding-top:2px">
-          <span class="stat stat--heart">${icon("heart",14)}${esc(w.hearts)}</span>
-          <span class="stat">${icon("comment",14)}${esc(w.comments)}</span>
-          <span class="stat">${icon("eye",14)}${esc(w.reads)}</span>
-          <span class="stat">${icon("clock",14)}${esc(w.read)}</span>
-          ${statEnd(w)}
+        <span class="list-card__line">
+          <a class="list-card__title" href="#/work/${w.id}">${esc(w.title)}</a>
+          <span class="list-card__by">by ${esc(w.author)}</span>
+        </span>
+        <span class="list-card__summary">${esc(w.summary)}</span>
+        <span class="list-card__meta">
+          <span class="pill pill--sm">${w.type === "fan" ? "Fanwork" : "Original"}</span>
+          <span class="pill pill--sm">${esc(w.source)}</span>
+          ${flag ? `<span class="pill pill--sm">${esc(flag)}</span>` : ""}
+          <span class="list-card__stats">
+            <span class="stat stat--heart">${icon("heart",13)}${esc(w.hearts)}</span>
+            <span class="stat">${icon("eye",13)}${esc(w.reads)}</span>
+            <span class="stat">${icon("comment",13)}${esc(w.comments)}</span>
+            ${w.format === "comic" ? `<span class="stat">${icon("book",13)}${esc(w.chapters)}</span>` : `<span class="stat">${icon("clock",13)}${esc(w.read)}</span>`}
+          </span>
         </span>
       </span>
     </article>`;
@@ -259,7 +267,8 @@
         LIVE.followingWorks = ids.length ? await WispDB.listWorks({ authors: ids, sort: "recent", limit: 30 }).catch(() => []) : [];
         // Events the reader has joined show as a compact strip they can click into.
         const [evs, mine] = await Promise.all([WispDB.listEvents().catch(() => []), WispDB.myEventIds().catch(() => new Set())]);
-        LIVE.joinedEvents = (evs || []).filter(e => mine.has(e.id));
+        const nowE = Date.now();
+        LIVE.joinedEvents = (evs || []).filter(e => mine.has(e.id) && !eventExpired(e, nowE));
         loadReadingStats(true);   // refresh the week widget with anything read since
       }
     } catch (e) { console.error("[wisp] home load failed:", e); LIVE.works = LIVE.works || []; }
@@ -2429,6 +2438,33 @@
   /* ======================================================================= */
   /*  SCREEN: COMMUNITY SPACE                                                 */
   /* ======================================================================= */
+  // How the community events list is ordered. "soonest" = nearest event date
+  // first; "latest" = most recently added first. Remembered across visits.
+  let eventSort = (function () { try { return localStorage.getItem("wisp.eventSort") || "latest"; } catch (e) { return "latest"; } })();
+  function eventStartMs(e) { return e.starts_at ? new Date(e.starts_at).getTime() : null; }
+  function eventEndMs(e) { return e.ends_at ? new Date(e.ends_at).getTime() : null; }
+  function eventCreatedMs(e) { return e.created_at ? new Date(e.created_at).getTime() : 0; }
+  // An event is "ended" once its end time has passed. Events with no end time
+  // (a point in time, or undated) never count as ended.
+  function eventEnded(e, now) { const em = eventEndMs(e); return em != null && now >= em; }
+  // Ended events drop off the lists 24 hours after they finish, to cut clutter.
+  function eventExpired(e, now) { const em = eventEndMs(e); return em != null && now >= em + 86400000; }
+  function sortEvents(list, mode) {
+    const arr = list.slice();
+    if (mode === "soonest") {
+      arr.sort((a, b) => {
+        const sa = eventStartMs(a), sb = eventStartMs(b);
+        if (sa == null && sb == null) return eventCreatedMs(b) - eventCreatedMs(a);
+        if (sa == null) return 1;                 // undated events sink to the bottom
+        if (sb == null) return -1;
+        return sa - sb;                            // earliest date first
+      });
+    } else {
+      arr.sort((a, b) => eventCreatedMs(b) - eventCreatedMs(a));   // newest added first
+    }
+    return arr;
+  }
+
   async function loadCommunity() {
     loadingScreen("#screen-community");
     try {
@@ -2457,27 +2493,41 @@
         <p class="section-lead">Hubs for fandoms and tags, plus events you can join.</p>
 
         <div class="shelf">
-          <div class="shelf__head"><span class="shelf__title">Events and challenges</span><span class="muted" style="font-size:13px">Only events you have joined show up on Home</span></div>
+          <div class="shelf__head">
+            <span class="shelf__title">Events and challenges</span>
+            <div class="event-sort" role="group" aria-label="Sort events">
+              <button class="event-sort__btn${eventSort === "soonest" ? " is-on" : ""}" data-event-sort="soonest" aria-pressed="${eventSort === "soonest"}">Soonest</button>
+              <button class="event-sort__btn${eventSort === "latest" ? " is-on" : ""}" data-event-sort="latest" aria-pressed="${eventSort === "latest"}">Latest</button>
+            </div>
+          </div>
+          <p class="muted event-sort__note">Only events you have joined show up on Home. Showing ${eventSort === "soonest" ? "nearest dates first" : "most recently added first"}.</p>
           ${(() => {
-            const rows = (isLive() ? LIVE.events : W.EVENTS).map((e, i) => {
-              const live = isLive();
+            const now = Date.now();
+            const live = isLive();
+            const source = live ? LIVE.events : W.EVENTS;
+            const visible = source.filter(e => !eventExpired(e, now));    // drop events ended over a day ago
+            const rows = sortEvents(visible, eventSort).map((e) => {
               const joined = live ? LIVE.myEvents.has(e.id) : e.joined;
-              const btnAttr = live ? `data-event-join="${e.id}"` : `data-event="${i}"`;
+              const btnAttr = live ? `data-event-join="${e.id}"` : `data-event="${W.EVENTS.indexOf(e)}"`;
+              const ended = eventEnded(e, now);
               // When an event has a real start time, the badge and a live countdown
               // are both derived from it (in Eastern Time); otherwise fall back to
               // the stored day/month text with no countdown.
               const dm = e.starts_at ? easternDayMonth(e.starts_at) : { day: e.d || e.day || "", month: e.m || e.month || "" };
-              const now = Date.now();
-              const startMs = e.starts_at ? new Date(e.starts_at).getTime() : null;
-              const endMs = e.ends_at ? new Date(e.ends_at).getTime() : null;
+              const startMs = eventStartMs(e);
+              const endMs = eventEndMs(e);
               let countdown = "";
               if (startMs && now < startMs) {
                 countdown = `<div class="event__count"><span class="ch-countdown" data-countdown="${esc(e.starts_at)}" data-countdown-label="Starts in" data-countdown-done="Happening now">Starts in: &hellip;</span></div>`;
-              } else if (startMs && endMs && now >= endMs) {
+              } else if (ended) {
                 countdown = `<div class="event__count muted">Ended ${esc(fmtEasternStamp(e.ends_at))}</div>`;
               } else if (startMs) {
                 countdown = `<div class="event__count is-due">Happening now${endMs ? ", ends " + esc(fmtEasternStamp(e.ends_at)) : ""}</div>`;
               }
+              // Joining closes once an event ends; members keep access to the space.
+              const action = ended
+                ? (live && joined ? `<a class="btn btn--ghost btn--sm" href="#/event/${e.id}">Open space</a>` : `<span class="event__ended-tag">Ended</span>`)
+                : `${live && joined ? `<a class="btn btn--ghost btn--sm" href="#/event/${e.id}">Open space</a>` : ""}<button class="btn ${joined ? "btn--quiet" : "btn--ghost"} btn--sm" ${btnAttr} aria-pressed="${joined}">${joined ? "Joined" : "Join"}</button>`;
               return `<div class="event">
                 <div class="event__date"><b>${esc(dm.day)}</b><span class="muted" style="font-size:12px">${esc(dm.month)}</span></div>
                 <div style="flex:1">
@@ -2485,10 +2535,7 @@
                   <p class="soft" style="font-size:14px;margin:6px 0 0;line-height:1.6">${esc(e.note)}</p>
                   ${countdown}
                 </div>
-                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                  ${live && joined ? `<a class="btn btn--ghost btn--sm" href="#/event/${e.id}">Open space</a>` : ""}
-                  <button class="btn ${joined ? "btn--quiet" : "btn--ghost"} btn--sm" ${btnAttr} aria-pressed="${joined}">${joined ? "Joined" : "Join"}</button>
-                </div>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${action}</div>
               </div>`;
             }).join("");
             return rows || `<p class="muted" style="font-size:14px;padding:14px 2px;line-height:1.6">No events running right now. New collections and challenges will appear here when they open.</p>`;
@@ -2600,17 +2647,20 @@
   /* ---- event space: a private feed for the event's members --------------- */
   async function loadEventSpace(id) {
     loadingScreen("#screen-community");
-    let ev = null, isMember = false, count = 0, posts = [];
+    let ev = null, isMember = false, count = 0, posts = [], notify = true;
     try {
       ev = await WispDB.getEvent(id);
       if (ev) {
         const mine = await WispDB.myEventIds().catch(() => new Set());
         isMember = mine.has(id);
         count = await WispDB.eventMemberCount(id).catch(() => 0);
-        if (isMember) posts = await WispDB.listEventPosts(id).catch(() => []);
+        if (isMember) {
+          posts = await WispDB.listEventPosts(id).catch(() => []);
+          notify = await WispDB.myEventNotify(id).catch(() => true);
+        }
       }
     } catch (e) { console.error("[wisp] event space load failed:", e); }
-    LIVE.eventSpace = { ev: ev, isMember: isMember, count: count, posts: posts };
+    LIVE.eventSpace = { ev: ev, isMember: isMember, count: count, posts: posts, notify: notify };
     renderEventSpace();
   }
   function eventCountdownHTML(ev) {
@@ -2645,33 +2695,45 @@
         </div>
       </div>`;
 
+    const ended = eventEnded(ev, Date.now());
     let bodyHTML;
     if (!sp.isMember) {
-      bodyHTML = `<div class="event-space__gate">
-        <p class="soft" style="font-size:15px">This space is for people taking part in the event. Join to see and share posts.</p>
-        <button class="btn btn--primary" data-event-space-join="${esc(ev.id)}">Join this event</button>
-      </div>`;
+      bodyHTML = ended
+        ? `<div class="event-space__gate">
+            <p class="soft" style="font-size:15px">This event has ended, so it's no longer open to join.</p>
+          </div>`
+        : `<div class="event-space__gate">
+            <p class="soft" style="font-size:15px">This space is for people taking part in the event. Join to see and share posts.</p>
+            <button class="btn btn--primary" data-event-space-join="${esc(ev.id)}">Join this event</button>
+          </div>`;
     } else {
+      const notifyOn = sp.notify !== false;
       const compose = `<div class="event-post-compose">
         <textarea id="ev-post" rows="3" placeholder="Share an update, a question, or an image with the event..."></textarea>
         <input type="file" id="ev-img" accept="image/*" hidden>
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-          <div style="display:flex;gap:14px;align-items:center">
+          <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
             <button class="btn--link" data-event-add-img style="font-size:13px">${icon("plus",13)} Add image</button>
+            <button class="btn--link" data-event-notify="${esc(ev.id)}" aria-pressed="${notifyOn}" style="font-size:13px">${icon(notifyOn ? "bell" : "mute",13)} ${notifyOn ? "Notifications on" : "Notifications off"}</button>
             <button class="btn--link" data-event-space-leave="${esc(ev.id)}" style="color:#a2444f;font-size:13px">Leave the event</button>
           </div>
           <button class="btn btn--primary btn--sm" data-event-post="${esc(ev.id)}">Post</button>
         </div>
       </div>`;
+      const isAdmin = !!(WispDB.isAdmin);
       const feed = sp.posts.length
         ? sp.posts.map(p => {
             const name = p.author ? (p.author.display_name || "A reader") : "A reader";
             const mine = WispDB.user && p.user_id === WispDB.user.id;
-            return `<div class="event-post">
+            const acts = [];
+            if (isAdmin) acts.push(`<button class="btn--link event-post__pin" data-event-post-pin="${esc(p.id)}:${p.pinned ? "0" : "1"}" style="font-size:12px;margin-left:auto">${p.pinned ? "Unpin" : "Pin"}</button>`);
+            if (mine) acts.push(`<button class="btn--link event-post__del" data-event-post-del="${esc(p.id)}" style="font-size:12px;color:#a2444f;${isAdmin ? "" : "margin-left:auto"}">Delete</button>`);
+            return `<div class="event-post${p.pinned ? " event-post--pinned" : ""}">
               <div class="event-post__head">
+                ${p.pinned ? `<span class="event-post__pinned">${icon("bookmark",12)} Pinned</span>` : ""}
                 <span class="event-post__who">${esc(name)}</span>
                 <span class="event-post__when">${esc(WispDB.relTime(p.created_at))}</span>
-                ${mine ? `<button class="btn--link event-post__del" data-event-post-del="${esc(p.id)}" style="font-size:12px;color:#a2444f;margin-left:auto">Delete</button>` : ""}
+                ${acts.join("")}
               </div>
               <div class="event-post__body prose">${mdToHtmlBlocks(p.body).join("")}</div>
             </div>`;
@@ -2725,6 +2787,23 @@
       confirmDialog({ title: "Delete this post?", body: "Your post is removed from the event space.", confirmText: "Delete", danger: true },
         async () => { try { await WispDB.deleteEventPost(b.dataset.eventPostDel); loadEventSpace(id); } catch (e) { toast((e && e.message) || "Could not delete."); } });
     }));
+    // Admin: pin or unpin a post so it sits at the top of the space.
+    scr.querySelectorAll("[data-event-post-pin]").forEach(b => b.addEventListener("click", async () => {
+      const parts = b.dataset.eventPostPin.split(":"), pid = parts[0], on = parts[1] === "1";
+      try { await WispDB.pinEventPost(pid, on); toast(on ? "Post pinned." : "Post unpinned."); loadEventSpace(id); }
+      catch (e) { toast((e && e.message) || "Could not update the pin."); }
+    }));
+    // Turn this event's activity notifications on or off for me.
+    const notif = scr.querySelector("[data-event-notify]");
+    notif && notif.addEventListener("click", async () => {
+      const on = notif.getAttribute("aria-pressed") !== "true";
+      try {
+        await WispDB.setEventNotify(id, on);
+        if (LIVE.eventSpace) LIVE.eventSpace.notify = on;
+        toast(on ? "You'll be notified about this event's activity." : "Notifications off for this event.");
+        renderEventSpace();
+      } catch (e) { toast((e && e.message) || "Could not update notifications."); }
+    });
   }
   // ---- hub widgets: small admin-placed blocks on a hub page ----------------
   const WIDGET_KINDS = { note: "Note", countdown: "Countdown", links: "Links", poll: "Poll" };
@@ -3194,6 +3273,10 @@
       ic = "comment";
       body = `<b>${esc(n.who)}</b> commented on <b>${esc(n.workTitle)}</b>${n.excerpt ? `: <span class="soft">${esc(n.excerpt)}</span>` : ""}`;
       attrs = `data-work="${esc(n.workId)}"`;
+    } else if (n.type === "event_post") {
+      ic = "users";
+      body = `<b>${esc(n.who)}</b> posted in <b>${esc(n.eventTitle)}</b>${n.excerpt ? `: <span class="soft">${esc(n.excerpt)}</span>` : ""}`;
+      attrs = `data-open-event="${esc(n.eventId)}"`;
     } else {
       ic = "user";
       body = `<b>${esc(n.who)}</b> started following you`;
@@ -3263,7 +3346,7 @@
     if (!notifPopEl || !notifPopEl.classList.contains("is-open")) return;
     notifPopEl.innerHTML = notifPopContent();
     // Notification rows navigate through the global click handler; close after.
-    notifPopEl.querySelectorAll(".act[data-read], .act[data-work], .act[data-nav-user]").forEach(b => b.addEventListener("click", closeNotifPop));
+    notifPopEl.querySelectorAll(".act[data-read], .act[data-work], .act[data-nav-user], .act[data-open-event]").forEach(b => b.addEventListener("click", closeNotifPop));
   }
   function toggleNotifPop() {
     if (!notifPopEl) {
@@ -4211,10 +4294,18 @@
       });
       return;
     }
+    const esort = e.target.closest("[data-event-sort]");
+    if (esort) {
+      const mode = esort.dataset.eventSort;
+      if (mode !== eventSort) { eventSort = mode; try { localStorage.setItem("wisp.eventSort", mode); } catch (er) {} renderCommunity(); }
+      return;
+    }
     const evj = e.target.closest("[data-event-join]");
     if (evj) {
       if (!WispDB.signedIn) { openAuth("in"); return; }
       const id = evj.dataset.eventJoin;
+      const evt = (LIVE.events || []).find(x => x.id === id);
+      if (evt && eventEnded(evt, Date.now()) && !LIVE.myEvents.has(id)) { toast("This event has ended."); return; }
       const on = !LIVE.myEvents.has(id);
       on ? LIVE.myEvents.add(id) : LIVE.myEvents.delete(id);   // optimistic + persistent
       renderCommunity();
@@ -4239,6 +4330,8 @@
 
     const navUser = e.target.closest("[data-nav-user]");
     if (navUser) { closeOverlay($("#railSheet")); navigate("user/" + navUser.dataset.navUser); return; }
+    const openEv = e.target.closest("[data-open-event]");
+    if (openEv) { closeNotifPop(); navigate("event/" + openEv.dataset.openEvent); return; }
     const work = e.target.closest("[data-work]");
     if (work && !e.target.closest("[data-read]")) { navigate("work/" + work.dataset.work); return; }
 
