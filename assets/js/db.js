@@ -511,6 +511,7 @@ window.WispDB = (function () {
     if (!user) throw new Error("Sign in first.");
     const row = { title: f.title, kind: f.kind || "Collection", note: f.note || "", day: f.day || "", month: f.month || "", sort: +f.sort || 0 };
     if (f.starts_at !== undefined) row.starts_at = f.starts_at;
+    if (f.ends_at !== undefined) row.ends_at = f.ends_at;
     const { data, error } = await client.from("events").insert(row).select().single();
     if (error) throw error;
     return data;
@@ -518,7 +519,7 @@ window.WispDB = (function () {
   async function updateEvent(id, f) {
     if (!user) throw new Error("Sign in first.");
     const patch = {};
-    ["title", "kind", "note", "day", "month", "sort", "starts_at"].forEach(k => { if (f[k] !== undefined) patch[k] = f[k]; });
+    ["title", "kind", "note", "day", "month", "sort", "starts_at", "ends_at"].forEach(k => { if (f[k] !== undefined) patch[k] = f[k]; });
     const { error } = await client.from("events").update(patch).eq("id", id);
     if (error) throw error;
   }

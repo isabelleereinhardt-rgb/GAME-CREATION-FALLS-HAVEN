@@ -2451,12 +2451,17 @@
               // are both derived from it (in Eastern Time); otherwise fall back to
               // the stored day/month text with no countdown.
               const dm = e.starts_at ? easternDayMonth(e.starts_at) : { day: e.d || e.day || "", month: e.m || e.month || "" };
-              const upcoming = e.starts_at && new Date(e.starts_at).getTime() > Date.now();
-              const countdown = e.starts_at
-                ? (upcoming
-                    ? `<div class="event__count"><span class="ch-countdown" data-countdown="${esc(e.starts_at)}" data-countdown-label="Starts in" data-countdown-done="Happening now">Starts in: &hellip;</span></div>`
-                    : `<div class="event__count is-due">Happening now</div>`)
-                : "";
+              const now = Date.now();
+              const startMs = e.starts_at ? new Date(e.starts_at).getTime() : null;
+              const endMs = e.ends_at ? new Date(e.ends_at).getTime() : null;
+              let countdown = "";
+              if (startMs && now < startMs) {
+                countdown = `<div class="event__count"><span class="ch-countdown" data-countdown="${esc(e.starts_at)}" data-countdown-label="Starts in" data-countdown-done="Happening now">Starts in: &hellip;</span></div>`;
+              } else if (startMs && endMs && now >= endMs) {
+                countdown = `<div class="event__count muted">Ended ${esc(fmtEasternStamp(e.ends_at))}</div>`;
+              } else if (startMs) {
+                countdown = `<div class="event__count is-due">Happening now${endMs ? ", ends " + esc(fmtEasternStamp(e.ends_at)) : ""}</div>`;
+              }
               return `<div class="event">
                 <div class="event__date"><b>${esc(dm.day)}</b><span class="muted" style="font-size:12px">${esc(dm.month)}</span></div>
                 <div style="flex:1">
@@ -4485,6 +4490,7 @@
             <input type="text" id="ae-note" placeholder="Short note (optional)">
             <label class="admin-add__lbl">Start date and time (Eastern Time), optional. Readers see a live countdown to it.</label>
             ${datePickerHTML("ae")}
+            ${durationHTML("ae", 1, "days")}
             <div class="admin-add__row">
               <button class="btn btn--primary btn--sm" data-admin-add-event>Add event</button>
               <span class="muted admin-echo" id="ae-echo" style="font-size:12px"></span>
@@ -4541,14 +4547,38 @@
     wireAdminPanel(events, hubs);
   }
 
-  // Build the Eastern start time (+ derived badge) for the event forms.
-  function eventTimeFields(raw) {
+  // Build the Eastern start time, derived badge, and end time (from a duration)
+  // for the event forms. durVal + durUnit ("hours"|"days") give the length.
+  function eventTimeFields(raw, durVal, durUnit) {
     const fields = {};
     if (raw) {
       const inst = easternWallToInstant(raw);
-      if (!isNaN(inst.getTime())) { fields.starts_at = inst.toISOString(); const dm = easternDayMonth(fields.starts_at); fields.day = dm.day; fields.month = dm.month; }
+      if (!isNaN(inst.getTime())) {
+        fields.starts_at = inst.toISOString();
+        const dm = easternDayMonth(fields.starts_at); fields.day = dm.day; fields.month = dm.month;
+        const n = Math.max(0, +durVal || 0);
+        fields.ends_at = n > 0 ? new Date(inst.getTime() + n * (durUnit === "hours" ? 3600000 : 86400000)).toISOString() : null;
+      }
     }
     return fields;
+  }
+  // Read a stored start/end back into a duration value + unit for the edit form.
+  function durationOf(startsAt, endsAt) {
+    if (!startsAt || !endsAt) return { val: 1, unit: "days" };
+    const ms = new Date(endsAt).getTime() - new Date(startsAt).getTime();
+    if (!(ms > 0)) return { val: 1, unit: "days" };
+    if (ms % 86400000 === 0) return { val: ms / 86400000, unit: "days" };
+    return { val: Math.max(1, Math.round(ms / 3600000)), unit: "hours" };
+  }
+  function durationHTML(pfx, val, unit) {
+    return `<div class="admin-add__row">
+      <span class="admin-add__lbl" style="margin:0">Lasts</span>
+      <input type="number" id="${pfx}-dur" min="1" value="${esc(String(val))}" style="width:64px">
+      <select id="${pfx}-dur-unit" class="ty-font" style="width:auto">
+        <option value="hours"${unit === "hours" ? " selected" : ""}>hours</option>
+        <option value="days"${unit === "days" ? " selected" : ""}>days</option>
+      </select>
+    </div>`;
   }
 
   function wireAdminPanel(events, hubs) {
@@ -4569,14 +4599,23 @@
       const h = (hubs || []).find(x => String(x.id) === b.dataset.adminEditHub); if (h) openEditHub(h);
     }));
 
-    const aeEcho = function () { const el = $("#ae-echo"); if (!el) return; const raw = readDatePicker("ae"); el.textContent = raw ? "Starts " + fmtEasternStamp(easternWallToInstant(raw).toISOString()) : "No date set; no countdown."; };
-    initDatePicker("ae", "", aeEcho); aeEcho();
+    const aeEcho = function () {
+      const el = $("#ae-echo"); if (!el) return; const raw = readDatePicker("ae");
+      if (!raw) { el.textContent = "No date set; no countdown."; return; }
+      const f = eventTimeFields(raw, ($("#ae-dur") || {}).value, ($("#ae-dur-unit") || {}).value);
+      el.textContent = "Starts " + fmtEasternStamp(f.starts_at) + (f.ends_at ? ", ends " + fmtEasternStamp(f.ends_at) : "");
+    };
+    initDatePicker("ae", "", aeEcho);
+    const aeDur = card.querySelector("#ae-dur"), aeDurU = card.querySelector("#ae-dur-unit");
+    aeDur && aeDur.addEventListener("input", aeEcho); aeDurU && aeDurU.addEventListener("change", aeEcho);
+    aeEcho();
 
     const addEvent = card.querySelector("[data-admin-add-event]");
     addEvent && addEvent.addEventListener("click", async () => {
       const title = $("#ae-title").value.trim();
       if (!title) { toast("Give the event a title."); return; }
-      const fields = Object.assign({ title, kind: $("#ae-kind").value.trim(), note: $("#ae-note").value.trim(), sort: 100 }, eventTimeFields(readDatePicker("ae")));
+      const fields = Object.assign({ title, kind: $("#ae-kind").value.trim(), note: $("#ae-note").value.trim(), sort: 100 },
+        eventTimeFields(readDatePicker("ae"), $("#ae-dur").value, $("#ae-dur-unit").value));
       try { await WispDB.createEvent(fields); toast("Event added."); renderAdminPanel(); }
       catch (e) { toast((e && e.message) || "Could not add the event."); }
     });
@@ -4655,6 +4694,7 @@
 
   function openEditEvent(ev) {
     const whenVal = ev.starts_at ? toEasternInputValue(new Date(ev.starts_at)) : "";
+    const eeDur = durationOf(ev.starts_at, ev.ends_at);
     openModal(`
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <h2 style="font-size:20px">Edit event</h2>
@@ -4663,16 +4703,25 @@
       <div class="field"><label>Title</label><input type="text" id="ee-title" value="${esc(ev.title || "")}"></div>
       <div class="field"><label>Kind</label><input type="text" id="ee-kind" value="${esc(ev.kind || "")}"></div>
       <div class="field"><label>Note</label><textarea id="ee-note" rows="2">${esc(ev.note || "")}</textarea></div>
-      <div class="field"><label>Start date and time (Eastern Time)</label>${datePickerHTML("ee")}<p class="muted" id="ee-echo" style="font-size:12px;margin:6px 0 0"></p></div>
+      <div class="field"><label>Start date and time (Eastern Time)</label>${datePickerHTML("ee")}${durationHTML("ee", eeDur.val, eeDur.unit)}<p class="muted" id="ee-echo" style="font-size:12px;margin:6px 0 0"></p></div>
       <div class="modal-actions">
         <button class="btn btn--quiet" data-modal-cancel>Cancel</button>
         <button class="btn btn--primary" id="ee-save">Save event</button>
       </div>`, "Edit event");
-    const echo = () => { const el = $("#ee-echo"); if (!el) return; const raw = readDatePicker("ee"); el.textContent = raw ? "Starts " + fmtEasternStamp(easternWallToInstant(raw).toISOString()) : "No start time; no countdown."; };
-    initDatePicker("ee", whenVal, echo); echo();
+    const echo = () => {
+      const el = $("#ee-echo"); if (!el) return; const raw = readDatePicker("ee");
+      if (!raw) { el.textContent = "No start time; no countdown."; return; }
+      const f = eventTimeFields(raw, ($("#ee-dur") || {}).value, ($("#ee-dur-unit") || {}).value);
+      el.textContent = "Starts " + fmtEasternStamp(f.starts_at) + (f.ends_at ? ", ends " + fmtEasternStamp(f.ends_at) : "");
+    };
+    initDatePicker("ee", whenVal, echo);
+    const eeDurEl = $("#ee-dur"), eeDurU = $("#ee-dur-unit");
+    eeDurEl && eeDurEl.addEventListener("input", echo); eeDurU && eeDurU.addEventListener("change", echo);
+    echo();
     $("#ee-save").addEventListener("click", async () => {
       const title = $("#ee-title").value.trim(); if (!title) { toast("Give the event a title."); return; }
-      const fields = Object.assign({ title, kind: $("#ee-kind").value.trim(), note: $("#ee-note").value.trim(), starts_at: null, day: "", month: "" }, eventTimeFields(readDatePicker("ee")));
+      const fields = Object.assign({ title, kind: $("#ee-kind").value.trim(), note: $("#ee-note").value.trim(), starts_at: null, ends_at: null, day: "", month: "" },
+        eventTimeFields(readDatePicker("ee"), $("#ee-dur").value, $("#ee-dur-unit").value));
       try { await WispDB.updateEvent(ev.id, fields); toast("Event updated."); renderAdminPanel(); }
       catch (e) { toast((e && e.message) || "Could not update the event."); }
     });
