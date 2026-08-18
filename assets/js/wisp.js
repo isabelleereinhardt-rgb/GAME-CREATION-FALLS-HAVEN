@@ -3434,6 +3434,7 @@
     let w = null;
     try {
       w = await WispDB.getWork(id);
+      if (!w) throw new Error("not found");
       LIVE.byId[id] = w;
       const chs = await WispDB.getChapters(id).catch(() => []);
       LIVE.chapters[id] = chs;
@@ -3448,12 +3449,26 @@
       const target = (chapterNum && readable.find(c => c.number === +chapterNum)) || readable[0];
       if (target) LIVE.reactions[target.id] = await WispDB.getReactions(target.id).catch(() => ({}));
     } catch (e) {
-      const dw = W.byId[id];                                // fall back to a demo/sample chapter
-      if (needsGate(dw)) { showGate(dw, () => renderReading(id)); return; }
-      renderReading(id || "amber"); return;
+      // Only a genuine bundled sample falls back to demo content. A real work id
+      // that no longer resolves (deleted, unpublished, or a stale link) must not
+      // show anyone else's work or a demo stand-in: it's gone.
+      delete LIVE.byId[id];
+      const dw = W.byId[id];
+      if (dw) {
+        if (needsGate(dw)) { showGate(dw, () => renderReading(id)); return; }
+        renderReading(id); return;
+      }
+      renderReadingGone(); return;
     }
     if (needsGate(w)) { showGate(w, () => renderReading(id, chapterNum)); return; }
     renderReading(id, chapterNum);
+  }
+  function renderReadingGone() {
+    $("#screen-reading").innerHTML = `<div class="reader"><div class="reader__wrap" style="text-align:center;padding:64px 20px">
+      <h1 class="reader__title" style="font-size:26px">This work isn't available</h1>
+      <p class="soft" style="font-size:15px;margin-top:10px;color:var(--ink3);line-height:1.6">It may have been removed by its author, or the link is out of date. Deleted works can't be opened, even from an old link.</p>
+      <div style="margin-top:22px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn btn--primary" data-nav="browse">${icon("search",16)} Browse works</button><button class="btn btn--quiet" data-nav="home">Home</button></div>
+    </div></div>`;
   }
 
   /* ---- writing desk (live) ----------------------------------------------- */
