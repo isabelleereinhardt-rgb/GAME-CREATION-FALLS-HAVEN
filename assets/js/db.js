@@ -220,6 +220,7 @@ window.WispDB = (function () {
     if (f.series_id !== undefined) row.series_id = f.series_id;
     if (f.book_number !== undefined) row.book_number = f.book_number;
     if (f.schedule !== undefined) row.schedule = f.schedule;
+    if (f.format) row.format = f.format;
     ["comments_enabled", "logged_in_only", "hide_stats"].forEach(k => { if (f[k] !== undefined) row[k] = f[k]; });
     const { data, error } = await client.from("works").insert(row).select().single();
     if (error) throw error;

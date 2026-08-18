@@ -14,7 +14,7 @@
 
   /* ---- settings and persistence (stands in for server-side sync) --------- */
   const DEFAULTS = { theme:"cream", accent:"default", face:"humanist", size:19, measure:66,
-                     dyslexia:false, motion:false, justify:false, margins:true, view:"gallery", adultOK:false, introSeen:false };
+                     dyslexia:false, motion:false, justify:false, margins:true, view:"gallery", adultOK:false, introSeen:false, comicMode:"strip" };
   let settings = load();
   function load() {
     try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem("wisp.settings") || "{}")); }
@@ -63,6 +63,11 @@
   let liveEditor = null;   // { work, chapter } when editing a real work, else null
   let editorCover = null;  // uploaded cover URL for the current editor session
   let coverCleared = false; // true when the author removed an existing cover
+  let editorFormat = "prose";   // "prose" or "comic" for the work being edited
+  let editorPages = [];         // comic page image URLs, in order
+  let editorProseHTML = "";     // stashed prose editor HTML, so a format toggle doesn't lose it
+  let comicIndex = 0;           // current page in the comic reader's single-page mode
+  let comicKeyHandler = null;   // keydown handler for comic paging, removed between renders
   let pendingSeries = null; // series name to prefill when starting a new book in a series
   let guestBrowsing = false; // set when a visitor chooses to look around without an account
   function isLive() { return !!(window.WispDB && WispDB.enabled); }
@@ -1101,31 +1106,48 @@
     const idx = ch ? readable.findIndex(c => c.number === ch.number) : -1;
     const prev = idx > 0 ? readable[idx - 1] : null;
     const next = idx >= 0 && idx < readable.length - 1 ? readable[idx + 1] : null;
-    const paras = ch ? mdToHtmlBlocks(ch.body) : [];
+    const isComic = w.format === "comic";
+    const paras = ch ? (isComic ? splitPages(ch.body) : mdToHtmlBlocks(ch.body)) : [];
     const byPara = (ch && LIVE.comments[ch.id]) || {};
+    if (isComic) comicIndex = 0;
+    const comicMode = settings.comicMode || "strip";
 
     const proseHTML = paras.length
-      ? paras.map((html, i) => {
+      ? paras.map((item, i) => {
           const n = (byPara[i] || []).length;
-          return `<div class="para" data-lpara="${i}">
-            ${commentsOn ? `<button class="para__marker" data-lmark="${i}" aria-label="Open the conversation on this line">${icon("comment",15)}${n ? `<span class="para__count">${n}</span>` : ""}</button>` : ""}
-            ${html}
+          const inner = isComic
+            ? `<img class="comic-page-img" src="${esc(item)}" alt="Page ${i + 1}" loading="lazy" decoding="async">`
+            : item;
+          return `<div class="para${isComic ? " para--page" : ""}${isComic && i === 0 ? " is-current" : ""}" data-lpara="${i}">
+            ${commentsOn ? `<button class="para__marker" data-lmark="${i}" aria-label="Open the conversation on this ${isComic ? "page" : "line"}">${icon("comment",15)}${n ? `<span class="para__count">${n}</span>` : ""}</button>` : ""}
+            ${inner}
             <div class="thread-slot" data-lslot="${i}"></div>
           </div>`;
         }).join("")
-      : `<div class="note"><p>This work has no published chapters yet.</p></div>`;
+      : `<div class="note"><p>${isComic ? "This comic has no pages yet." : "This work has no published chapters yet."}</p></div>`;
 
     $("#screen-reading").innerHTML = `
-      <div class="reader">
+      <div class="reader${isComic ? " reader--comic" : ""}">
         <div class="reader__progress" id="readProgress"><i></i></div>
         <div class="reader__wrap" id="readerWrap">
           <div class="reader__crumbs"><a href="#/work/${w.id}">${esc(w.title)}</a> ${icon("chev",12)} <span>Chapter ${ch ? ch.number : 1}${readable.length > 1 ? " of " + readable.length : ""}</span></div>
           <h1 class="reader__title">${esc(w.title)}</h1>
           <div class="reader__by">by <a href="#/${w.authorId ? "user/" + (w.authorHandle || w.authorId) : "work/" + w.id}">${esc(w.author)}</a></div>
           ${ch ? `<div class="reader__chapter">Chapter ${ch.number}</div>${ch.title ? `<div class="reader__chapter-title">${esc(ch.title)}</div>` : ""}` : ""}
-          <div class="prose" id="prose" data-justify="${settings.justify ? "on" : "off"}" data-hyphen="${settings.justify ? "on" : "off"}">
+          ${isComic && paras.length ? `<div class="comic-bar">
+            <div class="seg seg--sm" role="group" aria-label="Reading mode">
+              <button data-comic-mode="strip" class="${comicMode === "strip" ? "is-on" : ""}" aria-pressed="${comicMode === "strip"}">Long strip</button>
+              <button data-comic-mode="single" class="${comicMode === "single" ? "is-on" : ""}" aria-pressed="${comicMode === "single"}">Single page</button>
+            </div>
+          </div>` : ""}
+          <div class="prose" id="prose" data-comic="${isComic ? "on" : "off"}" data-comic-mode="${isComic ? comicMode : "strip"}" data-justify="${settings.justify ? "on" : "off"}" data-hyphen="${settings.justify ? "on" : "off"}">
             ${proseHTML}
           </div>
+          ${isComic && paras.length ? `<div class="comic-pager" id="comicPager" style="${comicMode === "single" ? "" : "display:none"}">
+            <button class="btn btn--quiet btn--sm" data-comic-prev>${icon("chev",13).replace("<svg", "<svg style='transform:rotate(180deg)'")} Prev</button>
+            <span class="comic-pager__count" id="comicCount">Page 1 / ${paras.length}</span>
+            <button class="btn btn--quiet btn--sm" data-comic-next>Next ${icon("chev",13)}</button>
+          </div>` : ""}
           ${readable.length > 1 ? `<div class="chapter-nav">
             ${prev ? `<button class="btn btn--quiet btn--sm" data-read="${w.id}/${prev.number}">&lsaquo; Previous</button>` : "<span></span>"}
             <button class="btn--link" data-work="${w.id}">Chapter index</button>
@@ -1142,8 +1164,59 @@
 
     mountReaderTools();
     if (ch) { wireLiveReading(w, ch); wireLiveHighlights(w, ch); wireReadingGlobalsOnce(); }
+    if (ch && isComic && paras.length) wireComicReader(paras.length);
     // Record that this work was opened, for history + Continue reading.
     if (WispDB.signedIn && ch) WispDB.saveProgress(w.id, ch.number, 0);
+  }
+
+  // The comic reader: long-strip by default, or single-page with a counter,
+  // arrow keys, and click-to-turn. The mode is remembered on the device.
+  function wireComicReader(count) {
+    const prose = $("#prose");
+    if (!prose || prose.dataset.comic !== "on") return;
+    const pager = $("#comicPager"), countEl = $("#comicCount");
+    const pages = () => $$("#prose .para--page");
+    const setCurrent = (i) => {
+      comicIndex = Math.max(0, Math.min(count - 1, i));
+      pages().forEach((p, idx) => p.classList.toggle("is-current", idx === comicIndex));
+      if (countEl) countEl.textContent = `Page ${comicIndex + 1} / ${count}`;
+      if (prose.dataset.comicMode === "single") {
+        const cur = pages()[comicIndex];
+        if (cur) cur.scrollIntoView({ block: "start", behavior: "auto" });
+      }
+    };
+    const setMode = (mode) => {
+      settings.comicMode = mode; save();
+      prose.dataset.comicMode = mode;
+      $$("#screen-reading .comic-bar [data-comic-mode]").forEach(b => {
+        const on = b.dataset.comicMode === mode; b.classList.toggle("is-on", on); b.setAttribute("aria-pressed", String(on));
+      });
+      if (pager) pager.style.display = mode === "single" ? "" : "none";
+      if (mode === "single") setCurrent(comicIndex);
+    };
+    $$("#screen-reading .comic-bar [data-comic-mode]").forEach(b => b.addEventListener("click", () => setMode(b.dataset.comicMode)));
+    if (pager) {
+      const p = pager.querySelector("[data-comic-prev]"), n = pager.querySelector("[data-comic-next]");
+      if (p) p.addEventListener("click", () => setCurrent(comicIndex - 1));
+      if (n) n.addEventListener("click", () => setCurrent(comicIndex + 1));
+    }
+    // Tap the right or left half of the current page to turn, in single mode.
+    prose.addEventListener("click", (e) => {
+      if (prose.dataset.comicMode !== "single") return;
+      if (e.target.closest(".para__marker") || e.target.closest(".thread")) return;
+      const img = e.target.closest(".comic-page-img"); if (!img) return;
+      const r = img.getBoundingClientRect();
+      setCurrent(comicIndex + ((e.clientX - r.left) > r.width / 2 ? 1 : -1));
+    });
+    // Arrow keys, only while reading a comic in single-page mode.
+    if (comicKeyHandler) document.removeEventListener("keydown", comicKeyHandler);
+    comicKeyHandler = (e) => {
+      if (currentScreen !== "reading" || prose.dataset.comicMode !== "single") return;
+      if (e.key === "ArrowRight") { e.preventDefault(); setCurrent(comicIndex + 1); }
+      else if (e.key === "ArrowLeft") { e.preventDefault(); setCurrent(comicIndex - 1); }
+    };
+    document.addEventListener("keydown", comicKeyHandler);
+    setMode(settings.comicMode || "strip");
   }
 
   // Text-selection highlight popover for real works: saves to the highlights
@@ -1741,6 +1814,86 @@
     return blocks.length ? blocks.join("") : "<p></p>";
   }
 
+  // A comic chapter's body is its page image URLs, one per line.
+  function splitPages(body) {
+    return String(body || "").split(/\r?\n+/).map(s => s.trim()).filter(u => /^https?:\/\//i.test(u));
+  }
+
+  // The editor's main writing area swaps between prose and a comic page manager.
+  function proseZoneHTML(bodyHTML) {
+    return `
+      <div class="toolbar" role="toolbar" aria-label="Formatting">
+        <button type="button" title="Heading" data-fmt="h2">H</button>
+        <button type="button" title="Bold" data-fmt="bold"><b>B</b></button>
+        <button type="button" title="Italic" data-fmt="italic"><i>I</i></button>
+        <button type="button" title="Quote" data-fmt="quote">&ldquo;</button>
+        <span class="sep"></span>
+        <button type="button" title="Bulleted list" data-fmt="ul">&bull;</button>
+        <button type="button" title="Numbered list" data-fmt="ol">1.</button>
+        <button type="button" title="Link" data-fmt="link">${icon("tag",15)}</button>
+        <span class="sep"></span>
+        <button type="button" title="Horizontal rule" data-fmt="hr"><span style="display:inline-block;width:16px;height:2px;background:currentColor;border-radius:2px"></span></button>
+        <span style="margin-left:auto;font-size:12px;color:var(--ink3);padding:0 8px">Markdown shortcuts on</span>
+      </div>
+      <div class="editor" id="we-body" contenteditable="true" spellcheck="true" aria-label="Chapter body">${bodyHTML}</div>`;
+  }
+  function comicZoneHTML() {
+    return `
+      <div class="comic-editor">
+        <div class="comic-editor__head">
+          <span>Pages <span class="muted">(${editorPages.length})</span></span>
+          <span class="comic-editor__add">
+            <label class="btn btn--quiet btn--sm" for="we-page-file">${icon("plus",13)} Upload<input type="file" id="we-page-file" accept="image/*" hidden></label>
+            <button type="button" class="btn btn--quiet btn--sm" data-page-url>${icon("plus",13)} Add by URL</button>
+          </span>
+        </div>
+        ${editorPages.length
+          ? `<div class="comic-pages">${editorPages.map((u, i) => `
+              <div class="comic-page">
+                <span class="comic-page__n">${i + 1}</span>
+                <img src="${esc(u)}" alt="Page ${i + 1}" class="comic-page__img" loading="lazy">
+                <div class="comic-page__acts">
+                  <button type="button" class="cact" data-page-up="${i}" ${i === 0 ? "disabled" : ""} aria-label="Move up">&uarr;</button>
+                  <button type="button" class="cact" data-page-down="${i}" ${i === editorPages.length - 1 ? "disabled" : ""} aria-label="Move down">&darr;</button>
+                  <button type="button" class="cact" data-page-del="${i}" aria-label="Remove page">Remove</button>
+                </div>
+              </div>`).join("")}</div>`
+          : `<p class="muted" style="padding:18px 2px;line-height:1.6">No pages yet. Upload your first page, or add one by URL. Each image is one page; readers scroll it top to bottom.</p>`}
+      </div>`;
+  }
+  function bodyZoneHTML(bodyHTML) {
+    return editorFormat === "comic" ? comicZoneHTML() : proseZoneHTML(bodyHTML == null ? editorProseHTML : bodyHTML);
+  }
+  function refreshBodyZone() {
+    const z = $("#we-body-zone");
+    if (!z) return;
+    z.innerHTML = bodyZoneHTML();
+    wireBodyZone();
+  }
+  function wireBodyZone() {
+    if (editorFormat !== "comic") return;
+    const addPage = (url) => { if (url) { editorPages.push(url); refreshBodyZone(); } };
+    const fileInput = $("#we-page-file");
+    if (fileInput) fileInput.addEventListener("change", async () => {
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      if (!isLive()) { toast("Connect Supabase to upload pages."); fileInput.value = ""; return; }
+      if (!WispDB.signedIn) { openAuth("in"); return; }
+      try { const url = await WispDB.uploadCover(file); addPage(url); toast("Page added."); }
+      catch (e) { toast((e && e.message) || "Could not upload the page."); }
+    });
+    const urlBtn = $("#we-body-zone [data-page-url]");
+    if (urlBtn) urlBtn.addEventListener("click", () => {
+      const url = (window.prompt("Image address for this page (https://...)", "https://") || "").trim();
+      if (!url || url === "https://") return;
+      if (!/^https?:\/\//i.test(url)) { toast("Page addresses need to start with https://"); return; }
+      addPage(url);
+    });
+    $$("#we-body-zone [data-page-del]").forEach(b => b.addEventListener("click", () => { editorPages.splice(+b.dataset.pageDel, 1); refreshBodyZone(); }));
+    $$("#we-body-zone [data-page-up]").forEach(b => b.addEventListener("click", () => { const i = +b.dataset.pageUp; if (i > 0) { [editorPages[i - 1], editorPages[i]] = [editorPages[i], editorPages[i - 1]]; refreshBodyZone(); } }));
+    $$("#we-body-zone [data-page-down]").forEach(b => b.addEventListener("click", () => { const i = +b.dataset.pageDown; if (i < editorPages.length - 1) { [editorPages[i + 1], editorPages[i]] = [editorPages[i], editorPages[i + 1]]; refreshBodyZone(); } }));
+  }
+
   function renderWriteEditor(work) {
     const isNew = !work;
     const editingLive = !!(work && work._db);
@@ -1760,6 +1913,11 @@
     editorCover = coverIsImage ? work.cover : null;
     coverCleared = false;
 
+    // Prose or comic. A comic chapter's body is a list of page image URLs.
+    editorFormat = (work && work.format === "comic") ? "comic" : "prose";
+    editorPages = (editorFormat === "comic" && editingLive && liveEditor && liveEditor.chapter)
+      ? splitPages(liveEditor.chapter.body) : [];
+
     // The editor holds one chapter at a time. Live edits load the real text;
     // otherwise the editor opens on a fresh chapter.
     const bodyHTML = editingLive && liveEditor && liveEditor.chapter
@@ -1767,6 +1925,7 @@
       : `<h2>Chapter ${chapters + 1}${isNew ? ": Untitled" : ""}</h2>
          <p>${isNew ? "Start typing, or paste from another editor." : "Pick up where you left off. Your writing saves automatically."}</p>
          <p>Format with the toolbar above, or use Markdown shortcuts.</p>`;
+    editorProseHTML = bodyHTML;
 
     const liveChs = editingLive && liveEditor && liveEditor.allChapters ? liveEditor.allChapters : null;
     const partsHTML = liveChs
@@ -1804,20 +1963,7 @@
         <div class="writer">
           <div>
             <input class="title-input" id="we-title" placeholder="Title your work" value="${esc(title)}">
-            <div class="toolbar" role="toolbar" aria-label="Formatting">
-              <button type="button" title="Heading" data-fmt="h2">H</button>
-              <button type="button" title="Bold" data-fmt="bold"><b>B</b></button>
-              <button type="button" title="Italic" data-fmt="italic"><i>I</i></button>
-              <button type="button" title="Quote" data-fmt="quote">&ldquo;</button>
-              <span class="sep"></span>
-              <button type="button" title="Bulleted list" data-fmt="ul">&bull;</button>
-              <button type="button" title="Numbered list" data-fmt="ol">1.</button>
-              <button type="button" title="Link" data-fmt="link">${icon("tag",15)}</button>
-              <span class="sep"></span>
-              <button type="button" title="Horizontal rule" data-fmt="hr"><span style="display:inline-block;width:16px;height:2px;background:currentColor;border-radius:2px"></span></button>
-              <span style="margin-left:auto;font-size:12px;color:var(--ink3);padding:0 8px">Markdown shortcuts on</span>
-            </div>
-            <div class="editor" id="we-body" contenteditable="true" spellcheck="true" aria-label="Chapter body">${bodyHTML}</div>
+            <div id="we-body-zone">${bodyZoneHTML(bodyHTML)}</div>
             <div class="write-actions" style="margin-top:16px">
               <button class="btn btn--primary" data-publish="publish">Publish chapter</button>
               <button class="btn btn--quiet" data-publish="draft">Save draft</button>
@@ -1840,6 +1986,12 @@
                 <div class="seg" role="group" aria-label="Work type">
                   <button data-wtype="fan" class="${type === "fan" ? "is-on" : ""}" aria-pressed="${type === "fan"}">Fanwork</button>
                   <button data-wtype="original" class="${type === "original" ? "is-on" : ""}" aria-pressed="${type === "original"}">Original</button>
+                </div>
+              </div>
+              <div class="field"><label>Format</label>
+                <div class="seg" role="group" aria-label="Format">
+                  <button data-wformat="prose" class="${editorFormat === "prose" ? "is-on" : ""}" aria-pressed="${editorFormat === "prose"}">Prose</button>
+                  <button data-wformat="comic" class="${editorFormat === "comic" ? "is-on" : ""}" aria-pressed="${editorFormat === "comic"}">Comic</button>
                 </div>
               </div>
               ${typeFields}
@@ -1887,6 +2039,8 @@
           </aside>
         </div>
       </div>`;
+
+    wireBodyZone();   // comic page manager, when the work is a comic
 
     // Real cover upload (live mode only; demo mode explains it needs a backend).
     const coverInput = $("#we-cover-file");
@@ -3373,6 +3527,17 @@
 
     const wt = e.target.closest("#screen-write [data-wtype]");
     if (wt) { $$("#screen-write [data-wtype]").forEach(b => { const on = b === wt; b.classList.toggle("is-on", on); b.setAttribute("aria-pressed", String(on)); }); return; }
+    const wf = e.target.closest("#screen-write [data-wformat]");
+    if (wf) {
+      const next = wf.dataset.wformat;
+      if (next !== editorFormat) {
+        if (editorFormat === "prose") { const ed = $("#we-body"); if (ed) editorProseHTML = ed.innerHTML; }
+        editorFormat = next;
+        $$("#screen-write [data-wformat]").forEach(b => { const on = b === wf; b.classList.toggle("is-on", on); b.setAttribute("aria-pressed", String(on)); });
+        refreshBodyZone();
+      }
+      return;
+    }
     const wr = e.target.closest("#screen-write [data-wrate]");
     if (wr) { $$("#screen-write [data-wrate]").forEach(b => { const on = b === wr; b.classList.toggle("is-on", on); b.setAttribute("aria-pressed", String(on)); }); return; }
     const pub = e.target.closest("[data-publish]");
@@ -3861,7 +4026,14 @@
     if (!WispDB.signedIn) { openAuth("in"); return; }
     const val = (id) => { const e = $(id); return e ? e.value.trim() : ""; };
     const title = val("#we-title") || "Untitled";
-    const bodyEl = $("#we-body"); const body = bodyEl ? editorHtmlToMd(bodyEl) : "";
+    const format = editorFormat === "comic" ? "comic" : "prose";
+    let body;
+    if (format === "comic") {
+      if (kind === "publish" && !editorPages.length) { toast("Add at least one page before you publish."); return; }
+      body = editorPages.join("\n");
+    } else {
+      const bodyEl = $("#we-body"); body = bodyEl ? editorHtmlToMd(bodyEl) : "";
+    }
     const typeBtn = $("#screen-write [data-wtype].is-on"); const type = typeBtn ? typeBtn.dataset.wtype : "original";
     const rateBtn = $("#screen-write [data-wrate].is-on"); const rating = rateBtn ? rateBtn.dataset.wrate : "G";
     const tags = val("#we-tags").split(",").map(s => s.trim()).filter(Boolean);
@@ -3889,7 +4061,7 @@
       if (liveEditor && liveEditor.work) {
         // Editing an existing work: update its fields, its first chapter, and tags.
         const id = liveEditor.work.id;
-        const fields = { title, type, source, rating, status, series_id, warnings,
+        const fields = { title, type, source, rating, status, series_id, warnings, format,
           comments_enabled: controls.comments_enabled, logged_in_only: controls.logged_in_only, hide_stats: controls.hide_stats };
         if (editorCover) fields.cover_image_url = editorCover;
         else if (coverCleared) fields.cover_image_url = null;   // revert to the letter cover
@@ -3907,7 +4079,7 @@
         // New work.
         let book_number;
         if (series_id) book_number = (await WispDB.countInSeries(series_id).catch(() => 0)) + 1;
-        await WispDB.createWork({ title, type, source, rating, tags, warnings, chapterBody: body, status,
+        await WispDB.createWork({ title, type, source, rating, tags, warnings, chapterBody: body, status, format,
           cover_image_url: editorCover, series_id, book_number, scheduled_for,
           comments_enabled: controls.comments_enabled, logged_in_only: controls.logged_in_only, hide_stats: controls.hide_stats });
         toast(kind === "schedule" ? "Scheduled. It releases at the time you set."
