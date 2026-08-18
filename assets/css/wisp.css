@@ -1595,3 +1595,10 @@ mark.hl { background: color-mix(in srgb, var(--amber) 34%, transparent); border-
   position: sticky; top: 0; background: var(--surface, #fff); border-bottom: 1px solid var(--line2, var(--line)); }
 .notif-pop .rail__group { padding: 9px 15px 2px; font-size: 11px; }
 .notif-pop .act-list { padding: 2px 8px 8px; }
+
+/* ---- Event duration: days / hours / minutes ----------------------------- */
+.admin-dur { flex-wrap: wrap; }
+.admin-dur__f { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink2); }
+.admin-dur__f input { width: 54px; padding: 6px 7px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg, #fff); color: var(--ink); font-size: 12.5px; font-family: inherit; }
+.admin-dur__f input:focus { outline: none; border-color: var(--rose); }

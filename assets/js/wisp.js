@@ -4702,7 +4702,7 @@
             <input type="text" id="ae-note" placeholder="Short note (optional)">
             <label class="admin-add__lbl">Start date and time (Eastern Time), optional. Readers see a live countdown to it.</label>
             ${datePickerHTML("ae")}
-            ${durationHTML("ae", 1, "days")}
+            ${durationHTML("ae", 1, 0, 0)}
             <div class="admin-add__row">
               <button class="btn btn--primary btn--sm" data-admin-add-event>Add event</button>
               <span class="muted admin-echo" id="ae-echo" style="font-size:12px"></span>
@@ -4759,37 +4759,40 @@
     wireAdminPanel(events, hubs);
   }
 
-  // Build the Eastern start time, derived badge, and end time (from a duration)
-  // for the event forms. durVal + durUnit ("hours"|"days") give the length.
-  function eventTimeFields(raw, durVal, durUnit) {
+  // Build the Eastern start time, derived badge, and end time (from a duration
+  // given as days + hours + minutes) for the event forms.
+  function eventTimeFields(raw, dd, hh, mm) {
     const fields = {};
     if (raw) {
       const inst = easternWallToInstant(raw);
       if (!isNaN(inst.getTime())) {
         fields.starts_at = inst.toISOString();
         const dm = easternDayMonth(fields.starts_at); fields.day = dm.day; fields.month = dm.month;
-        const n = Math.max(0, +durVal || 0);
-        fields.ends_at = n > 0 ? new Date(inst.getTime() + n * (durUnit === "hours" ? 3600000 : 86400000)).toISOString() : null;
+        const ms = (Math.max(0, +dd || 0) * 86400 + Math.max(0, +hh || 0) * 3600 + Math.max(0, +mm || 0) * 60) * 1000;
+        fields.ends_at = ms > 0 ? new Date(inst.getTime() + ms).toISOString() : null;
       }
     }
     return fields;
   }
-  // Read a stored start/end back into a duration value + unit for the edit form.
-  function durationOf(startsAt, endsAt) {
-    if (!startsAt || !endsAt) return { val: 1, unit: "days" };
-    const ms = new Date(endsAt).getTime() - new Date(startsAt).getTime();
-    if (!(ms > 0)) return { val: 1, unit: "days" };
-    if (ms % 86400000 === 0) return { val: ms / 86400000, unit: "days" };
-    return { val: Math.max(1, Math.round(ms / 3600000)), unit: "hours" };
+  // Read the three duration inputs for a form prefix, as [days, hours, minutes].
+  function durValues(pfx) {
+    return [($("#" + pfx + "-dd") || {}).value, ($("#" + pfx + "-hh") || {}).value, ($("#" + pfx + "-mm") || {}).value];
   }
-  function durationHTML(pfx, val, unit) {
-    return `<div class="admin-add__row">
+  // Decompose a stored start/end back into days + hours + minutes for the edit form.
+  function durationOf(startsAt, endsAt) {
+    let ms = (startsAt && endsAt) ? (new Date(endsAt).getTime() - new Date(startsAt).getTime()) : 86400000;
+    if (!(ms > 0)) ms = 86400000;
+    const d = Math.floor(ms / 86400000); ms -= d * 86400000;
+    const h = Math.floor(ms / 3600000); ms -= h * 3600000;
+    const m = Math.round(ms / 60000);
+    return { d: d, h: h, m: m };
+  }
+  function durationHTML(pfx, d, h, m) {
+    return `<div class="admin-add__row admin-dur">
       <span class="admin-add__lbl" style="margin:0">Lasts</span>
-      <input type="number" id="${pfx}-dur" min="1" value="${esc(String(val))}" style="width:64px">
-      <select id="${pfx}-dur-unit" class="ty-font" style="width:auto">
-        <option value="hours"${unit === "hours" ? " selected" : ""}>hours</option>
-        <option value="days"${unit === "days" ? " selected" : ""}>days</option>
-      </select>
+      <label class="admin-dur__f"><input type="number" id="${pfx}-dd" min="0" max="365" value="${esc(String(d))}">days</label>
+      <label class="admin-dur__f"><input type="number" id="${pfx}-hh" min="0" max="23" value="${esc(String(h))}">hrs</label>
+      <label class="admin-dur__f"><input type="number" id="${pfx}-mm" min="0" max="59" value="${esc(String(m))}">min</label>
     </div>`;
   }
 
@@ -4814,12 +4817,11 @@
     const aeEcho = function () {
       const el = $("#ae-echo"); if (!el) return; const raw = readDatePicker("ae");
       if (!raw) { el.textContent = "No date set; no countdown."; return; }
-      const f = eventTimeFields(raw, ($("#ae-dur") || {}).value, ($("#ae-dur-unit") || {}).value);
+      const f = eventTimeFields(raw, ...durValues("ae"));
       el.textContent = "Starts " + fmtEasternStamp(f.starts_at) + (f.ends_at ? ", ends " + fmtEasternStamp(f.ends_at) : "");
     };
     initDatePicker("ae", "", aeEcho);
-    const aeDur = card.querySelector("#ae-dur"), aeDurU = card.querySelector("#ae-dur-unit");
-    aeDur && aeDur.addEventListener("input", aeEcho); aeDurU && aeDurU.addEventListener("change", aeEcho);
+    ["ae-dd", "ae-hh", "ae-mm"].forEach(id => { const el = card.querySelector("#" + id); el && el.addEventListener("input", aeEcho); });
     aeEcho();
 
     const addEvent = card.querySelector("[data-admin-add-event]");
@@ -4827,7 +4829,7 @@
       const title = $("#ae-title").value.trim();
       if (!title) { toast("Give the event a title."); return; }
       const fields = Object.assign({ title, kind: $("#ae-kind").value.trim(), note: $("#ae-note").value.trim(), sort: 100 },
-        eventTimeFields(readDatePicker("ae"), $("#ae-dur").value, $("#ae-dur-unit").value));
+        eventTimeFields(readDatePicker("ae"), ...durValues("ae")));
       try { await WispDB.createEvent(fields); toast("Event added."); renderAdminPanel(); }
       catch (e) { toast((e && e.message) || "Could not add the event."); }
     });
@@ -4915,7 +4917,7 @@
       <div class="field"><label>Title</label><input type="text" id="ee-title" value="${esc(ev.title || "")}"></div>
       <div class="field"><label>Kind</label><input type="text" id="ee-kind" value="${esc(ev.kind || "")}"></div>
       <div class="field"><label>Note</label><textarea id="ee-note" rows="2">${esc(ev.note || "")}</textarea></div>
-      <div class="field"><label>Start date and time (Eastern Time)</label>${datePickerHTML("ee")}${durationHTML("ee", eeDur.val, eeDur.unit)}<p class="muted" id="ee-echo" style="font-size:12px;margin:6px 0 0"></p></div>
+      <div class="field"><label>Start date and time (Eastern Time)</label>${datePickerHTML("ee")}${durationHTML("ee", eeDur.d, eeDur.h, eeDur.m)}<p class="muted" id="ee-echo" style="font-size:12px;margin:6px 0 0"></p></div>
       <div class="modal-actions">
         <button class="btn btn--quiet" data-modal-cancel>Cancel</button>
         <button class="btn btn--primary" id="ee-save">Save event</button>
@@ -4923,17 +4925,16 @@
     const echo = () => {
       const el = $("#ee-echo"); if (!el) return; const raw = readDatePicker("ee");
       if (!raw) { el.textContent = "No start time; no countdown."; return; }
-      const f = eventTimeFields(raw, ($("#ee-dur") || {}).value, ($("#ee-dur-unit") || {}).value);
+      const f = eventTimeFields(raw, ...durValues("ee"));
       el.textContent = "Starts " + fmtEasternStamp(f.starts_at) + (f.ends_at ? ", ends " + fmtEasternStamp(f.ends_at) : "");
     };
     initDatePicker("ee", whenVal, echo);
-    const eeDurEl = $("#ee-dur"), eeDurU = $("#ee-dur-unit");
-    eeDurEl && eeDurEl.addEventListener("input", echo); eeDurU && eeDurU.addEventListener("change", echo);
+    ["ee-dd", "ee-hh", "ee-mm"].forEach(id => { const el = $("#" + id); el && el.addEventListener("input", echo); });
     echo();
     $("#ee-save").addEventListener("click", async () => {
       const title = $("#ee-title").value.trim(); if (!title) { toast("Give the event a title."); return; }
       const fields = Object.assign({ title, kind: $("#ee-kind").value.trim(), note: $("#ee-note").value.trim(), starts_at: null, ends_at: null, day: "", month: "" },
-        eventTimeFields(readDatePicker("ee"), $("#ee-dur").value, $("#ee-dur-unit").value));
+        eventTimeFields(readDatePicker("ee"), ...durValues("ee")));
       try { await WispDB.updateEvent(ev.id, fields); toast("Event updated."); renderAdminPanel(); }
       catch (e) { toast((e && e.message) || "Could not update the event."); }
     });
