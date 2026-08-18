@@ -687,6 +687,17 @@ a.card__title:hover { color: var(--rose-ink); }
 .dl-grid .btn { justify-content: flex-start; gap: 8px; }
 @media (max-width: 480px) { .dl-grid { grid-template-columns: 1fr; } }
 
+/* Saved searches on Browse. */
+.saved-searches { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+.saved-searches__label { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink3); text-transform: uppercase; letter-spacing: .04em; }
+.saved-searches__label svg { width: 13px; height: 13px; }
+.saved-chip { display: inline-flex; align-items: stretch; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--surface); }
+.saved-chip:hover { border-color: var(--rose); }
+.saved-chip__go { border: 0; background: none; color: var(--ink2); font: 13px var(--font-text); padding: 5px 4px 5px 12px; cursor: pointer; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved-chip__go:hover { color: var(--rose-ink); }
+.saved-chip__x { border: 0; background: none; color: var(--ink3); cursor: pointer; padding: 0 9px 0 6px; font-size: 15px; }
+.saved-chip__x:hover { color: var(--rose); }
+
 /* Reading-stats widget ("Your week"). */
 .rstats { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
 .rstat { display: flex; align-items: baseline; gap: 8px; }

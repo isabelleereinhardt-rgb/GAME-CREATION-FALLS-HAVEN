@@ -381,10 +381,67 @@
     if (userState.blockedUsers.size) list = list.filter(w => !userState.blockedUsers.has(w.author));
     return list;
   }
+  // ---- Saved searches (kept on this device) --------------------------------
+  function savedSearches() { return Array.isArray(settings.savedSearches) ? settings.savedSearches : []; }
+  function currentSearchSnapshot() {
+    return {
+      q: filterState.q || "", type: filterState.type || "all", sort: filterState.sort || "hearts",
+      ratings: Array.from(filterState.ratings), tagsInc: Array.from(filterState.tagsInc), tagsExc: Array.from(filterState.tagsExc)
+    };
+  }
+  function sameSearch(a, b) {
+    const norm = (s) => JSON.stringify({
+      q: s.q || "", type: s.type || "all", sort: s.sort || "hearts",
+      ratings: [...(s.ratings || [])].sort(), tagsInc: [...(s.tagsInc || [])].sort(), tagsExc: [...(s.tagsExc || [])].sort()
+    });
+    return norm(a) === norm(b);
+  }
+  function searchLabel(s) {
+    const bits = [];
+    if (s.q) bits.push(`“${s.q}”`);
+    if (s.type && s.type !== "all") bits.push(s.type === "fan" ? "Fanwork" : "Original");
+    (s.ratings || []).forEach(r => bits.push(RATE[r] || r));
+    (s.tagsInc || []).forEach(t => bits.push(t));
+    (s.tagsExc || []).forEach(t => bits.push("not " + t));
+    if (!bits.length) bits.push("All works");
+    return bits.join(" · ");
+  }
+  function saveCurrentSearch() {
+    const snap = currentSearchSnapshot();
+    const list = savedSearches().slice();
+    if (list.some(s => sameSearch(s, snap))) { toast("That search is already saved."); return; }
+    list.unshift(snap);
+    settings.savedSearches = list.slice(0, 12);
+    save();
+    renderBrowse();
+    toast("Search saved to this device.");
+  }
+  function applySavedSearch(i) {
+    const s = savedSearches()[i]; if (!s) return;
+    filterState.q = s.q || ""; filterState.type = s.type || "all"; filterState.sort = s.sort || "hearts";
+    filterState.ratings = new Set(s.ratings || []);
+    filterState.tagsInc = new Set(s.tagsInc || []);
+    filterState.tagsExc = new Set(s.tagsExc || []);
+    const si = $("#searchInput"); if (si) si.value = filterState.q;
+    refreshBrowse();
+  }
+  function removeSavedSearch(i) {
+    const list = savedSearches().slice();
+    list.splice(i, 1);
+    settings.savedSearches = list;
+    save();
+    renderBrowse();
+  }
+
   function renderBrowse() {
     const tags = allTags();
     const excCount = filterState.tagsExc.size;
     const results = browseResults();
+    const saved = savedSearches();
+    const savedHTML = saved.length ? `<div class="saved-searches">
+        <span class="saved-searches__label">${icon("bookmark",13)} Saved</span>
+        ${saved.map((s, i) => `<span class="saved-chip"><button class="saved-chip__go" data-apply-search="${i}">${esc(searchLabel(s))}</button><button class="saved-chip__x" data-del-search="${i}" aria-label="Remove saved search">&times;</button></span>`).join("")}
+      </div>` : "";
     const applied = [
       ...(filterState.q ? [`<button class="chip-x" data-clear="q">&ldquo;${esc(filterState.q)}&rdquo; &times;</button>`] : []),
       ...(filterState.type !== "all" ? [`<button class="chip-x" data-clear="type">${filterState.type === "fan" ? "Fanwork" : "Original"} ${icon("plus",12)}</button>`] : []),
@@ -453,6 +510,7 @@
                 </select>
               </div>
             </div>
+            ${savedHTML}
             ${applied ? `<div class="applied">${applied}</div>` : ""}
             ${results.length
               ? (settings.view === "list"
@@ -3538,7 +3596,11 @@
       else if (k === "q") { filterState.q = ""; const si = $("#searchInput"); if (si) si.value = ""; }
       refreshBrowse(); return;
     }
-    if (e.target.closest("#saveSearch")) { toast("Search saved. It won't send notifications."); return; }
+    if (e.target.closest("#saveSearch")) { saveCurrentSearch(); return; }
+    const applyS = e.target.closest("[data-apply-search]");
+    if (applyS) { applySavedSearch(+applyS.dataset.applySearch); return; }
+    const delS = e.target.closest("[data-del-search]");
+    if (delS) { removeSavedSearch(+delS.dataset.delSearch); return; }
   });
 
   /* ======================================================================= */
@@ -3974,8 +4036,6 @@
       else toast("Notifications show up in your activity feed. Most are off by default.");
     });
     $("#railSheet").addEventListener("click", (e) => { if (e.target.id === "railSheet" || e.target.closest("[data-railclose]")) closeOverlay($("#railSheet")); });
-    $("#addWidget").addEventListener("click", () => toast("Add widgets from the tray, like Lucky, highlighter, and read-aloud."));
-    $("#customizeWidgets").addEventListener("click", () => toast("Rearrange, add, or remove widgets."));
     $("#menuBtn").addEventListener("click", openSheet);
     $("#navSheet").addEventListener("click", (e) => { if (e.target.id === "navSheet") closeSheet(); });
 
