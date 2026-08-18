@@ -1990,7 +1990,7 @@
               </div>
               <div class="field"><label>Format</label>
                 <div class="seg" role="group" aria-label="Format">
-                  <button data-wformat="prose" class="${editorFormat === "prose" ? "is-on" : ""}" aria-pressed="${editorFormat === "prose"}">Prose</button>
+                  <button data-wformat="prose" class="${editorFormat === "prose" ? "is-on" : ""}" aria-pressed="${editorFormat === "prose"}">Book</button>
                   <button data-wformat="comic" class="${editorFormat === "comic" ? "is-on" : ""}" aria-pressed="${editorFormat === "comic"}">Comic</button>
                 </div>
               </div>
