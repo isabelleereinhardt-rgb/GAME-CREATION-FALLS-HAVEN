@@ -76,7 +76,7 @@
         <button class="nav__item" data-nav="library">Library</button>
         <button class="nav__item" data-nav="community">Community Space</button>
       </nav>
-      <div class="mode-flag"><span class="pip"></span>Safe mode on</div>
+      <button class="mode-flag" id="safeModeFlag" type="button" title="Safe mode hides explicit works behind an age check. Click to toggle." aria-pressed="true"><span class="pip"></span><span id="safeModeLabel">Safe mode on</span></button>
     </div>
   </header>
 
@@ -157,6 +157,9 @@
     <p style="font-size:12.5px;color:var(--ink2);margin:-4px 0 10px;line-height:1.55">Set the font, size, and colour for each kind of text. This changes only your own reading view.</p>
     <div id="typographyPanel"></div>
     <button class="btn btn--quiet btn--full" id="resetTypography" style="margin-top:12px">Reset typography to defaults</button>
+
+    <h3>Content</h3>
+    <div class="opt-row"><span id="lbl-safe">Safe mode: age-check explicit works</span><label class="switch"><input type="checkbox" id="optSafe" checked aria-labelledby="lbl-safe"><span class="track"></span><span class="knob"></span></label></div>
 
     <h3>Comfort and access</h3>
     <div class="opt-row"><span id="lbl-dyslexia">Dyslexia-friendly font</span><label class="switch"><input type="checkbox" id="optDyslexia" aria-labelledby="lbl-dyslexia"><span class="track"></span><span class="knob"></span></label></div>

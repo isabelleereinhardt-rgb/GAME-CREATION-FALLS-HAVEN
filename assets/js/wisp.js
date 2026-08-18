@@ -3258,6 +3258,26 @@
     applyTypography();
     save();
     syncDrawer();
+    syncSafeMode();
+  }
+
+  // Safe mode gates explicit (E-rated) works behind an age check. It is ON when
+  // the reader has not unlocked adult content (settings.adultOK is false).
+  function syncSafeMode() {
+    const on = !settings.adultOK;
+    const label = $("#safeModeLabel"), flag = $("#safeModeFlag"), opt = $("#optSafe");
+    if (label) label.textContent = on ? "Safe mode on" : "Safe mode off";
+    if (flag) { flag.setAttribute("aria-pressed", String(on)); flag.classList.toggle("mode-flag--off", !on); }
+    if (opt) opt.checked = on;
+  }
+  function toggleSafeMode() {
+    if (settings.adultOK) {                       // currently off: turn it back on, no confirm needed
+      settings.adultOK = false; save(); syncSafeMode();
+      toast("Safe mode on. Explicit works ask for age confirmation.");
+    } else {                                       // currently on: turning off unlocks adult content
+      confirmDialog({ title: "Turn safe mode off?", body: "Explicit works will open without an age check. Only do this if you are 18 or older.", confirmText: "I'm 18 or older" },
+        () => { settings.adultOK = true; save(); syncSafeMode(); toast("Safe mode off."); });
+    }
   }
 
   // Push the reader's chosen per-role fonts, sizes, and colours onto :root as
@@ -3306,6 +3326,11 @@
     $$("#faceSeg button").forEach(b => b.addEventListener("click", () => { settings.face = b.dataset.face; applySettings(); }));
     $("#sizeSlider").addEventListener("input", e => { settings.size = +e.target.value; applySettings(); });
     $("#measureSlider").addEventListener("input", e => { settings.measure = +e.target.value; applySettings(); });
+    const safeOpt = $("#optSafe");
+    safeOpt && safeOpt.addEventListener("change", e => {
+      if (e.target.checked) { settings.adultOK = false; save(); syncSafeMode(); toast("Safe mode on."); }
+      else { e.target.checked = true; toggleSafeMode(); }   // revert until the age confirm passes
+    });
     $("#optDyslexia").addEventListener("change", e => { settings.dyslexia = e.target.checked; applySettings(); });
     $("#optMotion").addEventListener("change", e => { settings.motion = e.target.checked; applySettings(); });
     $("#optJustify").addEventListener("change", e => { settings.justify = e.target.checked; applySettings(); });
@@ -5244,6 +5269,7 @@
 
     // Header and chrome.
     $("#themeBtn").addEventListener("click", openTheme);
+    $("#safeModeFlag") && $("#safeModeFlag").addEventListener("click", toggleSafeMode);
     $("#themeClose").addEventListener("click", closeTheme);
     $("#themeScrim").addEventListener("click", (e) => { if (e.target.id === "themeScrim") closeTheme(); });
     $("#signOutBtn").addEventListener("click", () => {

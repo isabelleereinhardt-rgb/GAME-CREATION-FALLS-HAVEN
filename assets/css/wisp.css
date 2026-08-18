@@ -387,8 +387,12 @@ img { max-width: 100%; display: block; }
 .mode-flag {
   justify-self: end; display: flex; align-items: center; gap: 7px;
   color: var(--ink3); font-size: 13.5px;
+  background: none; border: 1px solid transparent; border-radius: 999px; padding: 4px 10px;
+  font-family: inherit; cursor: pointer;
 }
+.mode-flag:hover { border-color: var(--line); color: var(--ink2); }
 .mode-flag .pip { width: 7px; height: 7px; border-radius: 50%; background: var(--sage); }
+.mode-flag--off .pip { background: var(--ink3); }
 
 .header__actions { justify-self: end; display: flex; align-items: center; gap: 6px; }
 .header__lead    { justify-self: start; }
