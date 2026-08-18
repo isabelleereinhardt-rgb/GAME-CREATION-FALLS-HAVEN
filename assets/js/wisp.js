@@ -61,7 +61,69 @@
 
   /* ---- small view helpers ------------------------------------------------ */
   const RATE = { G:"General", T:"Teen", M:"Mature", E:"Explicit" };
+  // What each rating means, shown in the hover/tap tooltips so a reader or
+  // writer never has to guess what a single letter stands for.
+  const RATE_INFO = {
+    G: { label: "General", desc: "Suitable for all readers." },
+    T: { label: "Teen", desc: "Mild themes, language, or violence. Around 13+." },
+    M: { label: "Mature", desc: "Sexual content, strong violence, or heavy themes. For adults." },
+    E: { label: "Explicit", desc: "Explicit sexual content or extreme material. 18+ only." }
+  };
+  function rateTip(r) { const i = RATE_INFO[r]; return i ? i.label + ": " + i.desc : (RATE[r] || r); }
+  const WARNING_INFO = {
+    "Graphic violence": "Detailed violence, gore, or injury.",
+    "Major character death": "A main character dies.",
+    "Underage": "Sexual content involving minors is depicted or implied.",
+    "Noncon": "Nonconsensual sexual content.",
+    "Choose not to warn": "The author has chosen not to flag specific warnings."
+  };
   const WARNINGS = ["Graphic violence", "Major character death", "Underage", "Noncon", "Choose not to warn"];
+  // Build the attributes that make any element carry a hover/focus/tap tooltip.
+  function tipAttrs(text) { const t = esc(text); return `data-tip="${t}" tabindex="0" aria-label="${t}"`; }
+
+  // A single shared tooltip bubble, shown on hover, keyboard focus, or tap for
+  // anything carrying a data-tip attribute. This is how a reader learns what a
+  // rating letter or a warning means without leaving the page.
+  let tipEl = null;
+  function ensureTip() {
+    if (!tipEl) { tipEl = document.createElement("div"); tipEl.className = "wisp-tip"; tipEl.setAttribute("role", "tooltip"); document.body.appendChild(tipEl); }
+    return tipEl;
+  }
+  function showTip(target) {
+    const text = target.getAttribute("data-tip"); if (!text) return;
+    const el = ensureTip();
+    el.textContent = text;
+    el.classList.add("is-open");
+    const r = target.getBoundingClientRect();
+    const tw = el.offsetWidth, th = el.offsetHeight;
+    let left = r.left + r.width / 2 - tw / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
+    let top = r.top - th - 9, place = "top";
+    if (top < 8) { top = r.bottom + 9; place = "bottom"; }   // flip below when there's no room above
+    el.style.left = left + "px"; el.style.top = top + "px"; el.dataset.place = place;
+    el.style.setProperty("--tip-arrow", Math.max(12, Math.min(r.left + r.width / 2 - left, tw - 12)) + "px");
+  }
+  function hideTip() { if (tipEl) tipEl.classList.remove("is-open"); }
+  function initTips() {
+    document.addEventListener("mouseover", (e) => { const t = e.target.closest("[data-tip]"); if (t) showTip(t); });
+    document.addEventListener("mouseout", (e) => { if (e.target.closest("[data-tip]")) hideTip(); });
+    document.addEventListener("focusin", (e) => { const t = e.target.closest("[data-tip]"); if (t) showTip(t); });
+    document.addEventListener("focusout", hideTip);
+    // Tap: a pure info marker (a span/icon, not a button or link) shows its tip
+    // and doesn't fall through to a parent card's navigation.
+    document.addEventListener("click", (e) => {
+      const t = e.target.closest("[data-tip]");
+      if (t && /^(SPAN|SVG|I|EM|B|SMALL)$/.test(t.tagName)) {
+        e.preventDefault(); e.stopPropagation();
+        const open = tipEl && tipEl.classList.contains("is-open") && tipEl.textContent === t.getAttribute("data-tip");
+        open ? hideTip() : showTip(t);
+        return;
+      }
+      if (!t) hideTip();
+    }, true);
+    window.addEventListener("scroll", hideTip, true);
+    window.addEventListener("resize", hideTip);
+  }
 
   // Reader actions that persist for the session (a stand-in for the server), so
   // a work you hearted or subscribed to still reads that way when you come back.
@@ -178,7 +240,7 @@
     const letter = coverLetter(title);
     return `<span class="cv" style="background:${bg}">${letter ? `<span class="cv__letter">${esc(letter)}</span>` : ""}</span>`;
   }
-  function rate(r) { return `<span class="rate rate--${r.toLowerCase()}" title="${RATE[r]}">${r}</span>`; }
+  function rate(r) { return `<span class="rate rate--${r.toLowerCase()}" data-tip="${esc(rateTip(r))}" tabindex="0" role="img" aria-label="Rated ${esc((RATE_INFO[r] || {}).label || RATE[r] || r)}">${r}</span>`; }
 
   function tagRow(tags, shown = 2) {
     const head = tags.slice(0, shown).map(t => `<button class="tag" data-tag="${esc(t)}">${esc(t)}</button>`).join("");
@@ -2181,9 +2243,10 @@
 
             <div class="panel">
               <h4>Rating</h4>
-              <div class="rate-choice">${["G","T","M","E"].map(r => `<button data-wrate="${r}" class="${r === rating ? "is-on" : ""}" aria-pressed="${r === rating}">${r}</button>`).join("")}</div>
+              <div class="rate-choice">${["G","T","M","E"].map(r => `<button data-wrate="${r}" class="${r === rating ? "is-on" : ""}" aria-pressed="${r === rating}" data-tip="${esc(rateTip(r))}">${r}</button>`).join("")}</div>
+              <p class="rate-meaning" id="wrate-meaning">${esc(rateTip(rating))}</p>
               <div class="field" style="margin-top:12px"><label>Warnings</label>
-                ${WARNINGS.map(w => `<label class="check"><input type="checkbox" data-warn="${esc(w)}" ${workWarnings.includes(w) ? "checked" : ""}> ${esc(w)}</label>`).join("")}
+                ${WARNINGS.map(w => `<label class="check"><input type="checkbox" data-warn="${esc(w)}" ${workWarnings.includes(w) ? "checked" : ""}> ${esc(w)} <span class="warn-info" ${tipAttrs(WARNING_INFO[w] || w)}>${icon("flag", 11)}</span></label>`).join("")}
               </div>
             </div>
 
@@ -4266,7 +4329,7 @@
       return;
     }
     const wr = e.target.closest("#screen-write [data-wrate]");
-    if (wr) { $$("#screen-write [data-wrate]").forEach(b => { const on = b === wr; b.classList.toggle("is-on", on); b.setAttribute("aria-pressed", String(on)); }); return; }
+    if (wr) { $$("#screen-write [data-wrate]").forEach(b => { const on = b === wr; b.classList.toggle("is-on", on); b.setAttribute("aria-pressed", String(on)); }); const m = $("#wrate-meaning"); if (m) m.textContent = rateTip(wr.dataset.wrate); return; }
     const pub = e.target.closest("[data-publish]");
     if (pub) { handlePublish(pub.dataset.publish); return; }
     const sched = e.target.closest("[data-schedule]");
@@ -5822,6 +5885,7 @@
 
     window.addEventListener("hashchange", route);
     wirePullToRefresh();
+    initTips();
     if (!location.hash) location.replace("#/home");
     route();
 
