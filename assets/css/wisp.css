@@ -1416,3 +1416,25 @@ mark.hl { background: color-mix(in srgb, var(--amber) 34%, transparent); border-
 .event__count { margin-top: 8px; font-size: 13px; color: var(--rose-ink); font-variant-numeric: tabular-nums; }
 .event__count .ch-countdown { font-variant-numeric: tabular-nums; }
 .event__count.is-due { color: var(--rose); font-weight: 600; }
+
+/* ---- Calendar date picker ------------------------------------------------ */
+.dpick { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--bg, #fff); }
+.dpick__bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.dpick__title { font: 600 14.5px var(--font-display); color: var(--ink); }
+.dpick__nav { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: none;
+  color: var(--ink2); font-size: 17px; line-height: 1; cursor: pointer; }
+.dpick__nav:hover { border-color: var(--rose); color: var(--rose-ink); }
+.dpick__grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.dpick__dow { text-align: center; font-size: 11px; color: var(--ink3); padding: 2px 0 4px; }
+.dpick__cell { aspect-ratio: 1; border: none; background: none; border-radius: 50%; cursor: pointer;
+  font-size: 13px; color: var(--ink); display: flex; align-items: center; justify-content: center; }
+.dpick__cell:hover { background: var(--rose-tint, #f3e2e4); }
+.dpick__cell--pad { visibility: hidden; cursor: default; }
+.dpick__cell.is-sel { background: var(--rose); color: #fff; font-weight: 600; }
+.dpick__cell.is-sel:hover { background: var(--rose); }
+.dpick__time { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.dpick__time-lbl { font-size: 12.5px; color: var(--ink2); }
+.dpick__time input[type="time"] { padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg, #fff); color: var(--ink); font-size: 13px; font-family: inherit; }
+.dpick__time input[type="time"]:focus { outline: none; border-color: var(--rose); }
+.dpick__clear { font-size: 12px; margin-left: auto; }

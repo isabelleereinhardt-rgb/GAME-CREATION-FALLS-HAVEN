@@ -4152,6 +4152,73 @@
     });
   }
 
+  /* ---- calendar date picker (used for event start times) ------------------ */
+  const datePickers = {};   // per-field calendar state, keyed by a prefix
+  const DP_MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const DP_DOW = ["S","M","T","W","T","F","S"];
+  function datePickerHTML(pfx) {
+    return `<div class="dpick" id="${pfx}-dpick">
+      <div class="dpick__bar">
+        <button type="button" class="dpick__nav" data-dp-prev="${pfx}" aria-label="Previous month">&lsaquo;</button>
+        <span class="dpick__title" id="${pfx}-cal-title"></span>
+        <button type="button" class="dpick__nav" data-dp-next="${pfx}" aria-label="Next month">&rsaquo;</button>
+      </div>
+      <div class="dpick__grid" id="${pfx}-grid"></div>
+      <div class="dpick__time">
+        <span class="dpick__time-lbl">Time (ET)</span>
+        <input type="time" id="${pfx}-time" step="60">
+        <button type="button" class="btn--link dpick__clear" data-dp-clear="${pfx}">Clear</button>
+      </div>
+    </div>`;
+  }
+  function initDatePicker(pfx, initialWall, onChange) {
+    let y, mo, d = null, hh = "18", mm = "00";
+    if (initialWall && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(initialWall)) {
+      const parts = initialWall.split("T"), dp = parts[0].split("-"), tp = parts[1].split(":");
+      y = +dp[0]; mo = +dp[1] - 1; d = +dp[2]; hh = tp[0]; mm = tp[1];
+    } else {
+      const p = easternParts(new Date()); y = +p.year; mo = +p.month - 1;   // default to the current Eastern month
+    }
+    datePickers[pfx] = { view: { y: y, mo: mo }, sel: d ? { y: y, mo: mo, d: d } : null, hh: hh, mm: mm, onChange: onChange || null };
+    const t = $("#" + pfx + "-time"); if (t) t.value = hh + ":" + mm;
+    renderCal(pfx);
+    wireDatePicker(pfx);
+  }
+  function renderCal(pfx) {
+    const st = datePickers[pfx]; if (!st) return;
+    const y = st.view.y, mo = st.view.mo;
+    const title = $("#" + pfx + "-cal-title"); if (title) title.textContent = DP_MONTHS[mo] + " " + y;
+    const firstDow = new Date(Date.UTC(y, mo, 1)).getUTCDay();
+    const days = new Date(Date.UTC(y, mo + 1, 0)).getUTCDate();
+    let cells = DP_DOW.map(function (x) { return '<span class="dpick__dow">' + x + '</span>'; }).join("");
+    for (let i = 0; i < firstDow; i++) cells += '<span class="dpick__cell dpick__cell--pad"></span>';
+    for (let day = 1; day <= days; day++) {
+      const sel = st.sel && st.sel.y === y && st.sel.mo === mo && st.sel.d === day;
+      cells += '<button type="button" class="dpick__cell' + (sel ? ' is-sel' : '') + '" data-dp-day="' + pfx + ':' + day + '">' + day + '</button>';
+    }
+    const grid = $("#" + pfx + "-grid"); if (grid) grid.innerHTML = cells;
+  }
+  function wireDatePicker(pfx) {
+    const card = $("#modalCard"); if (!card) return;
+    const st = datePickers[pfx];
+    const changed = function () { if (st.onChange) st.onChange(); };
+    const prev = card.querySelector('[data-dp-prev="' + pfx + '"]');
+    const next = card.querySelector('[data-dp-next="' + pfx + '"]');
+    const clear = card.querySelector('[data-dp-clear="' + pfx + '"]');
+    const grid = card.querySelector('#' + pfx + '-grid');
+    const time = card.querySelector('#' + pfx + '-time');
+    if (prev) prev.addEventListener("click", function () { st.view.mo--; if (st.view.mo < 0) { st.view.mo = 11; st.view.y--; } renderCal(pfx); });
+    if (next) next.addEventListener("click", function () { st.view.mo++; if (st.view.mo > 11) { st.view.mo = 0; st.view.y++; } renderCal(pfx); });
+    if (clear) clear.addEventListener("click", function () { st.sel = null; renderCal(pfx); changed(); });
+    if (grid) grid.addEventListener("click", function (e) { const b = e.target.closest("[data-dp-day]"); if (!b) return; st.sel = { y: st.view.y, mo: st.view.mo, d: +b.getAttribute("data-dp-day").split(":")[1] }; renderCal(pfx); changed(); });
+    if (time) time.addEventListener("input", function () { const v = (time.value || "18:00").split(":"); st.hh = v[0]; st.mm = v[1]; changed(); });
+  }
+  function readDatePicker(pfx) {
+    const st = datePickers[pfx]; if (!st || !st.sel) return "";
+    const pad = function (n) { return String(n).padStart(2, "0"); };
+    return st.sel.y + "-" + pad(st.sel.mo + 1) + "-" + pad(st.sel.d) + "T" + st.hh + ":" + st.mm;
+  }
+
   async function renderAdminPanel() {
     openModal(`<div class="admin-panel"><p class="muted admin-empty">Loading the control panel...</p></div>`, "Admin control panel");
     let events = [], hubs = [], works = [];
@@ -4208,11 +4275,11 @@
             <input type="text" id="ae-kind" placeholder="Kind (Collection, Exchange, Nomination...)">
             <input type="text" id="ae-note" placeholder="Short note (optional)">
             <label class="admin-add__lbl">Start date and time (Eastern Time), optional. Readers see a live countdown to it.</label>
+            ${datePickerHTML("ae")}
             <div class="admin-add__row">
-              <input type="datetime-local" id="ae-when" style="flex:1;min-width:190px">
               <button class="btn btn--primary btn--sm" data-admin-add-event>Add event</button>
+              <span class="muted admin-echo" id="ae-echo" style="font-size:12px"></span>
             </div>
-            <p class="muted admin-echo" id="ae-echo" style="font-size:12px;margin:0"></p>
           </div>
         </section>
 
@@ -4280,14 +4347,14 @@
       const h = (hubs || []).find(x => String(x.id) === b.dataset.adminEditHub); if (h) openEditHub(h);
     }));
 
-    const aeWhen = card.querySelector("#ae-when");
-    aeWhen && aeWhen.addEventListener("input", () => { const el = $("#ae-echo"); el.textContent = aeWhen.value ? "Starts " + fmtEasternStamp(easternWallToInstant(aeWhen.value).toISOString()) : ""; });
+    const aeEcho = function () { const el = $("#ae-echo"); if (!el) return; const raw = readDatePicker("ae"); el.textContent = raw ? "Starts " + fmtEasternStamp(easternWallToInstant(raw).toISOString()) : "No date set; no countdown."; };
+    initDatePicker("ae", "", aeEcho); aeEcho();
 
     const addEvent = card.querySelector("[data-admin-add-event]");
     addEvent && addEvent.addEventListener("click", async () => {
       const title = $("#ae-title").value.trim();
       if (!title) { toast("Give the event a title."); return; }
-      const fields = Object.assign({ title, kind: $("#ae-kind").value.trim(), note: $("#ae-note").value.trim(), sort: 100 }, eventTimeFields($("#ae-when").value));
+      const fields = Object.assign({ title, kind: $("#ae-kind").value.trim(), note: $("#ae-note").value.trim(), sort: 100 }, eventTimeFields(readDatePicker("ae")));
       try { await WispDB.createEvent(fields); toast("Event added."); renderAdminPanel(); }
       catch (e) { toast((e && e.message) || "Could not add the event."); }
     });
@@ -4329,17 +4396,16 @@
       <div class="field"><label>Title</label><input type="text" id="ee-title" value="${esc(ev.title || "")}"></div>
       <div class="field"><label>Kind</label><input type="text" id="ee-kind" value="${esc(ev.kind || "")}"></div>
       <div class="field"><label>Note</label><textarea id="ee-note" rows="2">${esc(ev.note || "")}</textarea></div>
-      <div class="field"><label>Start date and time (Eastern Time)</label><input type="datetime-local" id="ee-when" value="${esc(whenVal)}"><p class="muted" id="ee-echo" style="font-size:12px;margin:6px 0 0"></p></div>
+      <div class="field"><label>Start date and time (Eastern Time)</label>${datePickerHTML("ee")}<p class="muted" id="ee-echo" style="font-size:12px;margin:6px 0 0"></p></div>
       <div class="modal-actions">
         <button class="btn btn--quiet" data-modal-cancel>Cancel</button>
         <button class="btn btn--primary" id="ee-save">Save event</button>
       </div>`, "Edit event");
-    const echo = () => { const el = $("#ee-echo"); const raw = $("#ee-when").value; el.textContent = raw ? "Starts " + fmtEasternStamp(easternWallToInstant(raw).toISOString()) : "No start time; no countdown."; };
-    $("#ee-when").addEventListener("input", echo); echo();
+    const echo = () => { const el = $("#ee-echo"); if (!el) return; const raw = readDatePicker("ee"); el.textContent = raw ? "Starts " + fmtEasternStamp(easternWallToInstant(raw).toISOString()) : "No start time; no countdown."; };
+    initDatePicker("ee", whenVal, echo); echo();
     $("#ee-save").addEventListener("click", async () => {
       const title = $("#ee-title").value.trim(); if (!title) { toast("Give the event a title."); return; }
-      const raw = $("#ee-when").value;
-      const fields = Object.assign({ title, kind: $("#ee-kind").value.trim(), note: $("#ee-note").value.trim(), starts_at: null, day: "", month: "" }, eventTimeFields(raw));
+      const fields = Object.assign({ title, kind: $("#ee-kind").value.trim(), note: $("#ee-note").value.trim(), starts_at: null, day: "", month: "" }, eventTimeFields(readDatePicker("ee")));
       try { await WispDB.updateEvent(ev.id, fields); toast("Event updated."); renderAdminPanel(); }
       catch (e) { toast((e && e.message) || "Could not update the event."); }
     });
