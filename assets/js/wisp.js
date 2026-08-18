@@ -3095,12 +3095,18 @@
   /*  THEME ENGINE  ·  the accessibility engine too                          */
   /* ======================================================================= */
   const PRESETS = [
-    { id:"cream",    name:"Warm cream",   chips:["#f4efe4","#ab5a67","#2c2620"] },
-    { id:"sepia",    name:"Sepia",        chips:["#ecdfc4","#a5545f","#4a3b28"] },
-    { id:"slate",    name:"Slate",        chips:["#e8eaee","#9c5566","#23262c"] },
-    { id:"midnight", name:"Midnight",     chips:["#26242d","#d98a99","#ece7f0"] },
-    { id:"oled",     name:"OLED black",   chips:["#000000","#e0919f","#f1eef4"] },
-    { id:"contrast", name:"High contrast",chips:["#ffffff","#99303f","#131313"] }
+    { id:"cream",    name:"Warm cream",    chips:["#f4efe4","#ab5a67","#2c2620"] },
+    { id:"sepia",    name:"Soft sepia",    chips:["#ecdfc4","#a5545f","#4a3b28"] },
+    { id:"blush",    name:"Blush pink",    chips:["#f6ecee","#b0536a","#332428"] },
+    { id:"sage",     name:"Sage green",    chips:["#e9eee4","#a05a63","#262c22"] },
+    { id:"sky",      name:"Sky blue",      chips:["#e6ecf2","#9a5568","#212832"] },
+    { id:"lavender", name:"Soft lavender", chips:["#ece9f3","#8d5586","#2a2433"] },
+    { id:"slate",    name:"Cool grey",     chips:["#e8eaee","#9c5566","#23262c"] },
+    { id:"midnight", name:"Soft dark",     chips:["#26242d","#d98a99","#ece7f0"] },
+    { id:"forest",   name:"Forest night",  chips:["#1f2821","#d38a97","#e7efe6"] },
+    { id:"ocean",    name:"Deep ocean",    chips:["#1c2230","#d98a99","#e6eaf2"] },
+    { id:"oled",     name:"True black",    chips:["#000000","#e0919f","#f1eef4"] },
+    { id:"contrast", name:"High contrast", chips:["#ffffff","#99303f","#131313"] }
   ];
   const ACCENTS = [
     { id:"default", c:"#ab5a67" }, { id:"plum", c:"#7d5a86" }, { id:"sea", c:"#4f8079" },
@@ -3117,7 +3123,7 @@
     r.style.setProperty("--read-size", settings.size + "px");
     r.style.setProperty("--measure", settings.measure);
     document.body.classList.toggle("hide-margins", !settings.margins);
-    const themeColor = { cream:"#f4efe4", sepia:"#ecdfc4", slate:"#e8eaee", midnight:"#211f26", oled:"#000000", contrast:"#ffffff" }[settings.theme];
+    const themeColor = { cream:"#f4efe4", sepia:"#ecdfc4", blush:"#f6ecee", sage:"#e9eee4", sky:"#e6ecf2", lavender:"#ece9f3", slate:"#e8eaee", midnight:"#211f26", forest:"#1a221c", ocean:"#181d29", oled:"#000000", contrast:"#ffffff" }[settings.theme];
     const meta = $('meta[name="theme-color"]'); if (meta) meta.content = themeColor;
     // reflect prose justify on any open reader
     $$(".prose").forEach(p => { p.dataset.justify = settings.justify ? "on" : "off"; p.dataset.hyphen = settings.justify ? "on" : "off"; });

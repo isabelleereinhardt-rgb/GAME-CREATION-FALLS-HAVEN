@@ -156,6 +156,69 @@
   color-scheme: light;
 }
 
+/* Blush pink: a warm, rosy daylight. */
+:root[data-theme="blush"] {
+  --paper:#f6ecee; --paper2:#f0e2e4; --surface:#faf1f2; --surface2:#f2e6e8; --card:#fcf5f6;
+  --ink:#332428; --ink2:#6e5860; --ink3:#75606a;
+  --line:rgba(51,36,40,.13); --line2:rgba(51,36,40,.07);
+  --rose:#b0536a; --rose-ink:#914255; --rose-wash:rgba(176,83,106,.10);
+  --sage:#7a7d63; --amber:#b6844a; --shell:#ecd9dd;
+  --shadow:rgba(51,36,40,.07); --shadow-lg:rgba(51,36,40,.14);
+  --font-display:"Playfair Display",Georgia,serif; --font-text:"Newsreader",Georgia,serif; --font-read:var(--font-text);
+  --radius:14px; --radius-s:10px; --radius-xs:7px; color-scheme:light;
+}
+/* Sage green: a soft, leafy daylight. */
+:root[data-theme="sage"] {
+  --paper:#e9eee4; --paper2:#e0e7d9; --surface:#f1f4ec; --surface2:#e4eadd; --card:#f5f7f0;
+  --ink:#262c22; --ink2:#576050; --ink3:#67715d;
+  --line:rgba(38,44,34,.14); --line2:rgba(38,44,34,.07);
+  --rose:#a05a63; --rose-ink:#82454e; --rose-wash:rgba(160,90,99,.12);
+  --sage:#5f7a55; --amber:#a8793f; --shell:#d5dec9;
+  --shadow:rgba(38,44,34,.08); --shadow-lg:rgba(38,44,34,.16);
+  --font-display:"Playfair Display",Georgia,serif; --font-text:"Newsreader",Georgia,serif; --font-read:var(--font-text);
+  --radius:14px; --radius-s:10px; --radius-xs:7px; color-scheme:light;
+}
+/* Sky blue: a cool, airy daylight. */
+:root[data-theme="sky"] {
+  --paper:#e6ecf2; --paper2:#dde5ee; --surface:#eff3f8; --surface2:#e0e8f0; --card:#f4f7fb;
+  --ink:#212832; --ink2:#525d6b; --ink3:#636f7f;
+  --line:rgba(33,40,50,.13); --line2:rgba(33,40,50,.07);
+  --rose:#9a5568; --rose-ink:#7d4153; --rose-wash:rgba(154,85,104,.12);
+  --sage:#5f7a6c; --amber:#a8793f; --shell:#cfd9e5;
+  --shadow:rgba(33,40,50,.08); --shadow-lg:rgba(33,40,50,.16);
+  --font-display:"Playfair Display",Georgia,serif; --font-text:"Newsreader",Georgia,serif; --font-read:var(--font-text);
+  --radius:14px; --radius-s:10px; --radius-xs:7px; color-scheme:light;
+}
+/* Soft lavender: a gentle violet daylight. */
+:root[data-theme="lavender"] {
+  --paper:#ece9f3; --paper2:#e4e0ee; --surface:#f2eff8; --surface2:#e7e2f1; --card:#f6f3fb;
+  --ink:#2a2433; --ink2:#5f5870; --ink3:#6d6579;
+  --line:rgba(42,36,51,.13); --line2:rgba(42,36,51,.07);
+  --rose:#8d5586; --rose-ink:#71446c; --rose-wash:rgba(141,85,134,.12);
+  --sage:#5f7a6c; --amber:#a8793f; --shell:#ddd6ea;
+  --shadow:rgba(42,36,51,.08); --shadow-lg:rgba(42,36,51,.16);
+  --font-display:"Playfair Display",Georgia,serif; --font-text:"Newsreader",Georgia,serif; --font-read:var(--font-text);
+  --radius:14px; --radius-s:10px; --radius-xs:7px; color-scheme:light;
+}
+/* Forest night: a deep green dark. */
+:root[data-theme="forest"] {
+  --paper:#1a221c; --paper2:#212a23; --surface:#1f2821; --surface2:#28322a; --card:#232d25;
+  --ink:#e7efe6; --ink2:#a9b8ab; --ink3:#8fa091;
+  --line:rgba(231,239,230,.13); --line2:rgba(231,239,230,.07);
+  --rose:#d38a97; --rose-ink:#e2a3ae; --rose-wash:rgba(211,138,151,.14);
+  --sage:#8fb488; --amber:#cfa869; --shell:#121813;
+  --shadow:rgba(0,0,0,.34); --shadow-lg:rgba(0,0,0,.5); color-scheme:dark;
+}
+/* Deep ocean: a deep navy dark. */
+:root[data-theme="ocean"] {
+  --paper:#181d29; --paper2:#1f2533; --surface:#1c2230; --surface2:#252c3c; --card:#212838;
+  --ink:#e6eaf2; --ink2:#a6afc2; --ink3:#8b95ab;
+  --line:rgba(230,234,242,.13); --line2:rgba(230,234,242,.07);
+  --rose:#d98a99; --rose-ink:#e6a3b0; --rose-wash:rgba(217,138,153,.14);
+  --sage:#8fb0b4; --amber:#cfa869; --shell:#10131c;
+  --shadow:rgba(0,0,0,.36); --shadow-lg:rgba(0,0,0,.52); color-scheme:dark;
+}
+
 /* Accent override: readers may repaint the rose without leaving their theme. */
 :root[data-accent="plum"]   { --rose:#7d5a86; --rose-ink:#654a70; --rose-wash:rgba(125,90,134,.12); }
 :root[data-accent="sea"]    { --rose:#4f8079; --rose-ink:#3d655f; --rose-wash:rgba(79,128,121,.12); }
