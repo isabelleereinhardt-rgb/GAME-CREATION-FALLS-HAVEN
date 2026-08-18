@@ -618,6 +618,7 @@ window.WispDB = (function () {
     if (!user) throw new Error("Sign in first.");
     const row = { title: f.title, note: f.note || "", status: "signups" };
     if (f.reveal_at !== undefined) row.reveal_at = f.reveal_at;
+    if (f.match_at !== undefined) row.match_at = f.match_at;
     const { data, error } = await client.from("exchanges").insert(row).select().single();
     if (error) throw error;
     return data;
@@ -625,7 +626,7 @@ window.WispDB = (function () {
   async function updateExchange(id, f) {
     if (!user) throw new Error("Sign in first.");
     const patch = {};
-    ["title", "note", "status", "reveal_at"].forEach(k => { if (f[k] !== undefined) patch[k] = f[k]; });
+    ["title", "note", "status", "reveal_at", "match_at"].forEach(k => { if (f[k] !== undefined) patch[k] = f[k]; });
     const { error } = await client.from("exchanges").update(patch).eq("id", id);
     if (error) throw error;
   }

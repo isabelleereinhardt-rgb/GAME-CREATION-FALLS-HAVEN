@@ -2465,6 +2465,42 @@
     return arr;
   }
 
+  // Gift exchanges get the same ordering choice. "soonest" ranks by the close
+  // (match_at) time, nearest first; exchanges with no close time sink down.
+  let exchangeSort = (function () { try { return localStorage.getItem("wisp.exchangeSort") || "latest"; } catch (e) { return "latest"; } })();
+  function sortExchanges(list, mode) {
+    const arr = list.slice();
+    if (mode === "soonest") {
+      arr.sort((a, b) => {
+        const ma = a.match_at ? new Date(a.match_at).getTime() : null;
+        const mb = b.match_at ? new Date(b.match_at).getTime() : null;
+        if (ma == null && mb == null) return eventCreatedMs(b) - eventCreatedMs(a);
+        if (ma == null) return 1;
+        if (mb == null) return -1;
+        return ma - mb;
+      });
+    } else {
+      arr.sort((a, b) => eventCreatedMs(b) - eventCreatedMs(a));
+    }
+    return arr;
+  }
+  // When an exchange's close time has passed and it's still taking sign-ups,
+  // run matching. Matching is admin-only, so this fires from an admin's browser
+  // the next time they load the community page (the static-site stand-in for a
+  // scheduled job). Best effort: too few sign-ups just leaves it open.
+  async function autoMatchDueExchanges(list) {
+    if (!isLive() || !WispDB.isAdmin) return false;
+    const now = Date.now();
+    let ran = false;
+    for (const x of (list || [])) {
+      if (x.status === "signups" && x.match_at && new Date(x.match_at).getTime() <= now) {
+        try { await WispDB.runMatching(x.id); x.status = "matched"; ran = true; }
+        catch (e) { /* not enough sign-ups yet, or a transient error: leave it open */ }
+      }
+    }
+    return ran;
+  }
+
   async function loadCommunity() {
     loadingScreen("#screen-community");
     try {
@@ -2482,6 +2518,11 @@
       LIVE.myHubs = myHubs;
       LIVE.hubCounts = hubCounts;
       LIVE.exchanges = exchanges;
+      // If any exchange is past its close time, run matching (admin only).
+      if (await autoMatchDueExchanges(LIVE.exchanges)) {
+        LIVE.exchanges = await WispDB.listExchanges().catch(() => LIVE.exchanges);
+        toast("An exchange reached its close time; matching ran.");
+      }
     } catch (e) { console.error("[wisp] community load failed:", e); }
     renderCommunity();
   }
@@ -2543,17 +2584,34 @@
         </div>
 
         ${isLive() ? `<div class="shelf">
-          <div class="shelf__head"><span class="shelf__title">Gift exchanges</span><span class="muted" style="font-size:13px">Sign up with a request and an offer; you'll be matched to write for someone</span></div>
+          <div class="shelf__head">
+            <span class="shelf__title">Gift exchanges</span>
+            <div class="event-sort" role="group" aria-label="Sort exchanges">
+              <button class="event-sort__btn${exchangeSort === "soonest" ? " is-on" : ""}" data-exchange-sort="soonest" aria-pressed="${exchangeSort === "soonest"}">Soonest</button>
+              <button class="event-sort__btn${exchangeSort === "latest" ? " is-on" : ""}" data-exchange-sort="latest" aria-pressed="${exchangeSort === "latest"}">Latest</button>
+            </div>
+          </div>
+          <p class="muted event-sort__note">Sign up with a request and an offer; you'll be matched to write for someone. Showing ${exchangeSort === "soonest" ? "nearest close dates first" : "most recently added first"}.</p>
           ${(() => {
             const list = LIVE.exchanges || [];
             if (!list.length) return `<p class="muted" style="font-size:14px;padding:12px 2px;line-height:1.6">No gift exchanges yet. When one opens, you can sign up here.</p>`;
-            return list.map(x => {
+            const now = Date.now();
+            return sortExchanges(list, exchangeSort).map(x => {
               const st = EX_STATUS[x.status] || EX_STATUS.signups;
               const cta = x.status === "signups" ? "Sign up" : x.status === "matched" ? "Your assignment" : x.status === "revealed" ? "Your gift" : "View";
+              // A close time gives readers a live countdown while sign-ups are open.
+              let countdown = "";
+              if (x.match_at && x.status === "signups") {
+                const ms = new Date(x.match_at).getTime();
+                countdown = now < ms
+                  ? `<div class="event__count"><span class="ch-countdown" data-countdown="${esc(x.match_at)}" data-countdown-label="Sign-ups close in" data-countdown-done="Matching now">Sign-ups close in: &hellip;</span></div>`
+                  : `<div class="event__count is-due">Sign-ups closed; matching soon</div>`;
+              }
               return `<div class="event">
                 <div style="flex:1">
                   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="font:600 18px var(--font-display);color:var(--ink)">${esc(x.title)}</span><span class="pill">${st.label}</span></div>
                   ${x.note ? `<p class="soft" style="font-size:14px;margin:6px 0 0;line-height:1.6">${esc(x.note)}</p>` : ""}
+                  ${countdown}
                 </div>
                 <button class="btn btn--ghost btn--sm" data-exchange-open="${x.id}">${cta}</button>
               </div>`;
@@ -4300,6 +4358,12 @@
       if (mode !== eventSort) { eventSort = mode; try { localStorage.setItem("wisp.eventSort", mode); } catch (er) {} renderCommunity(); }
       return;
     }
+    const xsort = e.target.closest("[data-exchange-sort]");
+    if (xsort) {
+      const mode = xsort.dataset.exchangeSort;
+      if (mode !== exchangeSort) { exchangeSort = mode; try { localStorage.setItem("wisp.exchangeSort", mode); } catch (er) {} renderCommunity(); }
+      return;
+    }
     const evj = e.target.closest("[data-event-join]");
     if (evj) {
       if (!WispDB.signedIn) { openAuth("in"); return; }
@@ -4847,8 +4911,9 @@
       if (x.status !== "closed") acts.push(`<button class="btn btn--quiet btn--sm" data-admin-ex-status="${esc(x.id)}:closed">Close</button>`);
       acts.push(`<button class="btn btn--quiet btn--sm" data-admin-ex-edit="${esc(x.id)}">Edit</button>`);
       acts.push(`<button class="btn btn--danger btn--sm" data-admin-ex-del="${esc(x.id)}" data-label="${esc(x.title)}">Delete</button>`);
+      const closeLbl = x.match_at ? " &middot; closes " + esc(fmtEasternStamp(x.match_at)) : "";
       return `<div class="admin-row admin-row--wrap">
-        <div class="admin-row__main"><b>${esc(x.title)}</b><span class="muted">${st.label} &middot; ${n} ${n === 1 ? "sign-up" : "sign-ups"}</span></div>
+        <div class="admin-row__main"><b>${esc(x.title)}</b><span class="muted">${st.label} &middot; ${n} ${n === 1 ? "sign-up" : "sign-ups"}${closeLbl}</span></div>
         <div class="admin-row__acts admin-row__acts--wrap">${acts.join("")}</div>
       </div>`;
     }).join("") : `<p class="muted admin-empty">No gift exchanges yet.</p>`;
@@ -4928,9 +4993,11 @@
           <div class="admin-add">
             <input type="text" id="ax-title" placeholder="Exchange title (e.g. Winter Gift Exchange)">
             <input type="text" id="ax-note" placeholder="Short note (optional)">
+            <label class="admin-add__lbl">Sign-ups close and matching runs at (Eastern Time), optional. Readers see a live countdown.</label>
+            ${datePickerHTML("axm")}
             <div class="admin-add__row">
               <button class="btn btn--primary btn--sm" data-admin-ex-add>Create exchange</button>
-              <span class="muted" style="font-size:12px">Create it, let readers sign up, then Run matching.</span>
+              <span class="muted admin-echo" id="axm-echo" style="font-size:12px"></span>
             </div>
           </div>
         </section>
@@ -5062,11 +5129,18 @@
     resetBtn && resetBtn.addEventListener("click", adminEmailReset);
 
     // Gift exchanges.
+    const axmEcho = function () {
+      const el = $("#axm-echo"); if (!el) return; const raw = readDatePicker("axm");
+      el.textContent = raw ? "Closes and matches " + fmtEasternStamp(easternWallToInstant(raw).toISOString()) : "No close time; you run matching by hand.";
+    };
+    initDatePicker("axm", "", axmEcho); axmEcho();
     const addEx = card.querySelector("[data-admin-ex-add]");
     addEx && addEx.addEventListener("click", async () => {
       const title = $("#ax-title").value.trim();
       if (!title) { toast("Give the exchange a title."); return; }
-      try { await WispDB.createExchange({ title, note: $("#ax-note").value.trim() }); toast("Exchange created. Readers can sign up now."); renderAdminPanel(); }
+      const raw = readDatePicker("axm");
+      const match_at = raw ? easternWallToInstant(raw).toISOString() : null;
+      try { await WispDB.createExchange({ title, note: $("#ax-note").value.trim(), match_at }); toast("Exchange created. Readers can sign up now."); renderAdminPanel(); }
       catch (e) { toast((e && e.message) || "Could not create the exchange."); }
     });
     card.querySelectorAll("[data-admin-ex-status]").forEach(b => b.addEventListener("click", async () => {
@@ -5089,6 +5163,7 @@
   }
 
   function openEditExchange(ex) {
+    const whenVal = ex.match_at ? toEasternInputValue(new Date(ex.match_at)) : "";
     openModal(`
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <h2 style="font-size:20px">Edit exchange</h2>
@@ -5096,13 +5171,19 @@
       </div>
       <div class="field"><label>Title</label><input type="text" id="ax-e-title" value="${esc(ex.title || "")}"></div>
       <div class="field"><label>Note</label><textarea id="ax-e-note" rows="2">${esc(ex.note || "")}</textarea></div>
+      <div class="field"><label>Sign-ups close and matching runs at (Eastern Time)</label>${datePickerHTML("axem")}<p class="muted" id="axem-echo" style="font-size:12px;margin:6px 0 0"></p></div>
       <div class="modal-actions">
         <button class="btn btn--quiet" data-modal-cancel>Cancel</button>
         <button class="btn btn--primary" id="ax-e-save">Save exchange</button>
       </div>`, "Edit exchange");
+    const echo = () => { const el = $("#axem-echo"); if (!el) return; const raw = readDatePicker("axem");
+      el.textContent = raw ? "Closes and matches " + fmtEasternStamp(easternWallToInstant(raw).toISOString()) : "No close time; you run matching by hand."; };
+    initDatePicker("axem", whenVal, echo); echo();
     $("#ax-e-save").addEventListener("click", async () => {
       const title = $("#ax-e-title").value.trim(); if (!title) { toast("Give the exchange a title."); return; }
-      try { await WispDB.updateExchange(ex.id, { title, note: $("#ax-e-note").value.trim() }); toast("Exchange updated."); renderAdminPanel(); }
+      const raw = readDatePicker("axem");
+      const match_at = raw ? easternWallToInstant(raw).toISOString() : null;
+      try { await WispDB.updateExchange(ex.id, { title, note: $("#ax-e-note").value.trim(), match_at }); toast("Exchange updated."); renderAdminPanel(); }
       catch (e) { toast((e && e.message) || "Could not update the exchange."); }
     });
   }
