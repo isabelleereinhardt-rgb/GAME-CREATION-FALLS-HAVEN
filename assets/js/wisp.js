@@ -4071,7 +4071,7 @@
   async function openAdminPanel() {
     if (!isLive()) { toast("The admin panel needs the connected site."); return; }
     if (!WispDB.signedIn) { toast("Sign in with your admin account first."); openAuth("in"); return; }
-    if (!WispDB.isAdmin) { toast("This account is not an admin."); return; }
+    if (!WispDB.isAdmin) { toast("This account is not marked as an admin yet. Set is_admin = true on your profile in Supabase, then refresh."); return; }
     if (adminUnlocked) { renderAdminPanel(); return; }
     renderAdminLock();
   }
