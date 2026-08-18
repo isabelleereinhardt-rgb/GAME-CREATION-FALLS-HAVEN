@@ -2078,26 +2078,29 @@
 
         <div class="shelf">
           <div class="shelf__head"><span class="shelf__title">Events and challenges</span><span class="muted" style="font-size:13px">Only events you have joined show up on Home</span></div>
-          ${(isLive() ? LIVE.events : W.EVENTS).map((e, i) => {
-            const live = isLive();
-            const joined = live ? LIVE.myEvents.has(e.id) : e.joined;
-            const btnAttr = live ? `data-event-join="${e.id}"` : `data-event="${i}"`;
-            return `<div class="event">
-              <div class="event__date"><b>${esc(e.d || e.day || "")}</b><span class="muted" style="font-size:12px">${esc(e.m || e.month || "")}</span></div>
-              <div style="flex:1">
-                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="font:600 18px var(--font-display);color:var(--ink)">${esc(e.title)}</span><span class="pill">${esc(e.kind)}</span></div>
-                <p class="soft" style="font-size:14px;margin:6px 0 0;line-height:1.6">${esc(e.note)}</p>
-              </div>
-              <button class="btn ${joined ? "btn--quiet" : "btn--ghost"} btn--sm" ${btnAttr} aria-pressed="${joined}">${joined ? "Joined" : "Join"}</button>
-            </div>`;
-          }).join("")}
+          ${(() => {
+            const rows = (isLive() ? LIVE.events : W.EVENTS).map((e, i) => {
+              const live = isLive();
+              const joined = live ? LIVE.myEvents.has(e.id) : e.joined;
+              const btnAttr = live ? `data-event-join="${e.id}"` : `data-event="${i}"`;
+              return `<div class="event">
+                <div class="event__date"><b>${esc(e.d || e.day || "")}</b><span class="muted" style="font-size:12px">${esc(e.m || e.month || "")}</span></div>
+                <div style="flex:1">
+                  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="font:600 18px var(--font-display);color:var(--ink)">${esc(e.title)}</span><span class="pill">${esc(e.kind)}</span></div>
+                  <p class="soft" style="font-size:14px;margin:6px 0 0;line-height:1.6">${esc(e.note)}</p>
+                </div>
+                <button class="btn ${joined ? "btn--quiet" : "btn--ghost"} btn--sm" ${btnAttr} aria-pressed="${joined}">${joined ? "Joined" : "Join"}</button>
+              </div>`;
+            }).join("");
+            return rows || `<p class="muted" style="font-size:14px;padding:14px 2px;line-height:1.6">No events running right now. New collections and challenges will appear here when they open.</p>`;
+          })()}
           <p class="muted" style="font-size:12.5px;margin-top:10px">Collections now; full gift exchanges will come as the community grows.</p>
         </div>
 
         <div class="shelf">
           <div class="shelf__head"><span class="shelf__title">Hubs</span></div>
-          <div class="hub-grid">
-            ${(isLive() ? LIVE.hubs : W.HUBS).map(h => {
+          ${(() => {
+            const cards = (isLive() ? LIVE.hubs : W.HUBS).map(h => {
               const live = isLive();
               const following = live ? LIVE.myHubs.has(h.id) : false;
               const count = live ? (LIVE.hubCounts[h.id] || 0) : null;
@@ -2113,8 +2116,11 @@
                 <p class="soft" style="font-size:13.5px;margin:0;line-height:1.55">${esc(h.note)}</p>
                 <div class="hub__foot">${btn}${live ? `<span class="hub__see">See works ${icon("chev",12)}</span>` : ""}</div>
               </div>`;
-            }).join("")}
-          </div>
+            }).join("");
+            return cards
+              ? `<div class="hub-grid">${cards}</div>`
+              : `<p class="muted" style="font-size:14px;padding:6px 2px;line-height:1.6">No hubs yet. Once hubs are set up, they show here for readers to follow.</p>`;
+          })()}
         </div>
 
         <div class="editorial">
