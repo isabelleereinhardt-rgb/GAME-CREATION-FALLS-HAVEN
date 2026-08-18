@@ -914,9 +914,51 @@
     return parts.length ? parts : [text];
   }
 
+  // ---- Embeds: images and safe, sandboxed interactive frames ---------------
+  // A chapter can embed media on its own line: ![alt](url) for an image, or
+  // @[label](url) for a rich embed. Only https is allowed. Interactive frames
+  // are built for a fixed provider whitelist (video, maps, audio) and rendered
+  // sandboxed; anything else becomes a plain link card. No user HTML is injected.
+  function embedInfo(url) {
+    let u; try { u = new URL(url); } catch (e) { return null; }
+    if (u.protocol !== "https:") return null;
+    const host = u.hostname.replace(/^www\./, ""), path = u.pathname;
+    if (host === "youtu.be") { const id = path.slice(1).split("/")[0]; if (/^[\w-]{6,}$/.test(id)) return { kind: "video", src: "https://www.youtube-nocookie.com/embed/" + id }; }
+    if (host === "youtube.com" || host === "m.youtube.com" || host === "youtube-nocookie.com") {
+      const m = path.match(/^\/embed\/([\w-]{6,})/); if (m) return { kind: "video", src: "https://www.youtube-nocookie.com/embed/" + m[1] };
+      const id = u.searchParams.get("v"); if (id && /^[\w-]{6,}$/.test(id)) return { kind: "video", src: "https://www.youtube-nocookie.com/embed/" + id };
+    }
+    if (host === "vimeo.com") { const id = path.split("/").filter(Boolean)[0]; if (/^\d+$/.test(id)) return { kind: "video", src: "https://player.vimeo.com/video/" + id }; }
+    if (host === "player.vimeo.com" && /^\/video\/\d+/.test(path)) return { kind: "video", src: u.origin + path };
+    if ((host === "google.com" || host === "maps.google.com") && /^\/maps\/embed/.test(path)) return { kind: "map", src: u.href };
+    if (host === "google.com" && /^\/maps/.test(path)) { const q = u.searchParams.get("q"); if (q) return { kind: "map", src: "https://maps.google.com/maps?q=" + encodeURIComponent(q) + "&z=14&output=embed" }; }
+    if (host === "openstreetmap.org" && /^\/export\/embed/.test(path)) return { kind: "map", src: u.href };
+    if (host === "open.spotify.com" && /^\/(track|album|playlist|episode|show)\//.test(path)) return { kind: "audio", src: "https://open.spotify.com/embed" + path };
+    return null;
+  }
+  function imageEmbedHTML(url, alt) {
+    if (!/^https:\/\//i.test(url)) return `<p>${mdInline("![" + alt + "](" + url + ")")}</p>`;
+    return `<figure class="embed embed--img"><img src="${esc(url)}" alt="${esc(alt || "")}" loading="lazy" decoding="async">${alt ? `<figcaption>${esc(alt)}</figcaption>` : ""}</figure>`;
+  }
+  function linkCardHTML(url, label) {
+    let host = ""; try { host = new URL(url).hostname.replace(/^www\./, ""); } catch (e) {}
+    return `<a class="embed embed--link" href="${esc(url)}" target="_blank" rel="noopener nofollow"><span class="embed-link__label">${esc(label || url)}</span><span class="embed-link__host">${esc(host)} &#8599;</span></a>`;
+  }
+  function richEmbedHTML(url, label) {
+    const info = embedInfo(url);
+    if (!info) return linkCardHTML(url, label);
+    const allow = info.kind === "video" ? 'allow="fullscreen; picture-in-picture; encrypted-media"'
+      : info.kind === "audio" ? 'allow="encrypted-media; clipboard-write"' : "";
+    return `<div class="embed embed--${info.kind}"><iframe src="${esc(info.src)}" loading="lazy" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation" ${allow} allowfullscreen title="${esc(label || "Embedded content")}"></iframe></div>`;
+  }
+
   function renderBlock(block) {
     const lines = String(block).split(/\n/);
     const first = lines[0].trim();
+    const img = lines.length === 1 && first.match(/^!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)$/);
+    if (img) return imageEmbedHTML(img[2], img[1]);
+    const emb = lines.length === 1 && first.match(/^@\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)$/);
+    if (emb) return richEmbedHTML(emb[2], emb[1]);
     if (lines.length === 1 && /^(-{3,}|\*{3,}|_{3,})$/.test(first)) return "<hr>";
     const h = lines.length === 1 && first.match(/^(#{1,3})\s+(.*)$/);
     if (h) { const tag = ["h2", "h3", "h4"][h[1].length - 1]; return `<${tag}>${mdInline(h[2])}</${tag}>`; }
@@ -1943,6 +1985,9 @@
         <button type="button" title="Bulleted list" data-fmt="ul">&bull;</button>
         <button type="button" title="Numbered list" data-fmt="ol">1.</button>
         <button type="button" title="Link" data-fmt="link">${icon("tag",15)}</button>
+        <span class="sep"></span>
+        <button type="button" title="Insert an image" data-fmt="image">Image</button>
+        <button type="button" title="Embed a video, map, or audio" data-fmt="embed">Embed</button>
         <span class="sep"></span>
         <button type="button" title="Horizontal rule" data-fmt="hr"><span style="display:inline-block;width:16px;height:2px;background:currentColor;border-radius:2px"></span></button>
         <span style="margin-left:auto;font-size:12px;color:var(--ink3);padding:0 8px">Markdown shortcuts on</span>
@@ -4573,6 +4618,29 @@
       if (/^(https?:|mailto:)/i.test(url)) exec("createLink", url);
       else toast("Links need to start with https:// or mailto:");
     }
+    else if (kind === "image") {
+      const url = (window.prompt("Image address (https://...)", "https://") || "").trim();
+      if (!url || url === "https://") return;
+      if (!/^https:\/\//i.test(url)) { toast("Images need to start with https://"); return; }
+      const alt = (window.prompt("Caption or description (optional)", "") || "").trim();
+      insertEmbedBlock("![" + alt + "](" + url + ")");
+    }
+    else if (kind === "embed") {
+      const url = (window.prompt("Embed address: a YouTube or Vimeo link, a Google Maps or OpenStreetMap embed URL, or a Spotify link.", "https://") || "").trim();
+      if (!url || url === "https://") return;
+      if (!/^https:\/\//i.test(url)) { toast("Embeds need to start with https://"); return; }
+      if (!embedInfo(url)) toast("That address will show as a link. Interactive embeds support YouTube, Vimeo, Google Maps, OpenStreetMap, and Spotify.");
+      const label = (window.prompt("Label (optional)", "") || "").trim();
+      insertEmbedBlock("@[" + label + "](" + url + ")");
+    }
+  }
+  // Insert a Markdown embed line as its own paragraph, so it round-trips to a
+  // standalone block and renders as an embed in the preview and the reader.
+  function insertEmbedBlock(text) {
+    const ed = $("#we-body"); if (!ed) return;
+    ed.focus();
+    try { document.execCommand("insertHTML", false, "<p>" + esc(text) + "</p>"); }
+    catch (e) { const p = document.createElement("p"); p.textContent = text; ed.appendChild(p); }
   }
 
   // formatBlock toggles a block between the given tag and a plain paragraph.
