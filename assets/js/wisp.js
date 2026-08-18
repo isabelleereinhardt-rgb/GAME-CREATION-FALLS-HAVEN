@@ -4047,11 +4047,220 @@
         closeModal();
         toast("Password updated. You're signed in.");
         syncAuthHeader();
+        // If this reset was for the admin, let them set a fresh panel password too.
+        if (WispDB.isAdmin) promptNewAdminPassword();
       } catch (ex) {
         err.textContent = (ex && ex.message) || "Could not update the password."; err.style.display = "block";
         btn.disabled = false; btn.textContent = "Save new password";
       }
     });
+  }
+
+  /* ======================================================================= */
+  /*  ADMIN PANEL  ·  owner-only controls, opened with Shift + S + D          */
+  /*  The panel password is a soft second lock; the real authority for every  */
+  /*  action is the is_admin gate the database enforces (RLS).                */
+  /* ======================================================================= */
+  let adminUnlocked = false;
+  async function sha256Hex(str) {
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(str)));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+  function newSalt() { return "wisp-admin-" + Math.random().toString(36).slice(2, 10); }
+
+  async function openAdminPanel() {
+    if (!isLive()) { toast("The admin panel needs the connected site."); return; }
+    if (!WispDB.signedIn) { toast("Sign in with your admin account first."); openAuth("in"); return; }
+    if (!WispDB.isAdmin) { toast("This account is not an admin."); return; }
+    if (adminUnlocked) { renderAdminPanel(); return; }
+    renderAdminLock();
+  }
+
+  function renderAdminLock() {
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <h2 style="font-size:20px">Admin access</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <p class="muted" style="font-size:13px;margin-bottom:14px">Enter the admin password to open the control panel.</p>
+      <div class="field"><label>Admin password</label><input type="password" id="admin-pw" autocomplete="off"></div>
+      <div class="modal-actions" style="justify-content:space-between">
+        <button class="btn--link" id="admin-reset-lock" style="font-size:13px">Reset admin password</button>
+        <button class="btn btn--primary" id="admin-unlock">Unlock</button>
+      </div>`, "Admin access");
+    const submit = async () => {
+      const pw = $("#admin-pw").value || "";
+      const s = await WispDB.getAdminSettings();
+      if (!s) { toast("Admin settings are missing. Run migration 010 in Supabase."); return; }
+      const hash = await sha256Hex((s.panel_pw_salt || "") + pw);
+      if (hash === s.panel_pw_hash) { adminUnlocked = true; closeModal(); renderAdminPanel(); }
+      else toast("That password is not right.");
+    };
+    $("#admin-unlock").addEventListener("click", submit);
+    $("#admin-pw").addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
+    $("#admin-reset-lock").addEventListener("click", adminEmailReset);
+    $("#admin-pw").focus();
+  }
+
+  async function adminEmailReset() {
+    const email = WispDB.user && WispDB.user.email;
+    if (!email) { toast("No email is set on this account."); return; }
+    try {
+      await WispDB.resetPassword(email);
+      toast("A reset link is on its way to " + email + ". Open it to set a new admin password.");
+    } catch (e) { toast((e && e.message) || "Could not send the reset email."); }
+  }
+
+  // Offered at the end of the reset-link flow, so a verified admin can set a new
+  // panel password even when they were locked out of the old one.
+  function promptNewAdminPassword() {
+    openModal(`
+      <div style="margin-bottom:6px"><h2 style="font-size:20px">Set a new admin password</h2></div>
+      <p class="muted" style="font-size:13px;margin-bottom:14px">You are verified. Choose the new password for the admin panel.</p>
+      <div class="field"><label>New admin password</label><input type="password" id="ra-pw" autocomplete="new-password"></div>
+      <div class="modal-actions">
+        <button class="btn btn--quiet" data-modal-cancel>Skip</button>
+        <button class="btn btn--primary" id="ra-save">Save admin password</button>
+      </div>`, "New admin password");
+    $("#ra-save").addEventListener("click", async () => {
+      const pw = $("#ra-pw").value || "";
+      if (pw.length < 6) { toast("Use at least 6 characters."); return; }
+      const salt = newSalt();
+      try { await WispDB.setAdminPassword(await sha256Hex(salt + pw), salt); closeModal(); toast("Admin panel password updated."); }
+      catch (e) { toast((e && e.message) || "Could not set the admin password."); }
+    });
+  }
+
+  async function renderAdminPanel() {
+    openModal(`<div class="admin-panel"><p class="muted admin-empty">Loading the control panel...</p></div>`, "Admin control panel");
+    let events = [], hubs = [], works = [];
+    try {
+      [events, hubs, works] = await Promise.all([
+        WispDB.listEvents().catch(() => []),
+        WispDB.listHubs().catch(() => []),
+        WispDB.listWorks({ limit: 200 }).catch(() => [])
+      ]);
+    } catch (e) {}
+
+    const evRows = events.length ? events.map(e => `
+      <div class="admin-row">
+        <div class="admin-row__main"><b>${esc(e.title)}</b><span class="muted">${esc(e.kind || "")}${e.month ? " &middot; " + esc(e.month) + " " + esc(e.day || "") : ""}</span></div>
+        <button class="btn btn--danger btn--sm" data-admin-del-event="${esc(e.id)}" data-label="${esc(e.title)}">Delete</button>
+      </div>`).join("") : `<p class="muted admin-empty">No events yet.</p>`;
+    const hubRows = hubs.length ? hubs.map(h => `
+      <div class="admin-row">
+        <div class="admin-row__main"><b>${esc(h.name)}</b><span class="muted">${esc(h.kind || "")}</span></div>
+        <button class="btn btn--danger btn--sm" data-admin-del-hub="${esc(h.id)}" data-label="${esc(h.name)}">Delete</button>
+      </div>`).join("") : `<p class="muted admin-empty">No hubs yet.</p>`;
+    const workRows = works.length ? works.map(w => `
+      <div class="admin-row">
+        <div class="admin-row__main"><b>${esc(w.title)}</b><span class="muted">by ${esc(w.author || "Unknown")}</span></div>
+        <button class="btn btn--danger btn--sm" data-admin-del-work="${esc(w.id)}" data-label="${esc(w.title)}">Delete</button>
+      </div>`).join("") : `<p class="muted admin-empty">No works to show.</p>`;
+
+    openModal(`
+      <div class="admin-panel">
+        <div class="admin-panel__head">
+          <h2>Admin control panel</h2>
+          <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+        </div>
+        <p class="muted admin-panel__note">Signed in as ${esc((WispDB.user && WispDB.user.email) || "admin")}. Changes here are live for everyone.</p>
+
+        <section class="admin-sec">
+          <h3>Events</h3>
+          <div class="admin-list">${evRows}</div>
+          <div class="admin-add">
+            <input type="text" id="ae-title" placeholder="Event title">
+            <input type="text" id="ae-kind" placeholder="Kind (Collection, Exchange, Nomination...)">
+            <input type="text" id="ae-note" placeholder="Short note (optional)">
+            <div class="admin-add__row">
+              <input type="text" id="ae-month" placeholder="Month (Sep)" style="width:110px">
+              <input type="text" id="ae-day" placeholder="Day (14)" style="width:90px">
+              <button class="btn btn--primary btn--sm" data-admin-add-event>Add event</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="admin-sec">
+          <h3>Hubs</h3>
+          <div class="admin-list">${hubRows}</div>
+          <div class="admin-add">
+            <input type="text" id="ah-name" placeholder="Hub name">
+            <input type="text" id="ah-kind" placeholder="Kind (Tag, Fandom, Format...)">
+            <input type="text" id="ah-note" placeholder="Short note (optional)">
+            <div class="admin-add__row">
+              <input type="text" id="ah-icon" placeholder="Icon (tag or book)" style="width:170px">
+              <button class="btn btn--primary btn--sm" data-admin-add-hub>Add hub</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="admin-sec">
+          <h3>Works and books</h3>
+          <input type="text" id="admin-work-filter" placeholder="Filter by title or author" class="admin-filter">
+          <div class="admin-list" id="admin-work-list">${workRows}</div>
+        </section>
+
+        <section class="admin-sec">
+          <h3>Admin password</h3>
+          <div class="admin-add">
+            <input type="password" id="admin-new-pw" placeholder="New admin password" autocomplete="new-password">
+            <div class="admin-add__row">
+              <button class="btn btn--primary btn--sm" data-admin-set-pw>Change password</button>
+              <button class="btn btn--quiet btn--sm" data-admin-reset>Reset by email</button>
+            </div>
+            <p class="muted" style="font-size:12px;margin:2px 0 0">The password is a second lock. Adding and deleting only work while you are signed into your admin account.</p>
+          </div>
+        </section>
+      </div>`, "Admin control panel");
+
+    wireAdminPanel();
+  }
+
+  function wireAdminPanel() {
+    const card = $("#modalCard");
+    const withConfirm = (sel, prop, delFn, noun) => card.querySelectorAll(sel).forEach(b => b.addEventListener("click", () => {
+      const rid = b.dataset[prop], label = b.dataset.label || ("this " + noun);
+      confirmDialog({ title: `Delete this ${noun}?`, body: `&ldquo;${esc(label)}&rdquo; will be removed for everyone.${noun === "work" ? " Its chapters go too. This cannot be undone." : ""}`, confirmText: `Delete ${noun}`, danger: true },
+        async () => { try { await delFn(rid); toast(noun[0].toUpperCase() + noun.slice(1) + " deleted."); } catch (e) { toast((e && e.message) || "Could not delete."); } renderAdminPanel(); });
+    }));
+    withConfirm("[data-admin-del-event]", "adminDelEvent", (id) => WispDB.deleteEvent(id), "event");
+    withConfirm("[data-admin-del-hub]", "adminDelHub", (id) => WispDB.deleteHub(id), "hub");
+    withConfirm("[data-admin-del-work]", "adminDelWork", (id) => WispDB.adminDeleteWork(id), "work");
+
+    const addEvent = card.querySelector("[data-admin-add-event]");
+    addEvent && addEvent.addEventListener("click", async () => {
+      const title = $("#ae-title").value.trim();
+      if (!title) { toast("Give the event a title."); return; }
+      try { await WispDB.createEvent({ title, kind: $("#ae-kind").value.trim(), note: $("#ae-note").value.trim(), month: $("#ae-month").value.trim(), day: $("#ae-day").value.trim(), sort: 100 }); toast("Event added."); renderAdminPanel(); }
+      catch (e) { toast((e && e.message) || "Could not add the event."); }
+    });
+    const addHub = card.querySelector("[data-admin-add-hub]");
+    addHub && addHub.addEventListener("click", async () => {
+      const name = $("#ah-name").value.trim();
+      if (!name) { toast("Give the hub a name."); return; }
+      try { await WispDB.createHub({ name, kind: $("#ah-kind").value.trim(), note: $("#ah-note").value.trim(), icon: ($("#ah-icon").value.trim() || "tag"), sort: 100 }); toast("Hub added."); renderAdminPanel(); }
+      catch (e) { toast((e && e.message) || "Could not add the hub."); }
+    });
+
+    const filter = card.querySelector("#admin-work-filter");
+    filter && filter.addEventListener("input", () => {
+      const q = filter.value.trim().toLowerCase();
+      card.querySelectorAll("#admin-work-list .admin-row").forEach(row => {
+        row.style.display = row.textContent.toLowerCase().includes(q) ? "" : "none";
+      });
+    });
+
+    const setPw = card.querySelector("[data-admin-set-pw]");
+    setPw && setPw.addEventListener("click", async () => {
+      const pw = $("#admin-new-pw").value || "";
+      if (pw.length < 6) { toast("Use at least 6 characters."); return; }
+      const salt = newSalt();
+      try { await WispDB.setAdminPassword(await sha256Hex(salt + pw), salt); toast("Admin password changed."); $("#admin-new-pw").value = ""; }
+      catch (e) { toast((e && e.message) || "Could not change the password."); }
+    });
+    const resetBtn = card.querySelector("[data-admin-reset]");
+    resetBtn && resetBtn.addEventListener("click", adminEmailReset);
   }
 
   // Toolbar: apply formatting to the current selection in the editor. Uses the
@@ -4312,6 +4521,15 @@
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") { closeModal(); closeTheme(); closeSheet(); }
     });
+
+    // Owner-only admin panel: hold Shift and press S and D together.
+    const adminChord = new Set();
+    document.addEventListener("keydown", (e) => {
+      if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+      if (e.code === "KeyS" || e.code === "KeyD") adminChord.add(e.code);
+      if (e.shiftKey && adminChord.has("KeyS") && adminChord.has("KeyD")) { adminChord.clear(); openAdminPanel(); }
+    });
+    document.addEventListener("keyup", (e) => { adminChord.delete(e.code); });
     $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
 
     window.addEventListener("hashchange", route);

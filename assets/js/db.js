@@ -490,6 +490,54 @@ window.WispDB = (function () {
       if (error) throw error;
     }
   }
+  /* ---- admin ------------------------------------------------------------ */
+  // The admin panel's unlock secret lives as a salted hash in admin_settings,
+  // readable only by admins (RLS). The client hashes what the admin types and
+  // compares; the real authority for every action below is the is_admin gate.
+  async function getAdminSettings() {
+    if (!client) return null;
+    const { data, error } = await client.from("admin_settings").select("panel_pw_hash, panel_pw_salt").eq("id", 1).maybeSingle();
+    if (error) return null;
+    return data || null;
+  }
+  async function setAdminPassword(hashHex, salt) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("admin_settings")
+      .update({ panel_pw_hash: hashHex, panel_pw_salt: salt, updated_at: new Date().toISOString() }).eq("id", 1);
+    if (error) throw error;
+    return true;
+  }
+  async function createEvent(f) {
+    if (!user) throw new Error("Sign in first.");
+    const row = { title: f.title, kind: f.kind || "Collection", note: f.note || "", day: f.day || "", month: f.month || "", sort: +f.sort || 0 };
+    const { data, error } = await client.from("events").insert(row).select().single();
+    if (error) throw error;
+    return data;
+  }
+  async function deleteEvent(id) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("events").delete().eq("id", id);
+    if (error) throw error;
+  }
+  async function createHub(f) {
+    if (!user) throw new Error("Sign in first.");
+    const row = { name: f.name, kind: f.kind || "Tag", note: f.note || "", icon: f.icon || "tag", sort: +f.sort || 0 };
+    const { data, error } = await client.from("hubs").insert(row).select().single();
+    if (error) throw error;
+    return data;
+  }
+  async function deleteHub(id) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("hubs").delete().eq("id", id);
+    if (error) throw error;
+  }
+  // Admin moderation: delete any work by id (RLS allows this only for admins).
+  async function adminDeleteWork(id) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("works").delete().eq("id", id);
+    if (error) throw error;
+  }
+
   // One hub, with its real follower count and whether I follow it.
   async function hubDetail(id) {
     const { data: hub } = await client.from("hubs").select("*").eq("id", id).maybeSingle();
@@ -856,6 +904,7 @@ window.WispDB = (function () {
     get user() { return user; },
     get profile() { return profile; },
     get signedIn() { return !!user; },
+    get isAdmin() { return !!(profile && profile.is_admin); },
     get pendingRecovery() { return pendingRecovery; },
     clearRecovery() { pendingRecovery = false; },
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
@@ -869,6 +918,7 @@ window.WispDB = (function () {
     updateProfile, getProfile, worksByAuthor,
     listEvents, myEventIds, toggleEventJoin,
     listHubs, myHubIds, hubMemberCounts, toggleHubMembership, hubDetail, worksInHub,
+    getAdminSettings, setAdminPassword, createEvent, deleteEvent, createHub, deleteHub, adminDeleteWork,
     getWorksByIds, myBookmarks, myHistory, clearHistory,
     myLists, createList, deleteList, listContents, addToList, removeFromList,
     myHighlights, saveHighlight, deleteHighlight, submitReport, saveProgress, latestProgress, readingStats,
