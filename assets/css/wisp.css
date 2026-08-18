@@ -721,6 +721,26 @@ a.card__title:hover { color: var(--rose-ink); }
 .mb-chip:hover { border-color: var(--rose); color: var(--rose-ink); }
 .mb-chip span { font-size: 15px; line-height: 1; }
 
+/* Help & support links in the settings drawer. */
+.support-links { display: flex; flex-direction: column; gap: 10px; margin: 2px 0 4px; }
+.support-link {
+  display: flex; align-items: center; gap: 12px; text-decoration: none;
+  border: 1px solid var(--line); background: var(--surface);
+  border-radius: var(--radius-s); padding: 12px 14px; color: var(--ink);
+  transition: border-color .14s, background .14s;
+}
+.support-link:hover { border-color: var(--rose); background: var(--rose-wash); }
+.support-link__ic {
+  flex: none; width: 34px; height: 34px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--rose-wash); color: var(--rose);
+}
+.support-link__body { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.support-link__title { font-size: 14.5px; font-weight: 600; color: var(--ink); }
+.support-link__sub { font-size: 12.5px; color: var(--ink3); line-height: 1.35; }
+.support-link__go { flex: none; color: var(--ink3); font-size: 15px; }
+.support-link:hover .support-link__go { color: var(--rose-ink); }
+
 .para { position: relative; }
 .para__marker {
   position: absolute; left: -34px; top: .32em; width: 26px;
