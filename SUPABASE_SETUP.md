@@ -35,9 +35,11 @@ Supabase's free tier.
    to make Community events real, so joining and leaving them persists.
 7. Run [`supabase/migrations/005_work_controls.sql`](supabase/migrations/005_work_controls.sql)
    to add the per-work "hide my numbers" control.
-8. Run [`supabase/migrations/006_reports.sql`](supabase/migrations/006_reports.sql)
-   to make the in-app report button real, so reports are written to a table
-   only you (as the project owner) can read.
+8. Optional: [`supabase/migrations/006_reports.sql`](supabase/migrations/006_reports.sql)
+   creates a reports table only you (the project owner) can read. The in-app
+   report button now hands off to an external moderation form instead, so this
+   migration is optional; skip it unless you want the in-database reports table
+   too.
 9. Run [`supabase/migrations/007_hubs.sql`](supabase/migrations/007_hubs.sql)
    to make community hubs real, so following a hub persists and each hub shows
    its true follower count.

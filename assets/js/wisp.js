@@ -1571,48 +1571,24 @@
     menuDialog(w.title, items);
   }
 
-  // A real report: signed-in readers pick a reason and it is written to the
-  // reports table for the moderation team. Sample works (no real id) explain
-  // that reporting comes online once the site is connected.
+  // The report button hands off to a short moderation form (opens in a new
+  // tab). Reporting works whether or not the reader is signed in.
+  const REPORT_FORM = "https://forms.gle/GWvPX1vrbVfUddYL8";
   function openReportDialog(id) {
     const w = activeById(id);
     if (!w) return;
-    if (isLive() && !WispDB.signedIn) { openAuth("in"); return; }
-    const live = isLive() && isUuid(id);
-    const REASONS = ["Illegal content", "Harassment or threats", "Hateful content", "Spam", "Untagged or mis-rated", "Something else"];
     openModal(`
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <h2 style="font-size:20px">Report this work</h2>
         <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
       </div>
-      <p class="soft" style="font-size:14px;margin:0 0 14px;line-height:1.6">Reports go to the moderation team. Fiction is allowed when it's tagged and warned; the limits are illegal content, targeted harassment, doxxing, threats against real people, and spam.</p>
-      <div class="field"><label>What's wrong</label>
-        <div class="report-reasons" role="radiogroup" aria-label="Reason">
-          ${REASONS.map((r, i) => `<button type="button" class="report-reason${i === 0 ? " is-on" : ""}" data-reason="${esc(r)}" role="radio" aria-checked="${i === 0 ? "true" : "false"}">${esc(r)}</button>`).join("")}
-        </div>
-      </div>
-      <div class="field"><label>Anything to add (optional)</label><textarea id="rp-detail" rows="3" placeholder="What should a moderator know"></textarea></div>
+      <p class="soft" style="font-size:14px;margin:0 0 6px;line-height:1.6">Reports go to the moderation team through a short form. Please name the work and say what's wrong.</p>
+      ${w.title ? `<p class="soft" style="font-size:13px;margin:0 0 14px"><span class="muted">Reporting:</span> ${esc(w.title)}</p>` : ""}
+      <p class="soft" style="font-size:13px;margin:0 0 16px;line-height:1.6">Fiction is allowed when it's tagged and warned; the limits are illegal content, targeted harassment, doxxing, threats against real people, and spam.</p>
       <div class="modal-actions">
         <button class="btn btn--quiet" data-modal-cancel>Cancel</button>
-        <button class="btn btn--primary" data-rp-send ${live ? "" : "disabled"}>Send report</button>
-      </div>
-      ${live ? "" : `<p class="soft" style="font-size:12.5px;margin:12px 0 0">This is a sample work. Reporting saves once the site is connected to its backend.</p>`}`, "Report this work");
-    const card = $("#modalCard");
-    let reason = REASONS[0];
-    card.querySelectorAll("[data-reason]").forEach(b => b.addEventListener("click", () => {
-      card.querySelectorAll("[data-reason]").forEach(x => { x.classList.remove("is-on"); x.setAttribute("aria-checked", "false"); });
-      b.classList.add("is-on"); b.setAttribute("aria-checked", "true"); reason = b.dataset.reason;
-    }));
-    const send = card.querySelector("[data-rp-send]");
-    if (send && live) send.addEventListener("click", async () => {
-      send.disabled = true;
-      try {
-        await WispDB.submitReport({ target_type: "work", target_id: id, reason,
-          detail: ($("#rp-detail") && $("#rp-detail").value.trim()) || "" });
-        closeModal();
-        toast("Report sent. Thank you; a moderator will review it.");
-      } catch (e) { send.disabled = false; toast((e && e.message) || "Could not send the report."); }
-    });
+        <a class="btn btn--primary" href="${REPORT_FORM}" target="_blank" rel="noopener noreferrer" data-modal-cancel>Open the report form</a>
+      </div>`, "Report this work");
   }
 
   function msRow(b) {
