@@ -12,13 +12,50 @@
   // Real database ids are UUIDs; the bundled sample works use short string ids.
   const isUuid = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s || "");
 
+  /* ---- typography: fonts and roles readers can restyle ------------------- */
+  const TYPE_FONTS = [
+    { id: "playfair",     name: "Playfair Display",    stack: "'Playfair Display', Georgia, serif" },
+    { id: "cormorant",    name: "Cormorant Garamond",  stack: "'Cormorant Garamond', Georgia, serif" },
+    { id: "ebgaramond",   name: "EB Garamond",         stack: "'EB Garamond', Georgia, serif" },
+    { id: "lora",         name: "Lora",                stack: "'Lora', Georgia, serif" },
+    { id: "newsreader",   name: "Newsreader",          stack: "'Newsreader', Georgia, serif" },
+    { id: "crimson",      name: "Crimson Pro",         stack: "'Crimson Pro', Georgia, serif" },
+    { id: "merriweather", name: "Merriweather",        stack: "'Merriweather', Georgia, serif" },
+    { id: "inter",        name: "Inter",               stack: "'Inter', system-ui, sans-serif" },
+    { id: "system",       name: "System sans",         stack: "system-ui, -apple-system, sans-serif" }
+  ];
+  const TYPE_FONT_MAP = TYPE_FONTS.reduce((m, f) => { m[f.id] = f.stack; return m; }, {});
+  // Roles map to the elements the reader actually renders: the chapter title and
+  // subtitle, the three prose heading levels (# ## ###), body text, and captions.
+  // size 0 for body means "follow the reading-size slider".
+  const TYPE_ROLES = [
+    { id: "title",    label: "Title",       font: "playfair",   size: 34 },
+    { id: "subtitle", label: "Subtitle",    font: "playfair",   size: 24 },
+    { id: "h1",       label: "Heading 1",   font: "playfair",   size: 27 },
+    { id: "h2",       label: "Heading 2",   font: "playfair",   size: 23 },
+    { id: "h3",       label: "Heading 3",   font: "playfair",   size: 20 },
+    { id: "body",     label: "Normal text", font: "auto",       size: 0 },
+    { id: "caption",  label: "Caption",     font: "newsreader", size: 13 }
+  ];
+  function typographyDefaults() {
+    const t = {};
+    TYPE_ROLES.forEach(r => { t[r.id] = { font: r.font, size: r.size, color: "" }; });
+    return t;
+  }
+
   /* ---- settings and persistence (stands in for server-side sync) --------- */
   const DEFAULTS = { theme:"cream", accent:"default", face:"humanist", size:19, measure:66,
-                     dyslexia:false, motion:false, justify:false, margins:true, view:"gallery", adultOK:false, introSeen:false, comicMode:"strip" };
+                     dyslexia:false, motion:false, justify:false, margins:true, view:"gallery", adultOK:false, introSeen:false, comicMode:"strip",
+                     typography: typographyDefaults() };
   let settings = load();
   function load() {
-    try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem("wisp.settings") || "{}")); }
-    catch (e) { return Object.assign({}, DEFAULTS); }
+    try {
+      const s = Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem("wisp.settings") || "{}"));
+      // Fill in any typography roles missing from an older saved blob.
+      s.typography = Object.assign(typographyDefaults(), s.typography || {});
+      return s;
+    }
+    catch (e) { return Object.assign({}, DEFAULTS, { typography: typographyDefaults() }); }
   }
   function save() { try { localStorage.setItem("wisp.settings", JSON.stringify(settings)); } catch (e) {} }
 
@@ -3014,8 +3051,30 @@
     const meta = $('meta[name="theme-color"]'); if (meta) meta.content = themeColor;
     // reflect prose justify on any open reader
     $$(".prose").forEach(p => { p.dataset.justify = settings.justify ? "on" : "off"; p.dataset.hyphen = settings.justify ? "on" : "off"; });
+    applyTypography();
     save();
     syncDrawer();
+  }
+
+  // Push the reader's chosen per-role fonts, sizes, and colours onto :root as
+  // CSS variables. The reader stylesheet reads them, falling back to the design
+  // defaults when a value is unset (empty colour = inherit; body size 0 = slider).
+  function applyTypography() {
+    const r = document.documentElement;
+    const t = settings.typography || typographyDefaults();
+    TYPE_ROLES.forEach(role => {
+      const v = t[role.id] || {};
+      if (role.id === "body") {
+        // "auto" follows the reading-face toggle; a chosen font overrides it.
+        const chosen = v.font && v.font !== "auto" && TYPE_FONT_MAP[v.font];
+        r.style.setProperty("--ty-body-font", chosen ? TYPE_FONT_MAP[v.font] : "var(--font-read)");
+        r.style.setProperty("--ty-body-size", (v.size && +v.size > 0) ? (+v.size + "px") : "var(--read-size)");
+      } else {
+        r.style.setProperty("--ty-" + role.id + "-font", TYPE_FONT_MAP[v.font] || TYPE_FONT_MAP[role.font]);
+        r.style.setProperty("--ty-" + role.id + "-size", (+v.size || role.size) + "px");
+      }
+      r.style.setProperty("--ty-" + role.id + "-color", v.color || "");
+    });
   }
 
   function syncDrawer() {
@@ -3047,7 +3106,68 @@
     $("#optMotion").addEventListener("change", e => { settings.motion = e.target.checked; applySettings(); });
     $("#optJustify").addEventListener("change", e => { settings.justify = e.target.checked; applySettings(); });
     $("#optMargins").addEventListener("change", e => { settings.margins = e.target.checked; applySettings(); });
-    $("#resetTheme").addEventListener("click", () => { settings = Object.assign({}, DEFAULTS, { adultOK: settings.adultOK }); applySettings(); toast("Reset to defaults."); });
+    $("#resetTheme").addEventListener("click", () => { settings = Object.assign({}, DEFAULTS, { adultOK: settings.adultOK, typography: typographyDefaults() }); applySettings(); buildTypographyPanel(); toast("Reset to defaults."); });
+    buildTypographyPanel();
+    const rt = $("#resetTypography");
+    rt && rt.addEventListener("click", () => { settings.typography = typographyDefaults(); applyTypography(); save(); buildTypographyPanel(); toast("Typography reset to defaults."); });
+  }
+
+  function inkHex() {
+    const c = (getComputedStyle(document.documentElement).getPropertyValue("--ink") || "").trim();
+    return /^#[0-9a-f]{3,8}$/i.test(c) ? c : "#2b2530";
+  }
+  function buildTypographyPanel() {
+    const panel = $("#typographyPanel"); if (!panel) return;
+    const t = settings.typography || typographyDefaults();
+    const ink = inkHex();
+    const fontOpts = (sel) => TYPE_FONTS.map(f => `<option value="${f.id}"${f.id === sel ? " selected" : ""}>${esc(f.name)}</option>`).join("");
+    panel.innerHTML = `<div class="ty-grid">
+      <div class="ty-head"><span>Style</span><span>Font</span><span>Size</span><span>Colour</span></div>
+      ${TYPE_ROLES.map(role => {
+        const v = t[role.id] || {};
+        const sizeVal = role.id === "body" ? (v.size && +v.size > 0 ? v.size : "") : (+v.size || role.size);
+        const hasColor = !!v.color;
+        const selFont = v.font || role.font;
+        const autoOpt = role.id === "body" ? `<option value="auto"${selFont === "auto" ? " selected" : ""}>Auto (reading face)</option>` : "";
+        return `<div class="ty-row">
+          <span class="ty-name" data-ty-prev="${role.id}">${esc(role.label)}</span>
+          <select class="ty-font" data-ty="${role.id}" aria-label="${esc(role.label)} font">${autoOpt}${fontOpts(selFont)}</select>
+          <input class="ty-size" type="number" min="10" max="72" step="1" data-ty-size="${role.id}" value="${esc(String(sizeVal))}"${role.id === "body" ? ' placeholder="Auto"' : ""} aria-label="${esc(role.label)} size">
+          <span class="ty-color-wrap">
+            <input class="ty-color" type="color" data-ty-color="${role.id}" value="${esc(v.color || ink)}" aria-label="${esc(role.label)} colour">
+            <button type="button" class="ty-color-clear" data-ty-color-clear="${role.id}" title="Reset colour" aria-label="Reset ${esc(role.label)} colour"${hasColor ? "" : " hidden"}>&times;</button>
+          </span>
+        </div>`;
+      }).join("")}
+    </div>`;
+    panel.querySelectorAll("[data-ty]").forEach(sel => sel.addEventListener("change", () => setTy(sel.dataset.ty, "font", sel.value)));
+    panel.querySelectorAll("[data-ty-size]").forEach(inp => inp.addEventListener("input", () => setTy(inp.dataset.tySize, "size", inp.value === "" ? 0 : +inp.value)));
+    panel.querySelectorAll("[data-ty-color]").forEach(inp => inp.addEventListener("input", () => {
+      setTy(inp.dataset.tyColor, "color", inp.value);
+      const btn = panel.querySelector('[data-ty-color-clear="' + inp.dataset.tyColor + '"]'); if (btn) btn.hidden = false;
+    }));
+    panel.querySelectorAll("[data-ty-color-clear]").forEach(btn => btn.addEventListener("click", () => {
+      const id = btn.dataset.tyColorClear; setTy(id, "color", "");
+      const inp = panel.querySelector('[data-ty-color="' + id + '"]'); if (inp) inp.value = inkHex();
+      btn.hidden = true;
+    }));
+    syncTypographyPreview();
+  }
+  function setTy(roleId, key, val) {
+    if (!settings.typography) settings.typography = typographyDefaults();
+    if (!settings.typography[roleId]) settings.typography[roleId] = {};
+    settings.typography[roleId][key] = val;
+    applyTypography(); save(); syncTypographyPreview();
+  }
+  function syncTypographyPreview() {
+    const panel = $("#typographyPanel"); if (!panel) return;
+    const t = settings.typography || typographyDefaults();
+    TYPE_ROLES.forEach(role => {
+      const v = t[role.id] || {}; const prev = panel.querySelector('[data-ty-prev="' + role.id + '"]'); if (!prev) return;
+      const chosen = v.font && v.font !== "auto" && TYPE_FONT_MAP[v.font];
+      prev.style.fontFamily = chosen ? TYPE_FONT_MAP[v.font] : (role.id === "body" ? "var(--font-read)" : TYPE_FONT_MAP[role.font]);
+      prev.style.color = v.color || "";
+    });
   }
 
   // Shared modal-overlay plumbing: move focus in, trap Tab, make the app inert,

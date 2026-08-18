@@ -1438,3 +1438,27 @@ mark.hl { background: color-mix(in srgb, var(--amber) 34%, transparent); border-
   background: var(--bg, #fff); color: var(--ink); font-size: 13px; font-family: inherit; }
 .dpick__time input[type="time"]:focus { outline: none; border-color: var(--rose); }
 .dpick__clear { font-size: 12px; margin-left: auto; }
+
+/* ---- Typography settings panel ------------------------------------------ */
+.ty-grid { display: flex; flex-direction: column; gap: 6px; }
+.ty-head, .ty-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.4fr) 52px auto; gap: 8px; align-items: center; }
+.ty-head { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink3); padding: 0 2px 3px; }
+.ty-name { font-size: 14px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ty-font, .ty-size { padding: 6px 7px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg,#fff);
+  color: var(--ink); font-size: 12.5px; font-family: inherit; width: 100%; min-width: 0; }
+.ty-font:focus, .ty-size:focus { outline: none; border-color: var(--rose); }
+.ty-color-wrap { display: flex; align-items: center; gap: 2px; }
+.ty-color { width: 30px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: none; cursor: pointer; }
+.ty-color::-webkit-color-swatch-wrapper { padding: 2px; }
+.ty-color::-webkit-color-swatch { border: none; border-radius: 5px; }
+.ty-color-clear { border: none; background: none; color: var(--ink3); font-size: 15px; cursor: pointer; line-height: 1; padding: 0 2px; }
+.ty-color-clear:hover { color: var(--rose-ink); }
+
+/* ---- Reader typography (driven by the settings above via CSS variables) -- */
+.reader__title { font-family: var(--ty-title-font, var(--font-display)); font-size: var(--ty-title-size, 34px); color: var(--ty-title-color, var(--ink)); }
+.reader__chapter-title { font-family: var(--ty-subtitle-font, var(--font-display)); font-size: var(--ty-subtitle-size, 24px); color: var(--ty-subtitle-color, var(--ink)); }
+.prose h2 { font-family: var(--ty-h1-font, var(--font-display)); font-size: var(--ty-h1-size, 1.4em); color: var(--ty-h1-color, var(--ink)); }
+.prose h3 { font-family: var(--ty-h2-font, var(--font-display)); font-size: var(--ty-h2-size, 1.2em); color: var(--ty-h2-color, var(--ink)); }
+.prose h4 { font-family: var(--ty-h3-font, var(--font-display)); font-size: var(--ty-h3-size, 1.05em); color: var(--ty-h3-color, var(--ink)); }
+.prose p, .reader-para { font-family: var(--ty-body-font, var(--font-read)); font-size: var(--ty-body-size, var(--read-size)); color: var(--ty-body-color, inherit); }
+.note p { font-family: var(--ty-caption-font, var(--font-read)); font-size: var(--ty-caption-size, 13px); color: var(--ty-caption-color, inherit); }
