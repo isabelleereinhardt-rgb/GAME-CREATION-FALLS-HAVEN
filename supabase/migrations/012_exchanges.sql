@@ -25,6 +25,13 @@ create policy "exchanges_admin_write" on public.exchanges for all
   using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.is_admin))
   with check (exists (select 1 from public.profiles p where p.id = auth.uid() and p.is_admin));
 
+-- Seed one starter exchange so the section isn't empty on a fresh install.
+-- Change or delete it from the admin panel (Shift+S+D) whenever you like.
+insert into public.exchanges (id, title, note, status) values
+  ('a0000000-0000-4000-8000-000000000001', 'Winter Gift Exchange',
+   'Sign up with a request and an offer. When sign-ups close, everyone is matched to write one gift and receive one.', 'signups')
+on conflict (id) do nothing;
+
 create table if not exists public.exchange_signups (
   id          uuid primary key default gen_random_uuid(),
   exchange_id uuid not null references public.exchanges(id) on delete cascade,

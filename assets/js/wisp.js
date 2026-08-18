@@ -3141,6 +3141,47 @@
     inject(items) { LIVE.notifications = items; }
   };
 
+  /* ---- notifications dropdown (the bell) --------------------------------- */
+  let notifPopEl = null;
+  function notifPopContent() {
+    if (!isLive()) return `<div class="notif-pop__head">Notifications</div><div class="act-list"><p class="muted" style="font-size:13px;padding:12px;line-height:1.6">Notifications appear here once the site is connected. Most are off by default.</p></div>`;
+    if (!WispDB.signedIn) return `<div class="notif-pop__head">Notifications</div><div class="act-list"><p class="muted" style="font-size:13px;padding:12px;line-height:1.6">Sign in to see new chapters, comments, and followers.</p></div>`;
+    return `<div class="notif-pop__head">Notifications</div>${activityHTML()}`;
+  }
+  function notifOutside(e) { if (notifPopEl && !notifPopEl.contains(e.target) && !e.target.closest("#notifBtn")) closeNotifPop(); }
+  function notifEsc(e) { if (e.key === "Escape") closeNotifPop(); }
+  function closeNotifPop() {
+    if (notifPopEl) notifPopEl.classList.remove("is-open");
+    document.removeEventListener("click", notifOutside, true);
+    document.removeEventListener("keydown", notifEsc);
+  }
+  function renderNotifPop() {
+    if (!notifPopEl || !notifPopEl.classList.contains("is-open")) return;
+    notifPopEl.innerHTML = notifPopContent();
+    // Notification rows navigate through the global click handler; close after.
+    notifPopEl.querySelectorAll(".act[data-read], .act[data-work], .act[data-nav-user]").forEach(b => b.addEventListener("click", closeNotifPop));
+  }
+  function toggleNotifPop() {
+    if (!notifPopEl) {
+      notifPopEl = document.createElement("div");
+      notifPopEl.className = "notif-pop"; notifPopEl.id = "notifPop";
+      notifPopEl.setAttribute("role", "dialog"); notifPopEl.setAttribute("aria-label", "Notifications");
+      document.body.appendChild(notifPopEl);
+    }
+    if (notifPopEl.classList.contains("is-open")) { closeNotifPop(); return; }
+    const btn = $("#notifBtn"); const r = btn.getBoundingClientRect();
+    notifPopEl.style.top = (r.bottom + 8) + "px";
+    notifPopEl.style.right = Math.max(8, window.innerWidth - r.right) + "px";
+    notifPopEl.classList.add("is-open");
+    renderNotifPop();
+    // Fetch fresh notifications, then re-render into the open popover.
+    if (isLive() && WispDB.signedIn) {
+      loadNotifications(true).then(() => { renderNotifPop(); updateNotifBadge(); });
+    }
+    markNotificationsSeen();
+    setTimeout(() => { document.addEventListener("click", notifOutside, true); document.addEventListener("keydown", notifEsc); }, 0);
+  }
+
   let luckyIdx = 0;
   function widgetHTML() {
     if (isLive()) {
@@ -5272,19 +5313,7 @@
       if (WispDB.signedIn) WispDB.signOut().then(() => { guestBrowsing = false; toast("Signed out."); updateAuthGate(); });
       else openAuth("in");
     });
-    $("#notifBtn").addEventListener("click", () => {
-      const narrow = window.matchMedia("(max-width:1040px)").matches;
-      if (isLive() && WispDB.signedIn) {
-        // On a wide screen the feed already lives in the left rail, so the bell
-        // just marks it read; on a narrow screen it opens the activity sheet.
-        if (narrow) openRailSheet("activity");   // this also marks seen
-        else markNotificationsSeen();
-        return;
-      }
-      if (narrow) openRailSheet("activity");
-      else if (isLive()) openAuth("in");
-      else toast("Notifications show up in your activity feed. Most are off by default.");
-    });
+    $("#notifBtn").addEventListener("click", (e) => { e.stopPropagation(); toggleNotifPop(); });
     $("#railSheet").addEventListener("click", (e) => { if (e.target.id === "railSheet" || e.target.closest("[data-railclose]")) closeOverlay($("#railSheet")); });
     $("#menuBtn").addEventListener("click", openSheet);
     $("#navSheet").addEventListener("click", (e) => { if (e.target.id === "navSheet") closeSheet(); });
