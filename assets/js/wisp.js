@@ -2644,9 +2644,13 @@
       </div>`;
     } else {
       const compose = `<div class="event-post-compose">
-        <textarea id="ev-post" rows="3" placeholder="Share an update, a question, or a link with the event..."></textarea>
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
-          <button class="btn--link" data-event-space-leave="${esc(ev.id)}" style="color:#a2444f;font-size:13px">Leave the event</button>
+        <textarea id="ev-post" rows="3" placeholder="Share an update, a question, or an image with the event..."></textarea>
+        <input type="file" id="ev-img" accept="image/*" hidden>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <div style="display:flex;gap:14px;align-items:center">
+            <button class="btn--link" data-event-add-img style="font-size:13px">${icon("plus",13)} Add image</button>
+            <button class="btn--link" data-event-space-leave="${esc(ev.id)}" style="color:#a2444f;font-size:13px">Leave the event</button>
+          </div>
           <button class="btn btn--primary btn--sm" data-event-post="${esc(ev.id)}">Post</button>
         </div>
       </div>`;
@@ -2660,7 +2664,7 @@
                 <span class="event-post__when">${esc(WispDB.relTime(p.created_at))}</span>
                 ${mine ? `<button class="btn--link event-post__del" data-event-post-del="${esc(p.id)}" style="font-size:12px;color:#a2444f;margin-left:auto">Delete</button>` : ""}
               </div>
-              <div class="event-post__body">${mdInline(p.body)}</div>
+              <div class="event-post__body prose">${mdToHtmlBlocks(p.body).join("")}</div>
             </div>`;
           }).join("")
         : `<p class="muted" style="font-size:14px;padding:14px 2px">No posts yet. Be the first to say something.</p>`;
@@ -2683,10 +2687,27 @@
       confirmDialog({ title: "Leave this event?", body: "You'll leave the event space and stop seeing its posts. You can rejoin any time.", confirmText: "Leave event", danger: true },
         async () => { try { await WispDB.toggleEventJoin(id, false); toast("Left the event."); navigate("community"); } catch (e) { toast((e && e.message) || "Could not leave."); } });
     });
+    // Upload an image and drop it into the post as an inline embed.
+    const addImg = scr.querySelector("[data-event-add-img]"), imgInput = scr.querySelector("#ev-img");
+    addImg && addImg.addEventListener("click", () => {
+      if (!isLive()) { toast("Connect the site to upload images."); return; }
+      imgInput && imgInput.click();
+    });
+    imgInput && imgInput.addEventListener("change", async () => {
+      const file = imgInput.files && imgInput.files[0]; if (!file) return;
+      addImg.textContent = "Uploading...";
+      try {
+        const url = await WispDB.uploadCover(file);
+        const ta = $("#ev-post"); const sep = ta.value && !/\n$/.test(ta.value) ? "\n" : "";
+        ta.value += sep + "![](" + url + ")\n"; ta.focus();
+        toast("Image added. Post to share it.");
+      } catch (e) { toast((e && e.message) || "Could not upload the image."); }
+      addImg.innerHTML = icon("plus", 13) + " Add image"; imgInput.value = "";
+    });
     const post = scr.querySelector("[data-event-post]");
     post && post.addEventListener("click", async () => {
       const body = ($("#ev-post").value || "").trim();
-      if (!body) { toast("Write something first."); return; }
+      if (!body) { toast("Write something or add an image first."); return; }
       post.disabled = true;
       try { await WispDB.postToEvent(id, body); loadEventSpace(id); }
       catch (e) { post.disabled = false; toast((e && e.message) || "Could not post."); }
