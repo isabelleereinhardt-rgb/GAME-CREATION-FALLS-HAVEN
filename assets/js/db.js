@@ -294,6 +294,27 @@ window.WispDB = (function () {
     return data.id;
   }
 
+  // Swap two chapters' positions. Goes through a temporary number so the
+  // unique (work_id, number) constraint never trips mid-swap. Author-scoped by
+  // the chapters RLS policy.
+  async function swapChapterNumbers(workId, a, b) {
+    if (!user) throw new Error("Sign in first.");
+    const tmp = -1;
+    let r = await client.from("chapters").update({ number: tmp }).eq("work_id", workId).eq("number", a);
+    if (r.error) throw r.error;
+    r = await client.from("chapters").update({ number: a }).eq("work_id", workId).eq("number", b);
+    if (r.error) throw r.error;
+    r = await client.from("chapters").update({ number: b }).eq("work_id", workId).eq("number", tmp);
+    if (r.error) throw r.error;
+  }
+  // Tag names already in the system, for the editor's autocomplete.
+  async function listTags(limit) {
+    if (!client) return [];
+    const { data, error } = await client.from("tags").select("name").order("name").limit(limit || 500);
+    if (error) return [];
+    return (data || []).map(t => t.name).filter(Boolean);
+  }
+
   // Upcoming (still-locked) scheduled chapters for a work: number + release time
   // only, never the body or title.
   async function getUpcoming(workId) {
@@ -1175,7 +1196,7 @@ window.WispDB = (function () {
     onRecovery(fn) { recoveryListeners.add(fn); return () => recoveryListeners.delete(fn); },
     init, signUp, signIn, signOut, resetPassword, updatePassword,
     listWorks, getWork, getChapters, myWorks,
-    createWork, updateWork, deleteWork, setWorkStatus, firstChapter, saveChapter, getUpcoming, setTags,
+    createWork, updateWork, deleteWork, setWorkStatus, firstChapter, saveChapter, swapChapterNumbers, listTags, getUpcoming, setTags,
     mySeries, getSeries, worksInSeries, findOrCreateSeries, updateSeries, deleteSeries, countInSeries,
     toggle, myRelations, getComments, postComment, editComment, deleteComment, getReactions, toggleReaction, uploadCover,
     toggleFollow, amFollowing, followCounts, myFollowingIds, getNotifications,

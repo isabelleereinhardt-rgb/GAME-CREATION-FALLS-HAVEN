@@ -78,6 +78,18 @@
     "Choose not to warn": "The author has chosen not to flag specific warnings."
   };
   const WARNINGS = ["Graphic violence", "Major character death", "Underage", "Noncon", "Choose not to warn"];
+  // Seed suggestions for the tag autocomplete: broad book categories first, then
+  // common story tags. In live mode the tags already in the database are merged in.
+  const TAG_SUGGEST = [
+    "Romance", "Mystery", "Fantasy", "Science Fiction", "Fanfiction", "Poetry", "Horror", "Thriller",
+    "Historical", "Adventure", "Contemporary", "Literary Fiction", "Young Adult", "Drama", "Comedy",
+    "Action", "Paranormal", "Dystopian", "Slice of Life", "LGBTQ+", "Nonfiction", "Short Story",
+    "Slow Burn", "Enemies to Lovers", "Found Family", "Friends to Lovers", "Angst", "Fluff",
+    "Hurt/Comfort", "Coming of Age", "Alternate Universe", "Time Travel", "Magic", "Vampires",
+    "Werewolves", "Dragons", "Royalty", "Academia", "Small Town", "Second Chance", "Forbidden Love",
+    "Redemption", "Revenge", "Heist", "Survival", "Mythology", "Fairy Tale Retelling", "Gothic",
+    "Noir", "Cyberpunk", "Steampunk", "Space Opera", "Soulmates", "Grumpy/Sunshine"
+  ];
   // Build the attributes that make any element carry a hover/focus/tap tooltip.
   function tipAttrs(text) { const t = esc(text); return `data-tip="${t}" tabindex="0" aria-label="${t}"`; }
 
@@ -123,6 +135,85 @@
     }, true);
     window.addEventListener("scroll", hideTip, true);
     window.addEventListener("resize", hideTip);
+  }
+
+  // ---- serialization schedule: a friendly day + time an author updates on ---
+  const SCHED_DAYS = [
+    { v: "", l: "No set schedule" },
+    { v: "every day", l: "Every day" },
+    { v: "on weekdays", l: "Weekdays" },
+    { v: "on weekends", l: "Weekends" },
+    { v: "on Sundays", l: "Sundays" }, { v: "on Mondays", l: "Mondays" }, { v: "on Tuesdays", l: "Tuesdays" },
+    { v: "on Wednesdays", l: "Wednesdays" }, { v: "on Thursdays", l: "Thursdays" }, { v: "on Fridays", l: "Fridays" },
+    { v: "on Saturdays", l: "Saturdays" },
+    { v: "every other week", l: "Every other week" }, { v: "monthly", l: "Monthly" }
+  ];
+  function fmtClock(hhmm) {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm || ""); if (!m) return "";
+    let h = +m[1]; const mi = m[2]; const ap = h >= 12 ? "PM" : "AM";
+    h = h % 12; if (h === 0) h = 12;
+    return h + ":" + mi + " " + ap;
+  }
+  function composeSchedule(day, time) {
+    if (!day) return "";
+    return day + (time ? " at " + fmtClock(time) + " ET" : "");
+  }
+  // Best-effort prefill from whatever text is already stored on the work.
+  function parseSchedule(text) {
+    const s = (text || "").toLowerCase(); let day = "", time = "";
+    const found = SCHED_DAYS.find(d => d.v && s.indexOf(d.v.toLowerCase()) >= 0)
+      || SCHED_DAYS.find(d => d.v && s.indexOf(d.l.toLowerCase()) >= 0);
+    if (found) day = found.v;
+    const t24 = /(\d{1,2}):(\d{2})/.exec(s);
+    if (t24) {
+      let h = +t24[1]; const mi = t24[2];
+      if (/pm/.test(s) && h < 12) h += 12; if (/am/.test(s) && h === 12) h = 0;
+      time = String(h).padStart(2, "0") + ":" + mi;
+    }
+    return { day: day, time: time };
+  }
+
+  // ---- a lightweight autocomplete for a comma-separated text input ----------
+  // Completes the token after the last comma from suggestFn(); accept with click,
+  // Enter, or Tab; navigate with the arrow keys; Escape closes.
+  function attachAutocomplete(input, suggestFn) {
+    const wrap = document.createElement("div"); wrap.className = "ac-wrap";
+    input.parentNode.insertBefore(wrap, input); wrap.appendChild(input);
+    const menu = document.createElement("div"); menu.className = "ac-menu"; wrap.appendChild(menu);
+    let items = [], active = -1;
+    const curToken = () => { const v = input.value; const i = v.lastIndexOf(","); return v.slice(i + 1).replace(/^\s+/, ""); };
+    const entered = () => input.value.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+    function close() { menu.classList.remove("is-open"); menu.innerHTML = ""; items = []; active = -1; }
+    function paint() { menu.querySelectorAll(".ac-item").forEach((b, i) => b.classList.toggle("is-active", i === active)); }
+    function render() {
+      const tok = curToken().trim().toLowerCase();
+      if (!tok) { close(); return; }
+      const has = new Set(entered());
+      const all = (suggestFn() || []);
+      const pre = all.filter(s => s.toLowerCase().startsWith(tok) && !has.has(s.toLowerCase()));
+      const sub = all.filter(s => !s.toLowerCase().startsWith(tok) && s.toLowerCase().indexOf(tok) >= 0 && !has.has(s.toLowerCase()));
+      items = pre.concat(sub).slice(0, 8);
+      if (!items.length) { close(); return; }
+      active = 0;
+      menu.innerHTML = items.map((s, i) => `<button type="button" class="ac-item${i === 0 ? " is-active" : ""}" data-ac="${i}">${esc(s)}</button>`).join("");
+      menu.classList.add("is-open");
+    }
+    function accept(i) {
+      const s = items[i]; if (!s) return;
+      const v = input.value; const idx = v.lastIndexOf(",");
+      input.value = (idx >= 0 ? v.slice(0, idx + 1) + " " : "") + s + ", ";
+      close(); input.focus();
+    }
+    input.addEventListener("input", render);
+    input.addEventListener("keydown", (e) => {
+      if (!menu.classList.contains("is-open")) return;
+      if (e.key === "ArrowDown") { e.preventDefault(); active = Math.min(items.length - 1, active + 1); paint(); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); active = Math.max(0, active - 1); paint(); }
+      else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); accept(active < 0 ? 0 : active); }
+      else if (e.key === "Escape") { close(); }
+    });
+    menu.addEventListener("mousedown", (e) => { const b = e.target.closest("[data-ac]"); if (b) { e.preventDefault(); accept(+b.dataset.ac); } });
+    input.addEventListener("blur", () => setTimeout(close, 140));
   }
 
   // Reader actions that persist for the session (a stand-in for the server), so
@@ -717,6 +808,7 @@
               ${w.read ? `<span>${icon("clock",14)} ${w.read}</span>` : ""}
             </div>
             <p class="soft" style="font-size:16px;line-height:1.6;max-width:620px">${esc(w.summary)}</p>
+            ${w.schedule && !w.complete ? `<p class="work-schedule">${icon("clock",14)} Updates ${esc(w.schedule)}</p>` : ""}
             <div style="margin:16px 0">${tagRow(w.tags, 12)}</div>
             <div class="work-actions">
               <button class="btn btn--primary" data-read="${w.id}">${icon("book",16)} Start reading</button>
@@ -2178,12 +2270,19 @@
          <p>Format with the toolbar above, or use Markdown shortcuts.</p>`;
     editorProseHTML = bodyHTML;
 
+    const schedPre = parseSchedule(work && work.schedule);
     const liveChs = editingLive && liveEditor && liveEditor.allChapters ? liveEditor.allChapters : null;
     const partsHTML = liveChs
-      ? liveChs.map(c => `
-          <button class="part-row ${liveEditor.chapter && c.id === liveEditor.chapter.id ? "is-current" : ""}" data-edit-chapter="${c.number}">
-            <span class="part-n">${c.number}</span><span class="part-title">${c.title ? esc(c.title) : "Chapter " + c.number}${c.published ? "" : " &middot; draft"}</span>
-          </button>`).join("")
+      ? liveChs.map((c, i) => `
+          <div class="part-row ${liveEditor.chapter && c.id === liveEditor.chapter.id ? "is-current" : ""}">
+            <button class="part-open" data-edit-chapter="${c.number}">
+              <span class="part-n">${c.number}</span><span class="part-title">${c.title ? esc(c.title) : "Chapter " + c.number}${c.published ? "" : " &middot; draft"}</span>
+            </button>
+            <span class="part-move">
+              <button class="part-mv" data-ch-move="${c.number}:up" ${i === 0 ? "disabled" : ""} aria-label="Move chapter up">${icon("chev", 13)}</button>
+              <button class="part-mv part-mv--down" data-ch-move="${c.number}:down" ${i === liveChs.length - 1 ? "disabled" : ""} aria-label="Move chapter down">${icon("chev", 13)}</button>
+            </span>
+          </div>`).join("")
       : (chapters > 0
         ? Array.from({ length: chapters }, (_, i) => `
             <button class="part-row ${i === chapters - 1 ? "is-current" : ""}" data-toast="Open this chapter in the editor.">
@@ -2270,8 +2369,14 @@
 
             <div class="panel">
               <h4>Serialization</h4>
-              <div class="field"><label>Update schedule, shown to readers</label><input type="text" id="we-schedule" value="${work && work.schedule ? esc(work.schedule) : ""}" placeholder="e.g. Sundays"></div>
-              <p class="muted" style="font-size:12px;margin:0;line-height:1.55">Schedule chapters to post automatically, or backdate them.</p>
+              <div class="field"><label>Update schedule, shown to readers</label>
+                <div class="sched-row">
+                  <select id="we-sched-day" class="admin-select">${SCHED_DAYS.map(d => `<option value="${esc(d.v)}"${d.v === schedPre.day ? " selected" : ""}>${esc(d.l)}</option>`).join("")}</select>
+                  <input type="time" id="we-sched-time" value="${esc(schedPre.time)}" aria-label="Usual update time (Eastern)">
+                </div>
+                <p class="muted" id="we-sched-echo" style="font-size:12px;margin:6px 0 0;line-height:1.5"></p>
+              </div>
+              <p class="muted" style="font-size:12px;margin:0;line-height:1.55">Readers see this on the work page, under the synopsis. Use the chapter Schedule button to post automatically.</p>
             </div>
 
             <div class="panel">
@@ -2315,6 +2420,44 @@
       const dt = $("#coverDropText"); if (dt) dt.textContent = "Upload a cover";
       toast("Cover removed. It reverts to the title-letter cover when you save.");
     });
+
+    // Serialization: live preview of what readers will see.
+    const getv = (sel) => { const el = $(sel); return el ? el.value : ""; };
+    const schedEcho = () => { const el = $("#we-sched-echo"); if (!el) return;
+      const s = composeSchedule(getv("#we-sched-day"), getv("#we-sched-time"));
+      el.textContent = s ? "Readers will see: Updates " + s : "No schedule shown to readers."; };
+    ["#we-sched-day", "#we-sched-time"].forEach(sel => { const el = $(sel); if (el) el.addEventListener("input", schedEcho); });
+    schedEcho();
+
+    // Additional-tags autocomplete: house categories plus tags already in use.
+    const tagsInput = $("#we-tags");
+    if (tagsInput) {
+      const acTags = TAG_SUGGEST.slice();
+      attachAutocomplete(tagsInput, () => acTags);
+      if (isLive()) WispDB.listTags(500).then(names => {
+        const have = new Set(acTags.map(s => s.toLowerCase()));
+        (names || []).forEach(n => { if (n && !have.has(n.toLowerCase())) { acTags.push(n); have.add(n.toLowerCase()); } });
+      }).catch(() => {});
+    }
+
+    // Reorder chapters up or down (live works only).
+    $$("#screen-write [data-ch-move]").forEach(b => b.addEventListener("click", async () => {
+      if (!isLive() || !liveEditor || !liveEditor.work) { toast("Reordering needs the connected site."); return; }
+      const parts = b.dataset.chMove.split(":"), num = +parts[0], dir = parts[1];
+      const chs = liveEditor.allChapters || [];
+      const idx = chs.findIndex(c => c.number === num); if (idx < 0) return;
+      const j = dir === "up" ? idx - 1 : idx + 1; if (j < 0 || j >= chs.length) return;
+      const other = chs[j].number, wid = liveEditor.work.id;
+      const openId = liveEditor.chapter ? liveEditor.chapter.id : null;
+      $$("#screen-write [data-ch-move]").forEach(x => x.disabled = true);
+      try {
+        await WispDB.swapChapterNumbers(wid, num, other);
+        const fresh = await WispDB.getChapters(wid).catch(() => []);
+        const openNum = ((fresh.find(c => c.id === openId)) || {}).number || 1;
+        toast("Chapter moved.");
+        navigate("write/" + wid + "/" + openNum);
+      } catch (e) { toast((e && e.message) || "Could not reorder."); $$("#screen-write [data-ch-move]").forEach(x => x.disabled = false); }
+    }));
   }
 
   /* ======================================================================= */
@@ -5727,7 +5870,8 @@
     const chk = (id) => { const e = $(id); return e ? !!e.checked : undefined; };
     const controls = { comments_enabled: chk("#we-comments"), logged_in_only: chk("#we-loggedin"), hide_stats: chk("#we-hidestats") };
     const source = val("#we-source");
-    const schedule = val("#we-schedule");
+    const schedDay = val("#we-sched-day"), schedTime = val("#we-sched-time");
+    const schedule = composeSchedule(schedDay, schedTime);
     const seriesName = val("#we-series");
     const scheduled_for = kind === "schedule" ? scheduleTime : null;
     // "Save draft" on an already-published work saves changes without pulling it
