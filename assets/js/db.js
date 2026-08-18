@@ -59,6 +59,7 @@ window.WispDB = (function () {
       words: "",
       read: "",
       format: row.format || "prose",
+      schedule: row.schedule || "",
       seriesId: row.series_id || null,
       bookNumber: row.book_number || null,
       commentsEnabled: row.comments_enabled !== false,

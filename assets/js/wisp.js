@@ -143,7 +143,9 @@
 
   function tagRow(tags, shown = 2) {
     const head = tags.slice(0, shown).map(t => `<button class="tag" data-tag="${esc(t)}">${esc(t)}</button>`).join("");
-    const more = tags.length > shown ? `<button class="tag--more tag" data-tag-more>+${tags.length - shown}</button>` : "";
+    const rest = tags.slice(shown);
+    // The +N button carries the hidden tags so a click can reveal them in place.
+    const more = rest.length ? `<button class="tag--more tag" data-tag-more="${esc(JSON.stringify(rest))}">+${rest.length}</button>` : "";
     return `<div class="tag-row">${head}${more}</div>`;
   }
 
@@ -671,7 +673,7 @@
         <div>
           <div><span class="comment__who">${esc(c.who)}</span>${c.author ? ' <span class="pill" style="padding:2px 6px">Author</span>' : ""}<span class="comment__when">${esc(c.when)}</span></div>
           <div class="comment__text">${esc(c.text)}</div>
-          <div class="comment__acts"><button data-heart-c>${icon("heart",12)} Heart</button><button>Reply</button></div>
+          <div class="comment__acts"><button data-heart-c>${icon("heart",12)} Heart</button><button data-reply>Reply</button></div>
         </div>
       </div>`).join("");
     return `<div class="thread">
@@ -1531,10 +1533,11 @@
     }));
   }
 
+  const EXTRA_REACTS = ["✨","💔","😮","🫶","😔","🙌"];
   function wireThread(i, slot) {
     const p = W.CHAPTER.paragraphs[i];
-    slot.querySelectorAll("[data-react]").forEach(r => r.addEventListener("click", () => {
-      const [, emoji] = r.dataset.react.split(":");
+    const toggleReact = (r) => {
+      const emoji = r.dataset.react.split(":")[1];
       p.thread = p.thread || { reactions:{}, comments:[] };
       if (!p.thread.mine) p.thread.mine = new Set();
       const on = !p.thread.mine.has(emoji);
@@ -1544,8 +1547,24 @@
       r.setAttribute("aria-pressed", String(on));
       const n = p.thread.reactions[emoji];
       r.innerHTML = emoji + (n > 0 ? `<small>${n}</small>` : "");
-    }));
-    slot.querySelector(".react--add") && slot.querySelector(".react--add").addEventListener("click", () => toast("A full emoji picker opens here."));
+    };
+    slot.querySelectorAll("[data-react]").forEach(r => r.addEventListener("click", () => toggleReact(r)));
+    const addBtn = slot.querySelector(".react--add");
+    // The "+" opens a small palette of extra reactions; each picked emoji becomes
+    // a live reaction chip, wired like the rest. Clicking "+" again closes it.
+    addBtn && addBtn.addEventListener("click", () => {
+      const row = addBtn.parentElement;
+      const open = row.querySelectorAll("[data-react-extra]").length > 0;
+      if (open) { row.querySelectorAll("[data-react-extra]").forEach(el => el.remove()); return; }
+      const already = new Set(Array.from(row.querySelectorAll("[data-react]")).map(el => el.dataset.react.split(":")[1]));
+      EXTRA_REACTS.filter(e => !already.has(e)).forEach(e => {
+        const b = document.createElement("button");
+        b.className = "react"; b.setAttribute("data-react", i + ":" + e); b.setAttribute("data-react-extra", "1");
+        b.setAttribute("aria-pressed", "false"); b.textContent = e;
+        b.addEventListener("click", () => { b.removeAttribute("data-react-extra"); toggleReact(b); });
+        row.insertBefore(b, addBtn);
+      });
+    });
     const post = slot.querySelector(`[data-post="${i}"]`);
     const ta = slot.querySelector(`[data-compose="${i}"]`);
     post && post.addEventListener("click", () => {
@@ -1560,6 +1579,8 @@
       toast("Posted on the line.");
     });
     slot.querySelectorAll("[data-heart-c]").forEach(h => h.addEventListener("click", () => h.style.color = "var(--rose)"));
+    // Reply jumps the reader straight to the compose box for this line.
+    slot.querySelectorAll("[data-reply]").forEach(rb => rb.addEventListener("click", () => { ta && ta.focus(); }));
   }
 
   /* ======================================================================= */
@@ -1941,10 +1962,8 @@
         : `<p class="muted" style="font-size:13px;margin:0">No chapters yet. Your first one starts in the editor.</p>`);
 
     const typeFields = type === "fan"
-      ? `<div class="field"><label>Fandom</label><input type="text" id="we-source" value="${esc(source)}"></div>
-         <div class="field"><label>Relationship</label><input type="text" placeholder="Character A / Character B"></div>`
-      : `<div class="field"><label>Setting or genre</label><input type="text" id="we-source" value="${esc(source)}"></div>
-         <div class="field"><label>Characters</label><input type="text" placeholder="Registered against your series"></div>`;
+      ? `<div class="field"><label>Fandom</label><input type="text" id="we-source" value="${esc(source)}"></div>`
+      : `<div class="field"><label>Setting or genre</label><input type="text" id="we-source" value="${esc(source)}"></div>`;
 
     $("#screen-write").innerHTML = `
       <div class="page page--wide">
@@ -2020,7 +2039,7 @@
 
             <div class="panel">
               <h4>Serialization</h4>
-              <div class="field"><label>Update schedule, shown to readers</label><input type="text" value="${work && work.schedule ? esc(work.schedule) : ""}" placeholder="e.g. Sundays"></div>
+              <div class="field"><label>Update schedule, shown to readers</label><input type="text" id="we-schedule" value="${work && work.schedule ? esc(work.schedule) : ""}" placeholder="e.g. Sundays"></div>
               <p class="muted" style="font-size:12px;margin:0;line-height:1.55">Schedule chapters to post automatically, or backdate them.</p>
             </div>
 
@@ -2031,11 +2050,6 @@
               <div class="toggle-row"><span>Hide my numbers</span><label class="switch"><input type="checkbox" id="we-hidestats" ${editingLive && work.hideStats ? "checked" : ""} aria-label="Hide my numbers"><span class="track"></span><span class="knob"></span></label></div>
             </div>
 
-            <div class="panel">
-              <h4>Notes and workspace</h4>
-              <p class="muted" style="font-size:13px;line-height:1.6;margin:0">Attach outlines, character sheets, and worldbuilding notes to this work and its series.</p>
-              <button class="btn--link" style="margin-top:10px">Open workspace</button>
-            </div>
           </aside>
         </div>
       </div>`;
@@ -2233,7 +2247,7 @@
           </div>
           <p class="muted" style="font-size:12.5px;margin-top:12px">Lists are private by default. Make one public and anyone can browse it.</p>
         </div>`,
-      history: `<div class="shelf"><div class="shelf__head"><span class="shelf__title">Recently read</span><button class="btn--link" data-toast="History cleared for this session.">Clear history</button></div>${gridOf(L.history)}</div>`,
+      history: `<div class="shelf"><div class="shelf__head"><span class="shelf__title">Recently read</span><button class="btn--link" data-toast="Clearing your history works once the site is connected and you're signed in.">Clear history</button></div>${gridOf(L.history)}</div>`,
       things: `
         <div class="shelf">
           <div class="shelf__head"><span class="shelf__title">Things</span><span class="muted" style="font-size:13px">Your private highlights and notes</span></div>
@@ -3557,6 +3571,16 @@
     const read = e.target.closest("[data-read]");
     if (read) { navigate("read/" + read.dataset.read); return; }
 
+    const tagMore = e.target.closest("[data-tag-more]");
+    if (tagMore) {
+      // Reveal the hidden tags in place, then drop the +N button.
+      let rest = []; try { rest = JSON.parse(tagMore.getAttribute("data-tag-more") || "[]"); } catch (err) { rest = []; }
+      const row = tagMore.parentElement;
+      rest.forEach(t => { const b = document.createElement("button"); b.className = "tag"; b.setAttribute("data-tag", t); b.textContent = t; row.insertBefore(b, tagMore); });
+      tagMore.remove();
+      return;
+    }
+
     const tagEl = e.target.closest("[data-tag]:not([data-tag-more])");
     if (tagEl) { filterState.tagsInc.add(tagEl.dataset.tag); navigate("browse"); if (location.hash.includes("browse")) renderBrowse(); return; }
 
@@ -4041,6 +4065,7 @@
     const chk = (id) => { const e = $(id); return e ? !!e.checked : undefined; };
     const controls = { comments_enabled: chk("#we-comments"), logged_in_only: chk("#we-loggedin"), hide_stats: chk("#we-hidestats") };
     const source = val("#we-source");
+    const schedule = val("#we-schedule");
     const seriesName = val("#we-series");
     const scheduled_for = kind === "schedule" ? scheduleTime : null;
     // "Save draft" on an already-published work saves changes without pulling it
@@ -4061,7 +4086,7 @@
       if (liveEditor && liveEditor.work) {
         // Editing an existing work: update its fields, its first chapter, and tags.
         const id = liveEditor.work.id;
-        const fields = { title, type, source, rating, status, series_id, warnings, format,
+        const fields = { title, type, source, rating, status, series_id, warnings, format, schedule,
           comments_enabled: controls.comments_enabled, logged_in_only: controls.logged_in_only, hide_stats: controls.hide_stats };
         if (editorCover) fields.cover_image_url = editorCover;
         else if (coverCleared) fields.cover_image_url = null;   // revert to the letter cover
@@ -4079,7 +4104,7 @@
         // New work.
         let book_number;
         if (series_id) book_number = (await WispDB.countInSeries(series_id).catch(() => 0)) + 1;
-        await WispDB.createWork({ title, type, source, rating, tags, warnings, chapterBody: body, status, format,
+        await WispDB.createWork({ title, type, source, rating, tags, warnings, chapterBody: body, status, format, schedule,
           cover_image_url: editorCover, series_id, book_number, scheduled_for,
           comments_enabled: controls.comments_enabled, logged_in_only: controls.logged_in_only, hide_stats: controls.hide_stats });
         toast(kind === "schedule" ? "Scheduled. It releases at the time you set."
