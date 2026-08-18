@@ -2562,7 +2562,16 @@
       const detail = await WispDB.hubDetail(id);
       if (!detail) { renderHubNotFound(); return; }
       const works = await WispDB.worksInHub(detail.hub).catch(() => []);
-      LIVE.hubPage = { detail, works };
+      const widgets = await WispDB.listHubWidgets(id).catch(() => []);
+      const polls = {};
+      await Promise.all(widgets.filter(w => w.kind === "poll").map(async w => {
+        const [tally, mine] = await Promise.all([
+          WispDB.pollTally(w.id).catch(() => ({})),
+          WispDB.myPollVote(w.id).catch(() => null)
+        ]);
+        polls[w.id] = { tally: tally, mine: mine };
+      }));
+      LIVE.hubPage = { detail, works, widgets, polls };
     } catch (e) {
       console.error("[wisp] hub load failed:", e);
       renderHubNotFound(); return;
@@ -2717,12 +2726,82 @@
         async () => { try { await WispDB.deleteEventPost(b.dataset.eventPostDel); loadEventSpace(id); } catch (e) { toast((e && e.message) || "Could not delete."); } });
     }));
   }
+  // ---- hub widgets: small admin-placed blocks on a hub page ----------------
+  const WIDGET_KINDS = { note: "Note", countdown: "Countdown", links: "Links", poll: "Poll" };
+  function safeUrl(u) { try { const x = new URL(u); return (x.protocol === "https:" || x.protocol === "http:") ? x.href : ""; } catch (e) { return ""; } }
+  function hubWidgetHTML(w, polls) {
+    const cfg = w.config || {};
+    const title = w.title ? `<div class="hubw__title">${esc(w.title)}</div>` : "";
+    let body = "";
+    if (w.kind === "note") {
+      body = `<div class="hubw__body prose">${mdToHtmlBlocks(cfg.body || "").join("")}</div>`;
+    } else if (w.kind === "countdown") {
+      const iso = cfg.target || "";
+      const ms = iso ? new Date(iso).getTime() : NaN;
+      if (!iso || isNaN(ms)) {
+        body = `<p class="muted" style="font-size:13px;margin:0">No date set yet.</p>`;
+      } else if (Date.now() >= ms) {
+        body = `<div class="hubw__countdown hubw__countdown--done">${esc(cfg.done || "It's here.")}</div>`;
+      } else {
+        body = `<div class="hubw__countdown" data-countdown="${esc(iso)}" data-countdown-label="" data-countdown-done="${esc(cfg.done || "It's here.")}">&hellip;</div>
+          <p class="muted hubw__sub">${esc(fmtEasternStamp(iso))}</p>`;
+      }
+    } else if (w.kind === "links") {
+      const items = (Array.isArray(cfg.items) ? cfg.items : []).map(it => ({ label: it.label || it.url || "", url: safeUrl(it.url || "") })).filter(it => it.url);
+      body = items.length
+        ? `<ul class="hubw__links">${items.map(it => `<li><a href="${esc(it.url)}" target="_blank" rel="noopener noreferrer">${icon("external", 13)}<span>${esc(it.label)}</span></a></li>`).join("")}</ul>`
+        : `<p class="muted" style="font-size:13px;margin:0">No links yet.</p>`;
+    } else if (w.kind === "poll") {
+      body = pollWidgetHTML(w, (polls && polls[w.id]) || { tally: {}, mine: null });
+    }
+    return `<section class="hubw hubw--${esc(w.kind)}">${title}${body}</section>`;
+  }
+  function pollWidgetHTML(w, state) {
+    const cfg = w.config || {};
+    const options = Array.isArray(cfg.options) ? cfg.options : [];
+    const tally = state.tally || {};
+    const mine = (state.mine === 0 || state.mine) ? state.mine : null;
+    const total = Object.keys(tally).reduce((s, k) => s + (tally[k] || 0), 0);
+    const q = cfg.question ? `<p class="hubw__poll-q">${esc(cfg.question)}</p>` : "";
+    const rows = options.map((opt, i) => {
+      const c = tally[i] || 0;
+      const pct = total ? Math.round((c / total) * 100) : 0;
+      const picked = mine === i;
+      return `<button class="hubw__poll-opt${picked ? " is-picked" : ""}" data-poll-vote="${esc(w.id)}:${i}" aria-pressed="${picked}">
+        <span class="hubw__poll-bar" style="width:${pct}%"></span>
+        <span class="hubw__poll-label">${esc(opt)}${picked ? " " + icon("check", 12) : ""}</span>
+        <span class="hubw__poll-pct">${pct}%</span>
+      </button>`;
+    }).join("");
+    const foot = `<p class="muted hubw__sub">${total} ${total === 1 ? "vote" : "votes"}${mine !== null ? " &middot; tap another option to change your vote" : ""}</p>`;
+    return `${q}<div class="hubw__poll">${rows}</div>${foot}`;
+  }
+  function wireHubWidgets() {
+    const scr = $("#screen-community");
+    scr.querySelectorAll("[data-poll-vote]").forEach(b => b.addEventListener("click", async () => {
+      if (!isLive() || !WispDB.signedIn) { toast("Sign in to vote in this poll."); return; }
+      const parts = b.dataset.pollVote.split(":"), wid = parts[0], choice = +parts[1];
+      const st = (LIVE.hubPage && LIVE.hubPage.polls && LIVE.hubPage.polls[wid]) || null;
+      if (st && st.mine === choice) return;                       // already my pick
+      try {
+        await WispDB.castPollVote(wid, choice);
+        // Refresh just this poll's tally and re-render in place.
+        const [tally, mine] = await Promise.all([WispDB.pollTally(wid), WispDB.myPollVote(wid)]);
+        if (LIVE.hubPage && LIVE.hubPage.polls) LIVE.hubPage.polls[wid] = { tally: tally, mine: mine };
+        renderHubPage();
+      } catch (e) { toast((e && e.message) || "Could not record your vote."); }
+    }));
+  }
   function renderHubPage() {
     const hp = LIVE.hubPage;
     if (!hp) return;
     const { hub, count, following } = hp.detail;
     const works = hp.works || [];
+    const widgets = hp.widgets || [];
     const countLabel = count === 0 ? "No followers yet" : count + (count === 1 ? " follower" : " followers");
+    const widgetRail = widgets.length
+      ? `<div class="hub-widgets">${widgets.map(w => hubWidgetHTML(w, hp.polls)).join("")}</div>`
+      : "";
     $("#screen-community").innerHTML = `
       <div class="page page--wide">
         <button class="btn--link" data-nav="community" style="margin-bottom:18px">&lsaquo; All hubs</button>
@@ -2736,6 +2815,8 @@
           <button class="btn ${following ? "btn--quiet" : "btn--primary"}" data-hub-follow="${hub.id}" aria-pressed="${following}">${following ? "Following" : "Follow"}</button>
         </div>
 
+        ${widgetRail}
+
         <div class="shelf" style="margin-top:24px">
           <div class="shelf__head"><span class="shelf__title">Works in this hub</span>${works.length ? `<span class="muted" style="font-size:13px">${works.length} ${works.length === 1 ? "work" : "works"}</span>` : ""}</div>
           ${works.length
@@ -2746,6 +2827,8 @@
                </div>`}
         </div>
       </div>`;
+    startCountdowns();
+    wireHubWidgets();
   }
 
   // ---- Series landing page -------------------------------------------------
@@ -4691,6 +4774,7 @@
       <div class="admin-row">
         <div class="admin-row__main"><b>${esc(h.name)}</b><span class="muted">${esc(h.kind || "")}</span></div>
         <div class="admin-row__acts">
+          <button class="btn btn--quiet btn--sm" data-admin-hub-widgets="${esc(h.id)}">Widgets</button>
           <button class="btn btn--quiet btn--sm" data-admin-edit-hub="${esc(h.id)}">Edit</button>
           <button class="btn btn--danger btn--sm" data-admin-del-hub="${esc(h.id)}" data-label="${esc(h.name)}">Delete</button>
         </div>
@@ -4833,6 +4917,9 @@
     }));
     card.querySelectorAll("[data-admin-edit-hub]").forEach(b => b.addEventListener("click", () => {
       const h = (hubs || []).find(x => String(x.id) === b.dataset.adminEditHub); if (h) openEditHub(h);
+    }));
+    card.querySelectorAll("[data-admin-hub-widgets]").forEach(b => b.addEventListener("click", () => {
+      const h = (hubs || []).find(x => String(x.id) === b.dataset.adminHubWidgets); if (h) openHubWidgets(h);
     }));
 
     const aeEcho = function () {
@@ -4979,6 +5066,150 @@
       const name = $("#eh-name").value.trim(); if (!name) { toast("Give the hub a name."); return; }
       try { await WispDB.updateHub(h.id, { name, kind: $("#eh-kind").value.trim(), note: $("#eh-note").value.trim(), icon: ($("#eh-icon").value.trim() || "tag") }); toast("Hub updated."); renderAdminPanel(); }
       catch (e) { toast((e && e.message) || "Could not update the hub."); }
+    });
+  }
+
+  /* ---- admin: manage a hub's widgets ------------------------------------- */
+  function linksToText(items) { return (Array.isArray(items) ? items : []).map(it => (it.label && it.label !== it.url ? it.label + " | " : "") + (it.url || "")).join("\n"); }
+  function parseLinks(text) {
+    return (text || "").split("\n").map(l => l.trim()).filter(Boolean).map(l => {
+      const i = l.indexOf("|"); let label, url;
+      if (i >= 0) { label = l.slice(0, i).trim(); url = l.slice(i + 1).trim(); } else { url = l; label = l; }
+      url = safeUrl(url); return url ? { label: label || url, url: url } : null;
+    }).filter(Boolean);
+  }
+  // The config fields for one widget kind, prefilled from an existing widget.
+  function widgetKindForm(pfx, kind, w) {
+    const cfg = (w && w.config) || {};
+    const titleField = `<div class="field"><label>Title (optional)</label><input type="text" id="${pfx}-title" value="${esc((w && w.title) || "")}" placeholder="A heading for the block"></div>`;
+    if (kind === "note") return titleField + `<div class="field"><label>Note</label><textarea id="${pfx}-body" rows="4" placeholder="Write an announcement. Markdown works.">${esc(cfg.body || "")}</textarea></div>`;
+    if (kind === "countdown") return titleField + `<div class="field"><label>Counts down to (Eastern Time)</label>${datePickerHTML(pfx)}</div><div class="field"><label>When it arrives, show</label><input type="text" id="${pfx}-done" value="${esc(cfg.done || "")}" placeholder="It's here."></div>`;
+    if (kind === "links") return titleField + `<div class="field"><label>Links, one per line as: Label | https://...</label><textarea id="${pfx}-links" rows="4" placeholder="Discord | https://discord.gg/...">${esc(linksToText(cfg.items))}</textarea></div>`;
+    if (kind === "poll") return titleField + `<div class="field"><label>Question</label><input type="text" id="${pfx}-q" value="${esc(cfg.question || "")}" placeholder="What should we read next?"></div><div class="field"><label>Options, one per line</label><textarea id="${pfx}-opts" rows="4" placeholder="Option one&#10;Option two">${esc((cfg.options || []).join("\n"))}</textarea></div>`;
+    return "";
+  }
+  // Read a widget-kind form back into { title, config }, or throw a message.
+  function readWidgetKind(pfx, kind) {
+    const title = (($("#" + pfx + "-title") || {}).value || "").trim();
+    let config = {};
+    if (kind === "note") {
+      const body = (($("#" + pfx + "-body") || {}).value || "").trim();
+      if (!body) throw new Error("Write the note first.");
+      config = { body: body };
+    } else if (kind === "countdown") {
+      const raw = readDatePicker(pfx); let target = null;
+      if (raw) { const inst = easternWallToInstant(raw); if (!isNaN(inst.getTime())) target = inst.toISOString(); }
+      if (!target) throw new Error("Pick a date to count down to.");
+      config = { target: target, done: (($("#" + pfx + "-done") || {}).value || "").trim() };
+    } else if (kind === "links") {
+      const items = parseLinks((($("#" + pfx + "-links") || {}).value || ""));
+      if (!items.length) throw new Error("Add at least one valid link.");
+      config = { items: items };
+    } else if (kind === "poll") {
+      const question = (($("#" + pfx + "-q") || {}).value || "").trim();
+      const options = (($("#" + pfx + "-opts") || {}).value || "").split("\n").map(s => s.trim()).filter(Boolean);
+      if (!question) throw new Error("Give the poll a question.");
+      if (options.length < 2) throw new Error("A poll needs at least two options.");
+      config = { question: question, options: options };
+    }
+    return { title: title, config: config };
+  }
+  async function openHubWidgets(hub) {
+    if (!isLive()) { toast("Widgets need the connected site."); return; }
+    openModal(`<div class="admin-panel"><p class="muted admin-empty">Loading widgets...</p></div>`, "Hub widgets");
+    let widgets = [];
+    try { widgets = await WispDB.listHubWidgets(hub.id); } catch (e) {}
+    const rows = widgets.length ? widgets.map((w, i) => {
+      const label = w.title || WIDGET_KINDS[w.kind] || w.kind;
+      return `<div class="admin-row admin-row--wrap">
+        <div class="admin-row__main"><b>${esc(label)}</b><span class="muted">${esc(WIDGET_KINDS[w.kind] || w.kind)}</span></div>
+        <div class="admin-row__acts admin-row__acts--wrap">
+          <button class="btn btn--quiet btn--sm" data-w-up="${esc(w.id)}" ${i === 0 ? "disabled" : ""} aria-label="Move up">${icon("chev", 13)}</button>
+          <button class="btn btn--quiet btn--sm" data-w-down="${esc(w.id)}" ${i === widgets.length - 1 ? "disabled" : ""} aria-label="Move down" style="transform:none"><span style="display:inline-block;transform:rotate(180deg)">${icon("chev", 13)}</span></button>
+          <button class="btn btn--quiet btn--sm" data-w-edit="${esc(w.id)}">Edit</button>
+          <button class="btn btn--danger btn--sm" data-w-del="${esc(w.id)}" data-label="${esc(label)}">Delete</button>
+        </div>
+      </div>`;
+    }).join("") : `<p class="muted admin-empty">No widgets yet. Add one below.</p>`;
+
+    const kindOpts = Object.keys(WIDGET_KINDS).map(k => `<option value="${k}">${WIDGET_KINDS[k]}</option>`).join("");
+    openModal(`
+      <div class="admin-panel">
+        <div class="admin-panel__head">
+          <h2>Widgets: ${esc(hub.name)}</h2>
+          <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+        </div>
+        <button class="btn--link" data-w-back style="margin:-4px 0 10px">&lsaquo; Back to panel</button>
+        <p class="muted admin-panel__note">Blocks that show on this hub's page: a note, a live countdown, a list of links, or a poll readers vote in.</p>
+        <section class="admin-sec">
+          <h3>On this hub</h3>
+          <div class="admin-list">${rows}</div>
+        </section>
+        <section class="admin-sec">
+          <h3>Add a widget</h3>
+          <div class="admin-add">
+            <label class="admin-add__lbl" style="margin:0">Kind</label>
+            <select id="wadd-kind" class="admin-filter" style="margin:0">${kindOpts}</select>
+            <div id="wadd-form">${widgetKindForm("wadd", "note", null)}</div>
+            <div class="admin-add__row">
+              <button class="btn btn--primary btn--sm" data-w-add>Add widget</button>
+            </div>
+          </div>
+        </section>
+      </div>`, "Hub widgets");
+
+    const card = $("#modalCard");
+    const back = card.querySelector("[data-w-back]");
+    back && back.addEventListener("click", () => renderAdminPanel());
+    const kindSel = card.querySelector("#wadd-kind");
+    const rebuild = () => {
+      $("#wadd-form").innerHTML = widgetKindForm("wadd", kindSel.value, null);
+      if (kindSel.value === "countdown") initDatePicker("wadd", "", function () {});
+    };
+    kindSel && kindSel.addEventListener("change", rebuild);
+
+    card.querySelector("[data-w-add]").addEventListener("click", async () => {
+      let payload; try { payload = readWidgetKind("wadd", kindSel.value); } catch (e) { toast(e.message); return; }
+      try { await WispDB.createWidget({ hub_id: hub.id, kind: kindSel.value, title: payload.title, config: payload.config, position: widgets.length }); toast("Widget added."); openHubWidgets(hub); }
+      catch (e) { toast((e && e.message) || "Could not add the widget."); }
+    });
+    card.querySelectorAll("[data-w-edit]").forEach(b => b.addEventListener("click", () => {
+      const w = widgets.find(x => String(x.id) === b.dataset.wEdit); if (w) openEditWidget(hub, w);
+    }));
+    card.querySelectorAll("[data-w-del]").forEach(b => b.addEventListener("click", () => {
+      const id = b.dataset.wDel, label = b.dataset.label || "this widget";
+      confirmDialog({ title: "Delete this widget?", body: `&ldquo;${esc(label)}&rdquo; is removed from the hub page.`, confirmText: "Delete widget", danger: true },
+        async () => { try { await WispDB.deleteWidget(id); toast("Widget deleted."); } catch (e) { toast((e && e.message) || "Could not delete."); } openHubWidgets(hub); });
+    }));
+    const reorder = async (id, dir) => {
+      const i = widgets.findIndex(x => String(x.id) === id); if (i < 0) return;
+      const j = i + dir; if (j < 0 || j >= widgets.length) return;
+      const order = widgets.slice(); const t = order[i]; order[i] = order[j]; order[j] = t;
+      try { await Promise.all(order.map((w, k) => WispDB.updateWidget(w.id, { position: k }))); openHubWidgets(hub); }
+      catch (e) { toast((e && e.message) || "Could not reorder."); }
+    };
+    card.querySelectorAll("[data-w-up]").forEach(b => b.addEventListener("click", () => reorder(b.dataset.wUp, -1)));
+    card.querySelectorAll("[data-w-down]").forEach(b => b.addEventListener("click", () => reorder(b.dataset.wDown, 1)));
+  }
+  function openEditWidget(hub, w) {
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <h2 style="font-size:20px">Edit ${esc(WIDGET_KINDS[w.kind] || w.kind)} widget</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <div id="wedit-form">${widgetKindForm("wedit", w.kind, w)}</div>
+      <div class="modal-actions">
+        <button class="btn btn--quiet" data-modal-cancel>Cancel</button>
+        <button class="btn btn--primary" id="wedit-save">Save widget</button>
+      </div>`, "Edit widget");
+    if (w.kind === "countdown") {
+      const cur = (w.config && w.config.target) ? toEasternInputValue(new Date(w.config.target)) : "";
+      initDatePicker("wedit", cur, function () {});
+    }
+    $("#wedit-save").addEventListener("click", async () => {
+      let payload; try { payload = readWidgetKind("wedit", w.kind); } catch (e) { toast(e.message); return; }
+      try { await WispDB.updateWidget(w.id, { title: payload.title, config: payload.config }); toast("Widget updated."); openHubWidgets(hub); }
+      catch (e) { toast((e && e.message) || "Could not update the widget."); }
     });
   }
 

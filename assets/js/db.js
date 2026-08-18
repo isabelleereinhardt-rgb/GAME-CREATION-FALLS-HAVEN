@@ -723,6 +723,54 @@ window.WispDB = (function () {
     return works.filter(w => w && (w._dbStatus === "ongoing" || w._dbStatus === "complete"));
   }
 
+  /* ---- hub widgets ------------------------------------------------------ */
+  // Every widget on a hub, in display order. Public read; safe in demo mode.
+  async function listHubWidgets(hubId) {
+    if (!client || !hubId) return [];
+    const { data, error } = await client.from("hub_widgets").select("*").eq("hub_id", hubId).order("position", { ascending: true }).order("created_at", { ascending: true });
+    if (error) return [];
+    return data || [];
+  }
+  async function createWidget(f) {                    // admin only (enforced by RLS)
+    if (!user) throw new Error("Sign in first.");
+    const row = { hub_id: f.hub_id, kind: f.kind, title: f.title || "", config: f.config || {}, position: +f.position || 0 };
+    const { data, error } = await client.from("hub_widgets").insert(row).select().single();
+    if (error) throw error;
+    return data;
+  }
+  async function updateWidget(id, f) {
+    if (!user) throw new Error("Sign in first.");
+    const patch = {};
+    ["title", "config", "position"].forEach(k => { if (f[k] !== undefined) patch[k] = f[k]; });
+    const { error } = await client.from("hub_widgets").update(patch).eq("id", id);
+    if (error) throw error;
+  }
+  async function deleteWidget(id) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("hub_widgets").delete().eq("id", id);
+    if (error) throw error;
+  }
+  // Poll tallies: a map of option index -> vote count for one poll widget.
+  async function pollTally(widgetId) {
+    if (!client || !widgetId) return {};
+    const { data } = await client.from("widget_poll_votes").select("choice").eq("widget_id", widgetId);
+    const counts = {};
+    (data || []).forEach(r => { counts[r.choice] = (counts[r.choice] || 0) + 1; });
+    return counts;
+  }
+  // The signed-in reader's own choice for a poll (option index), or null.
+  async function myPollVote(widgetId) {
+    if (!user || !widgetId) return null;
+    const { data } = await client.from("widget_poll_votes").select("choice").eq("widget_id", widgetId).eq("user_id", user.id).maybeSingle();
+    return data ? data.choice : null;
+  }
+  // Cast or change a vote. Upsert on (widget_id, user_id) so a reader has one vote.
+  async function castPollVote(widgetId, choice) {
+    if (!user) throw new Error("Sign in to vote.");
+    const { error } = await client.from("widget_poll_votes").upsert({ widget_id: widgetId, user_id: user.id, choice: choice }, { onConflict: "widget_id,user_id" });
+    if (error) throw error;
+  }
+
   /* ---- following -------------------------------------------------------- */
   async function toggleFollow(authorId, on) {
     if (!user) throw new Error("Sign in to follow.");
@@ -1064,6 +1112,7 @@ window.WispDB = (function () {
     getAdminSettings, setAdminPassword, createEvent, updateEvent, deleteEvent, createHub, updateHub, deleteHub, adminDeleteWork,
     listExchanges, getExchange, createExchange, updateExchange, deleteExchange,
     mySignup, joinExchange, withdrawSignup, listSignups, signupCounts, runMatching, myAssignment, myGift, attachGift,
+    listHubWidgets, createWidget, updateWidget, deleteWidget, pollTally, myPollVote, castPollVote,
     getWorksByIds, myBookmarks, myHistory, clearHistory,
     myLists, createList, deleteList, listContents, addToList, removeFromList,
     myHighlights, saveHighlight, deleteHighlight, submitReport, saveProgress, latestProgress, readingStats,

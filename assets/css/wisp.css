@@ -1602,3 +1602,29 @@ mark.hl { background: color-mix(in srgb, var(--amber) 34%, transparent); border-
 .admin-dur__f input { width: 54px; padding: 6px 7px; border: 1px solid var(--line); border-radius: 8px;
   background: var(--bg, #fff); color: var(--ink); font-size: 12.5px; font-family: inherit; }
 .admin-dur__f input:focus { outline: none; border-color: var(--rose); }
+
+/* Hub widgets: admin-placed blocks (note, countdown, links, poll) on a hub page. */
+.hub-widgets { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; margin-top: 22px; }
+.hubw { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); padding: 18px 20px; }
+.hubw__title { font: 600 15px var(--font-display); color: var(--ink); margin-bottom: 10px; }
+.hubw__body { font-size: 14.5px; color: var(--ink2); line-height: 1.65; }
+.hubw__body > :first-child { margin-top: 0; }
+.hubw__body > :last-child { margin-bottom: 0; }
+.hubw__sub { font-size: 12px; margin: 8px 0 0; }
+.hubw__countdown { font: 600 26px var(--font-display); color: var(--rose-ink); letter-spacing: 0.01em; }
+.hubw__countdown--done { font-size: 18px; color: var(--ink); }
+.hubw__links { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.hubw__links a { display: flex; align-items: center; gap: 8px; color: var(--link); font-size: 14px; text-decoration: none; }
+.hubw__links a:hover { text-decoration: underline; }
+.hubw__links svg { color: var(--ink3); flex: none; }
+.hubw__poll-q { font-size: 14.5px; color: var(--ink); margin: 0 0 10px; font-weight: 600; }
+.hubw__poll { display: flex; flex-direction: column; gap: 8px; }
+.hubw__poll-opt { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; text-align: left; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface, #fff); color: var(--ink); font-family: inherit; font-size: 14px; cursor: pointer; transition: border-color 0.15s; }
+.hubw__poll-opt:hover { border-color: var(--rose); }
+.hubw__poll-opt.is-picked { border-color: var(--rose); box-shadow: inset 0 0 0 1px var(--rose); }
+.hubw__poll-bar { position: absolute; inset: 0 auto 0 0; background: var(--rose-wash); z-index: 0; transition: width 0.3s ease; }
+.hubw__poll-label { position: relative; z-index: 1; display: flex; align-items: center; gap: 6px; }
+.hubw__poll-label svg { color: var(--rose-ink); }
+.hubw__poll-pct { position: relative; z-index: 1; font-size: 12.5px; color: var(--ink3); font-variant-numeric: tabular-nums; }
