@@ -70,6 +70,8 @@
   let comicKeyHandler = null;   // keydown handler for comic paging, removed between renders
   let pendingSeries = null; // series name to prefill when starting a new book in a series
   let guestBrowsing = false; // set when a visitor chooses to look around without an account
+  let lastAuthUid;           // last signed-in user id, so we re-render only on real identity changes
+  let profileShownFor = null; // uid whose loaded profile the current render reflects
   function isLive() { return !!(window.WispDB && WispDB.enabled); }
   function activeWorks() { return isLive() ? LIVE.works : W.WORKS; }
   function activeById(id) { return LIVE.byId[id] || W.byId[id]; }   // live wins; demo fills curated links
@@ -3892,6 +3894,25 @@
       if (avatar) { avatar.textContent = "?"; avatar.title = "Sign in"; }
       LIVE.notifications = null; updateNotifBadge();           // drop any feed from a previous session
       LIVE.readingStats = null;
+    }
+    // The backend connects after the first paint, so a screen shown at boot can
+    // be a demo render (the sample "Rowan" profile and works) even for a
+    // signed-in reader. When the real identity arrives, or the profile row
+    // finishes loading for it, re-render the current screen so it shows the
+    // reader's own data. This is careful not to re-route on a plain token
+    // refresh: refreshUser briefly nulls the profile on every auth event, so we
+    // only re-render once per identity when its profile first becomes available,
+    // never again, and never interrupt someone mid-read.
+    const uid = WispDB.signedIn ? ((WispDB.user && WispDB.user.id) || "") : null;
+    const hasProfile = !!WispDB.profile;
+    if (uid !== lastAuthUid) {
+      const wasIn = lastAuthUid != null;                        // was a real account signed in before
+      lastAuthUid = uid;
+      profileShownFor = hasProfile ? uid : null;
+      if (uid || wasIn) route();                                // skip the guest / never-signed-in case
+    } else if (uid && hasProfile && profileShownFor !== uid) {
+      profileShownFor = uid;                                    // profile row arrived for the same id
+      route();
     }
   }
 
