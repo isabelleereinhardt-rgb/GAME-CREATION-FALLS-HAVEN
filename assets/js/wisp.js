@@ -553,6 +553,7 @@
       const lockedRows = upcoming.map(u => `<div class="chapter-row chapter-row--locked" aria-label="Chapter ${u.number}, scheduled">
           <span class="chapter-row__n">${u.number}</span>
           <span class="chapter-row__title">Chapter ${u.number} <span class="ch-lock" title="Scheduled">${icon("lock",13)}</span> <span class="ch-countdown" data-countdown="${esc(u.scheduled_for)}">Time till release: &hellip;</span></span>
+          <span class="chapter-row__when">${esc(fmtEasternStamp(u.scheduled_for))}</span>
         </div>`).join("");
       rows = (releasedRows + lockedRows) || `<p class="muted" style="padding:14px 4px">No chapters published yet.</p>`;
     } else {
@@ -612,6 +613,48 @@
         <div class="chapter-list">${rows}</div>
       </div>`;
     startCountdowns();
+  }
+
+  /* ---- Eastern Time (ET) anchoring ---------------------------------------
+     Scheduling and release countdowns are anchored to US Eastern Time
+     (America/New_York, which shifts between EST and EDT with daylight saving),
+     so a release time means the same clock time for every reader, whatever
+     timezone their own device is in. */
+  const EASTERN_TZ = "America/New_York";
+  function easternParts(instant) {
+    const dtf = new Intl.DateTimeFormat("en-US", { timeZone: EASTERN_TZ, hourCycle: "h23",
+      year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const p = {};
+    dtf.formatToParts(instant).forEach(x => { if (x.type !== "literal") p[x.type] = x.value; });
+    return p;
+  }
+  // How far Eastern Time sits from UTC, in ms, at a given instant (handles DST).
+  function easternOffsetMs(instant) {
+    const p = easternParts(instant);
+    const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+    return asUTC - instant.getTime();
+  }
+  // Read an Eastern wall-clock "YYYY-MM-DDThh:mm" as the absolute instant it names.
+  function easternWallToInstant(raw) {
+    const naive = Date.parse(raw + "Z");                 // first read the wall time as if it were UTC
+    if (isNaN(naive)) return new Date(NaN);
+    let off = easternOffsetMs(new Date(naive));
+    let instant = naive - off;
+    const off2 = easternOffsetMs(new Date(instant));     // correct once across a DST boundary
+    if (off2 !== off) instant = naive - off2;
+    return new Date(instant);
+  }
+  // Format an instant as the "YYYY-MM-DDThh:mm" a datetime-local input wants, in ET.
+  function toEasternInputValue(instant) {
+    const p = easternParts(instant);
+    return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+  }
+  // A human release stamp in ET, e.g. "Aug 20, 2026, 6:00 PM ET".
+  function fmtEasternStamp(iso) {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    return new Intl.DateTimeFormat("en-US", { timeZone: EASTERN_TZ, month: "short", day: "numeric",
+      year: "numeric", hour: "numeric", minute: "2-digit" }).format(d) + " ET";
   }
 
   /* ---- live release countdowns ------------------------------------------- */
@@ -4098,7 +4141,7 @@
           body, published: kind === "publish", scheduled_for      // this chapter's own state
         });
         await WispDB.setTags(id, tags);
-        toast(kind === "schedule" ? "Scheduled. It releases at the time you set."
+        toast(kind === "schedule" ? "Scheduled. It releases " + fmtEasternStamp(scheduled_for) + "."
           : kind === "draft" ? (wasPublished ? "Changes saved." : "Draft saved.") : "Changes published.");
       } else {
         // New work.
@@ -4107,7 +4150,7 @@
         await WispDB.createWork({ title, type, source, rating, tags, warnings, chapterBody: body, status, format, schedule,
           cover_image_url: editorCover, series_id, book_number, scheduled_for,
           comments_enabled: controls.comments_enabled, logged_in_only: controls.logged_in_only, hide_stats: controls.hide_stats });
-        toast(kind === "schedule" ? "Scheduled. It releases at the time you set."
+        toast(kind === "schedule" ? "Scheduled. It releases " + fmtEasternStamp(scheduled_for) + "."
           : kind === "draft" ? "Draft saved to your account." : "Published. It is now in your works.");
       }
       liveEditor = null; editorCover = null;
@@ -4118,25 +4161,27 @@
   // Ask for a release time, then schedule the chapter for it.
   function openScheduleDialog() {
     if (isLive() && !WispDB.signedIn) { openAuth("in"); return; }
-    // Default suggestion: tomorrow, same time (local), formatted for datetime-local.
-    const dt = new Date(Date.now() + 86400000);
-    const pad = (n) => String(n).padStart(2, "0");
-    const localVal = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+    // Default suggestion: tomorrow, same Eastern clock time, formatted for the input.
+    const easternVal = toEasternInputValue(new Date(Date.now() + 86400000));
     openModal(`
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <h2 style="font-size:20px">Schedule this chapter</h2>
         <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
       </div>
-      <p class="muted" style="font-size:13px;margin-bottom:14px">Readers see the chapter as locked with a live countdown until this time; then it releases on its own.</p>
-      <div class="field"><label>Release date and time</label><input type="datetime-local" id="sched-when" value="${localVal}"></div>
+      <p class="muted" style="font-size:13px;margin-bottom:14px">Readers see the chapter as locked with a live countdown until this time; then it releases on its own. Times are Eastern (ET), so the release lands at the same clock time for every reader.</p>
+      <div class="field"><label>Release date and time (Eastern Time)</label><input type="datetime-local" id="sched-when" value="${easternVal}"><p class="muted" id="sched-echo" style="font-size:12px;margin:6px 0 0"></p></div>
       <div class="modal-actions">
         <button class="btn btn--quiet" data-modal-cancel>Cancel</button>
         <button class="btn btn--primary" data-sched-go>Schedule release</button>
       </div>`, "Schedule this chapter");
+    // Echo the picked time back as an explicit ET stamp so there is no ambiguity.
+    const echo = () => { const el = $("#sched-echo"); const raw = $("#sched-when").value;
+      el.textContent = raw ? "Releases " + fmtEasternStamp(easternWallToInstant(raw).toISOString()) : ""; };
+    $("#sched-when").addEventListener("input", echo); echo();
     $("#modalCard [data-sched-go]").addEventListener("click", () => {
       const raw = $("#sched-when").value;
       if (!raw) { toast("Pick a date and time."); return; }
-      const when = new Date(raw);
+      const when = easternWallToInstant(raw);
       if (isNaN(when.getTime()) || when.getTime() <= Date.now()) { toast("Pick a time in the future."); return; }
       closeModal();
       handlePublish("schedule", when.toISOString());
