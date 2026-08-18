@@ -3572,8 +3572,8 @@
       }
       renderWork(id);
     } catch (e) {
-      if (W.byId[id]) { renderWork(id); return; }         // a curated demo link
-      $("#screen-work").innerHTML = `<div class="page"><button class="btn--link" data-back style="margin-bottom:18px">&lsaquo; Back</button><p style="padding:40px 0;color:var(--ink3)">This work could not be found.</p></div>`;
+      // Connected mode shows real works only, never a bundled demo sample.
+      $("#screen-work").innerHTML = `<div class="page"><button class="btn--link" data-back style="margin-bottom:18px">&lsaquo; Back</button><p style="padding:40px 0;color:var(--ink3);line-height:1.6">This work isn't available. It may have been removed by its author, or the link is out of date.</p></div>`;
     }
   }
 
@@ -3602,15 +3602,10 @@
       const target = (chapterNum && readable.find(c => c.number === +chapterNum)) || readable[0];
       if (target) LIVE.reactions[target.id] = await WispDB.getReactions(target.id).catch(() => ({}));
     } catch (e) {
-      // Only a genuine bundled sample falls back to demo content. A real work id
-      // that no longer resolves (deleted, unpublished, or a stale link) must not
-      // show anyone else's work or a demo stand-in: it's gone.
+      // On the connected site only real works open. A work id that doesn't
+      // resolve (deleted, unpublished, a stale link, or a bundled demo sample
+      // that isn't real content here) is treated as gone: no demo stand-in.
       delete LIVE.byId[id];
-      const dw = W.byId[id];
-      if (dw) {
-        if (needsGate(dw)) { showGate(dw, () => renderReading(id)); return; }
-        renderReading(id); return;
-      }
       renderReadingGone(); return;
     }
     if (needsGate(w)) { showGate(w, () => renderReading(id, chapterNum)); return; }
