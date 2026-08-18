@@ -1405,3 +1405,14 @@ mark.hl { background: color-mix(in srgb, var(--amber) 34%, transparent); border-
 .admin-filter { width: 100%; padding: 8px 11px; border: 1px solid var(--line); border-radius: 9px;
   background: var(--bg, #fff); color: var(--ink); font-size: 13.5px; font-family: inherit; margin-bottom: 10px; }
 .admin-filter:focus { outline: none; border-color: var(--rose); }
+
+/* ---- Admin panel: edit rows, stats, event countdown --------------------- */
+.admin-row__acts { display: flex; gap: 6px; flex-shrink: 0; }
+.admin-stats { display: flex; gap: 18px; margin: 0 0 16px; font-size: 13px; color: var(--ink2); }
+.admin-stats b { color: var(--ink); font-size: 15px; }
+.admin-add__lbl { font-size: 12px; color: var(--ink2); margin-top: 2px; }
+.admin-echo { min-height: 15px; }
+/* Live event countdown on the community page. */
+.event__count { margin-top: 8px; font-size: 13px; color: var(--rose-ink); font-variant-numeric: tabular-nums; }
+.event__count .ch-countdown { font-variant-numeric: tabular-nums; }
+.event__count.is-due { color: var(--rose); font-weight: 600; }

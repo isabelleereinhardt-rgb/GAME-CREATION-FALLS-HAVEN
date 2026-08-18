@@ -510,9 +510,17 @@ window.WispDB = (function () {
   async function createEvent(f) {
     if (!user) throw new Error("Sign in first.");
     const row = { title: f.title, kind: f.kind || "Collection", note: f.note || "", day: f.day || "", month: f.month || "", sort: +f.sort || 0 };
+    if (f.starts_at !== undefined) row.starts_at = f.starts_at;
     const { data, error } = await client.from("events").insert(row).select().single();
     if (error) throw error;
     return data;
+  }
+  async function updateEvent(id, f) {
+    if (!user) throw new Error("Sign in first.");
+    const patch = {};
+    ["title", "kind", "note", "day", "month", "sort", "starts_at"].forEach(k => { if (f[k] !== undefined) patch[k] = f[k]; });
+    const { error } = await client.from("events").update(patch).eq("id", id);
+    if (error) throw error;
   }
   async function deleteEvent(id) {
     if (!user) throw new Error("Sign in first.");
@@ -525,6 +533,13 @@ window.WispDB = (function () {
     const { data, error } = await client.from("hubs").insert(row).select().single();
     if (error) throw error;
     return data;
+  }
+  async function updateHub(id, f) {
+    if (!user) throw new Error("Sign in first.");
+    const patch = {};
+    ["name", "kind", "note", "icon", "sort"].forEach(k => { if (f[k] !== undefined) patch[k] = f[k]; });
+    const { error } = await client.from("hubs").update(patch).eq("id", id);
+    if (error) throw error;
   }
   async function deleteHub(id) {
     if (!user) throw new Error("Sign in first.");
@@ -918,7 +933,7 @@ window.WispDB = (function () {
     updateProfile, getProfile, worksByAuthor,
     listEvents, myEventIds, toggleEventJoin,
     listHubs, myHubIds, hubMemberCounts, toggleHubMembership, hubDetail, worksInHub,
-    getAdminSettings, setAdminPassword, createEvent, deleteEvent, createHub, deleteHub, adminDeleteWork,
+    getAdminSettings, setAdminPassword, createEvent, updateEvent, deleteEvent, createHub, updateHub, deleteHub, adminDeleteWork,
     getWorksByIds, myBookmarks, myHistory, clearHistory,
     myLists, createList, deleteList, listContents, addToList, removeFromList,
     myHighlights, saveHighlight, deleteHighlight, submitReport, saveProgress, latestProgress, readingStats,

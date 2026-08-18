@@ -658,15 +658,24 @@
     return new Intl.DateTimeFormat("en-US", { timeZone: EASTERN_TZ, month: "short", day: "numeric",
       year: "numeric", hour: "numeric", minute: "2-digit" }).format(d) + " ET";
   }
+  // The short date badge (day + month abbreviation) for an instant, in ET.
+  function easternDayMonth(iso) {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return { day: "", month: "" };
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone: EASTERN_TZ, month: "short", day: "numeric" }).formatToParts(d);
+    const m = parts.find(p => p.type === "month"), day = parts.find(p => p.type === "day");
+    return { day: day ? day.value : "", month: m ? m.value : "" };
+  }
 
-  /* ---- live release countdowns ------------------------------------------- */
+  /* ---- live countdowns (chapter releases and events) --------------------- */
   let countdownTimer = null;
-  function fmtCountdown(ms) {
-    if (ms <= 0) return "Releasing now";
+  function fmtCountdown(ms, label, doneText) {
+    label = label || "Time till release";
+    if (ms <= 0) return doneText || "Releasing now";
     const s = Math.floor(ms / 1000);
     const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
     const pad = (n) => String(n).padStart(2, "0");
-    return "Time till release: " + (d ? d + (d === 1 ? " day, " : " days, ") : "") +
+    return label + ": " + (d ? d + (d === 1 ? " day, " : " days, ") : "") +
       pad(h) + " hours, " + pad(m) + " minutes, " + pad(sec) + " seconds";
   }
   function startCountdowns() {
@@ -678,7 +687,7 @@
       els.forEach(el => {
         const t = new Date(el.dataset.countdown).getTime();
         const left = t - now;
-        el.textContent = fmtCountdown(left);
+        el.textContent = fmtCountdown(left, el.dataset.countdownLabel, el.dataset.countdownDone);
         if (left <= 0) el.classList.add("is-due");
       });
     };
@@ -2354,11 +2363,22 @@
               const live = isLive();
               const joined = live ? LIVE.myEvents.has(e.id) : e.joined;
               const btnAttr = live ? `data-event-join="${e.id}"` : `data-event="${i}"`;
+              // When an event has a real start time, the badge and a live countdown
+              // are both derived from it (in Eastern Time); otherwise fall back to
+              // the stored day/month text with no countdown.
+              const dm = e.starts_at ? easternDayMonth(e.starts_at) : { day: e.d || e.day || "", month: e.m || e.month || "" };
+              const upcoming = e.starts_at && new Date(e.starts_at).getTime() > Date.now();
+              const countdown = e.starts_at
+                ? (upcoming
+                    ? `<div class="event__count"><span class="ch-countdown" data-countdown="${esc(e.starts_at)}" data-countdown-label="Starts in" data-countdown-done="Happening now">Starts in: &hellip;</span></div>`
+                    : `<div class="event__count is-due">Happening now</div>`)
+                : "";
               return `<div class="event">
-                <div class="event__date"><b>${esc(e.d || e.day || "")}</b><span class="muted" style="font-size:12px">${esc(e.m || e.month || "")}</span></div>
+                <div class="event__date"><b>${esc(dm.day)}</b><span class="muted" style="font-size:12px">${esc(dm.month)}</span></div>
                 <div style="flex:1">
                   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="font:600 18px var(--font-display);color:var(--ink)">${esc(e.title)}</span><span class="pill">${esc(e.kind)}</span></div>
                   <p class="soft" style="font-size:14px;margin:6px 0 0;line-height:1.6">${esc(e.note)}</p>
+                  ${countdown}
                 </div>
                 <button class="btn ${joined ? "btn--quiet" : "btn--ghost"} btn--sm" ${btnAttr} aria-pressed="${joined}">${joined ? "Joined" : "Join"}</button>
               </div>`;
@@ -2405,6 +2425,7 @@
           </div>
         </div>
       </div>`;
+    startCountdowns();   // events with a start time count down live, like chapter releases
   }
 
   // ---- Hub landing page ----------------------------------------------------
@@ -4142,15 +4163,23 @@
       ]);
     } catch (e) {}
 
-    const evRows = events.length ? events.map(e => `
+    const evRows = events.length ? events.map(e => {
+      const when = e.starts_at ? fmtEasternStamp(e.starts_at) : (e.month ? (e.month + " " + (e.day || "")).trim() : "");
+      return `
       <div class="admin-row">
-        <div class="admin-row__main"><b>${esc(e.title)}</b><span class="muted">${esc(e.kind || "")}${e.month ? " &middot; " + esc(e.month) + " " + esc(e.day || "") : ""}</span></div>
-        <button class="btn btn--danger btn--sm" data-admin-del-event="${esc(e.id)}" data-label="${esc(e.title)}">Delete</button>
-      </div>`).join("") : `<p class="muted admin-empty">No events yet.</p>`;
+        <div class="admin-row__main"><b>${esc(e.title)}</b><span class="muted">${esc(e.kind || "")}${when ? " &middot; " + esc(when) : ""}</span></div>
+        <div class="admin-row__acts">
+          <button class="btn btn--quiet btn--sm" data-admin-edit-event="${esc(e.id)}">Edit</button>
+          <button class="btn btn--danger btn--sm" data-admin-del-event="${esc(e.id)}" data-label="${esc(e.title)}">Delete</button>
+        </div>
+      </div>`; }).join("") : `<p class="muted admin-empty">No events yet.</p>`;
     const hubRows = hubs.length ? hubs.map(h => `
       <div class="admin-row">
         <div class="admin-row__main"><b>${esc(h.name)}</b><span class="muted">${esc(h.kind || "")}</span></div>
-        <button class="btn btn--danger btn--sm" data-admin-del-hub="${esc(h.id)}" data-label="${esc(h.name)}">Delete</button>
+        <div class="admin-row__acts">
+          <button class="btn btn--quiet btn--sm" data-admin-edit-hub="${esc(h.id)}">Edit</button>
+          <button class="btn btn--danger btn--sm" data-admin-del-hub="${esc(h.id)}" data-label="${esc(h.name)}">Delete</button>
+        </div>
       </div>`).join("") : `<p class="muted admin-empty">No hubs yet.</p>`;
     const workRows = works.length ? works.map(w => `
       <div class="admin-row">
@@ -4165,6 +4194,11 @@
           <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
         </div>
         <p class="muted admin-panel__note">Signed in as ${esc((WispDB.user && WispDB.user.email) || "admin")}. Changes here are live for everyone.</p>
+        <div class="admin-stats">
+          <span><b>${works.length}</b> works</span>
+          <span><b>${events.length}</b> events</span>
+          <span><b>${hubs.length}</b> hubs</span>
+        </div>
 
         <section class="admin-sec">
           <h3>Events</h3>
@@ -4173,11 +4207,12 @@
             <input type="text" id="ae-title" placeholder="Event title">
             <input type="text" id="ae-kind" placeholder="Kind (Collection, Exchange, Nomination...)">
             <input type="text" id="ae-note" placeholder="Short note (optional)">
+            <label class="admin-add__lbl">Start date and time (Eastern Time), optional. Readers see a live countdown to it.</label>
             <div class="admin-add__row">
-              <input type="text" id="ae-month" placeholder="Month (Sep)" style="width:110px">
-              <input type="text" id="ae-day" placeholder="Day (14)" style="width:90px">
+              <input type="datetime-local" id="ae-when" style="flex:1;min-width:190px">
               <button class="btn btn--primary btn--sm" data-admin-add-event>Add event</button>
             </div>
+            <p class="muted admin-echo" id="ae-echo" style="font-size:12px;margin:0"></p>
           </div>
         </section>
 
@@ -4214,10 +4249,20 @@
         </section>
       </div>`, "Admin control panel");
 
-    wireAdminPanel();
+    wireAdminPanel(events, hubs);
   }
 
-  function wireAdminPanel() {
+  // Build the Eastern start time (+ derived badge) for the event forms.
+  function eventTimeFields(raw) {
+    const fields = {};
+    if (raw) {
+      const inst = easternWallToInstant(raw);
+      if (!isNaN(inst.getTime())) { fields.starts_at = inst.toISOString(); const dm = easternDayMonth(fields.starts_at); fields.day = dm.day; fields.month = dm.month; }
+    }
+    return fields;
+  }
+
+  function wireAdminPanel(events, hubs) {
     const card = $("#modalCard");
     const withConfirm = (sel, prop, delFn, noun) => card.querySelectorAll(sel).forEach(b => b.addEventListener("click", () => {
       const rid = b.dataset[prop], label = b.dataset.label || ("this " + noun);
@@ -4228,11 +4273,22 @@
     withConfirm("[data-admin-del-hub]", "adminDelHub", (id) => WispDB.deleteHub(id), "hub");
     withConfirm("[data-admin-del-work]", "adminDelWork", (id) => WispDB.adminDeleteWork(id), "work");
 
+    card.querySelectorAll("[data-admin-edit-event]").forEach(b => b.addEventListener("click", () => {
+      const ev = (events || []).find(x => String(x.id) === b.dataset.adminEditEvent); if (ev) openEditEvent(ev);
+    }));
+    card.querySelectorAll("[data-admin-edit-hub]").forEach(b => b.addEventListener("click", () => {
+      const h = (hubs || []).find(x => String(x.id) === b.dataset.adminEditHub); if (h) openEditHub(h);
+    }));
+
+    const aeWhen = card.querySelector("#ae-when");
+    aeWhen && aeWhen.addEventListener("input", () => { const el = $("#ae-echo"); el.textContent = aeWhen.value ? "Starts " + fmtEasternStamp(easternWallToInstant(aeWhen.value).toISOString()) : ""; });
+
     const addEvent = card.querySelector("[data-admin-add-event]");
     addEvent && addEvent.addEventListener("click", async () => {
       const title = $("#ae-title").value.trim();
       if (!title) { toast("Give the event a title."); return; }
-      try { await WispDB.createEvent({ title, kind: $("#ae-kind").value.trim(), note: $("#ae-note").value.trim(), month: $("#ae-month").value.trim(), day: $("#ae-day").value.trim(), sort: 100 }); toast("Event added."); renderAdminPanel(); }
+      const fields = Object.assign({ title, kind: $("#ae-kind").value.trim(), note: $("#ae-note").value.trim(), sort: 100 }, eventTimeFields($("#ae-when").value));
+      try { await WispDB.createEvent(fields); toast("Event added."); renderAdminPanel(); }
       catch (e) { toast((e && e.message) || "Could not add the event."); }
     });
     const addHub = card.querySelector("[data-admin-add-hub]");
@@ -4261,6 +4317,53 @@
     });
     const resetBtn = card.querySelector("[data-admin-reset]");
     resetBtn && resetBtn.addEventListener("click", adminEmailReset);
+  }
+
+  function openEditEvent(ev) {
+    const whenVal = ev.starts_at ? toEasternInputValue(new Date(ev.starts_at)) : "";
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <h2 style="font-size:20px">Edit event</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <div class="field"><label>Title</label><input type="text" id="ee-title" value="${esc(ev.title || "")}"></div>
+      <div class="field"><label>Kind</label><input type="text" id="ee-kind" value="${esc(ev.kind || "")}"></div>
+      <div class="field"><label>Note</label><textarea id="ee-note" rows="2">${esc(ev.note || "")}</textarea></div>
+      <div class="field"><label>Start date and time (Eastern Time)</label><input type="datetime-local" id="ee-when" value="${esc(whenVal)}"><p class="muted" id="ee-echo" style="font-size:12px;margin:6px 0 0"></p></div>
+      <div class="modal-actions">
+        <button class="btn btn--quiet" data-modal-cancel>Cancel</button>
+        <button class="btn btn--primary" id="ee-save">Save event</button>
+      </div>`, "Edit event");
+    const echo = () => { const el = $("#ee-echo"); const raw = $("#ee-when").value; el.textContent = raw ? "Starts " + fmtEasternStamp(easternWallToInstant(raw).toISOString()) : "No start time; no countdown."; };
+    $("#ee-when").addEventListener("input", echo); echo();
+    $("#ee-save").addEventListener("click", async () => {
+      const title = $("#ee-title").value.trim(); if (!title) { toast("Give the event a title."); return; }
+      const raw = $("#ee-when").value;
+      const fields = Object.assign({ title, kind: $("#ee-kind").value.trim(), note: $("#ee-note").value.trim(), starts_at: null, day: "", month: "" }, eventTimeFields(raw));
+      try { await WispDB.updateEvent(ev.id, fields); toast("Event updated."); renderAdminPanel(); }
+      catch (e) { toast((e && e.message) || "Could not update the event."); }
+    });
+  }
+
+  function openEditHub(h) {
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <h2 style="font-size:20px">Edit hub</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <div class="field"><label>Name</label><input type="text" id="eh-name" value="${esc(h.name || "")}"></div>
+      <div class="field"><label>Kind</label><input type="text" id="eh-kind" value="${esc(h.kind || "")}"></div>
+      <div class="field"><label>Note</label><textarea id="eh-note" rows="2">${esc(h.note || "")}</textarea></div>
+      <div class="field"><label>Icon (tag or book)</label><input type="text" id="eh-icon" value="${esc(h.icon || "tag")}"></div>
+      <div class="modal-actions">
+        <button class="btn btn--quiet" data-modal-cancel>Cancel</button>
+        <button class="btn btn--primary" id="eh-save">Save hub</button>
+      </div>`, "Edit hub");
+    $("#eh-save").addEventListener("click", async () => {
+      const name = $("#eh-name").value.trim(); if (!name) { toast("Give the hub a name."); return; }
+      try { await WispDB.updateHub(h.id, { name, kind: $("#eh-kind").value.trim(), note: $("#eh-note").value.trim(), icon: ($("#eh-icon").value.trim() || "tag") }); toast("Hub updated."); renderAdminPanel(); }
+      catch (e) { toast((e && e.message) || "Could not update the hub."); }
+    });
   }
 
   // Toolbar: apply formatting to the current selection in the editor. Uses the
