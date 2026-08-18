@@ -553,6 +553,103 @@ window.WispDB = (function () {
     if (error) throw error;
   }
 
+  /* ---- gift exchanges --------------------------------------------------- */
+  async function listExchanges() {
+    if (!client) return [];
+    const { data, error } = await client.from("exchanges").select("*").order("created_at", { ascending: false });
+    if (error) return [];
+    return data || [];
+  }
+  async function getExchange(id) {
+    const { data, error } = await client.from("exchanges").select("*").eq("id", id).maybeSingle();
+    if (error) throw error;
+    return data || null;
+  }
+  async function createExchange(f) {
+    if (!user) throw new Error("Sign in first.");
+    const row = { title: f.title, note: f.note || "", status: "signups" };
+    if (f.reveal_at !== undefined) row.reveal_at = f.reveal_at;
+    const { data, error } = await client.from("exchanges").insert(row).select().single();
+    if (error) throw error;
+    return data;
+  }
+  async function updateExchange(id, f) {
+    if (!user) throw new Error("Sign in first.");
+    const patch = {};
+    ["title", "note", "status", "reveal_at"].forEach(k => { if (f[k] !== undefined) patch[k] = f[k]; });
+    const { error } = await client.from("exchanges").update(patch).eq("id", id);
+    if (error) throw error;
+  }
+  async function deleteExchange(id) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("exchanges").delete().eq("id", id);
+    if (error) throw error;
+  }
+  // The signed-in reader's own sign-up for an exchange (or null).
+  async function mySignup(exchangeId) {
+    if (!user) return null;
+    const { data } = await client.from("exchange_signups").select("*").eq("exchange_id", exchangeId).eq("user_id", user.id).maybeSingle();
+    return data || null;
+  }
+  async function joinExchange(exchangeId, f) {
+    if (!user) throw new Error("Sign in to join.");
+    const row = { exchange_id: exchangeId, user_id: user.id, request: f.request || "", offer: f.offer || "" };
+    // Upsert on (exchange_id, user_id) so editing a sign-up just updates it.
+    const { error } = await client.from("exchange_signups").upsert(row, { onConflict: "exchange_id,user_id" });
+    if (error) throw error;
+  }
+  async function withdrawSignup(exchangeId) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("exchange_signups").delete().eq("exchange_id", exchangeId).eq("user_id", user.id);
+    if (error) throw error;
+  }
+  async function listSignups(exchangeId) {          // admin: every sign-up, to run matching
+    const { data, error } = await client.from("exchange_signups").select("*").eq("exchange_id", exchangeId);
+    if (error) throw error;
+    return data || [];
+  }
+  async function signupCounts() {                    // admin: sign-ups per exchange, for the list
+    const { data } = await client.from("exchange_signups").select("exchange_id");
+    const counts = {};
+    (data || []).forEach(r => { counts[r.exchange_id] = (counts[r.exchange_id] || 0) + 1; });
+    return counts;
+  }
+  // Pair everyone in one shuffled cycle: each gives to the next, last to the
+  // first. No self-assignment for two or more sign-ups. Admin only.
+  async function runMatching(exchangeId) {
+    if (!user) throw new Error("Sign in first.");
+    const signups = await listSignups(exchangeId);
+    if (signups.length < 2) throw new Error("Need at least two sign-ups to match.");
+    const order = signups.slice();
+    for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = order[i]; order[i] = order[j]; order[j] = t; }
+    const rows = order.map((s, i) => {
+      const receiver = order[(i + 1) % order.length];
+      return { exchange_id: exchangeId, giver_id: s.user_id, receiver_id: receiver.user_id, request: receiver.request || "" };
+    });
+    await client.from("exchange_assignments").delete().eq("exchange_id", exchangeId);   // clear any prior run
+    const { error } = await client.from("exchange_assignments").insert(rows);
+    if (error) throw error;
+    await updateExchange(exchangeId, { status: "matched" });
+    return rows.length;
+  }
+  // The assignment this reader must write for (giver = me).
+  async function myAssignment(exchangeId) {
+    if (!user) return null;
+    const { data } = await client.from("exchange_assignments").select("*").eq("exchange_id", exchangeId).eq("giver_id", user.id).maybeSingle();
+    return data || null;
+  }
+  // The gift written for this reader (receiver = me); RLS returns it only once revealed.
+  async function myGift(exchangeId) {
+    if (!user) return null;
+    const { data } = await client.from("exchange_assignments").select("*").eq("exchange_id", exchangeId).eq("receiver_id", user.id).maybeSingle();
+    return data || null;
+  }
+  async function attachGift(assignmentId, workId) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("exchange_assignments").update({ work_id: workId || null }).eq("id", assignmentId);
+    if (error) throw error;
+  }
+
   // One hub, with its real follower count and whether I follow it.
   async function hubDetail(id) {
     const { data: hub } = await client.from("hubs").select("*").eq("id", id).maybeSingle();
@@ -934,6 +1031,8 @@ window.WispDB = (function () {
     listEvents, myEventIds, toggleEventJoin,
     listHubs, myHubIds, hubMemberCounts, toggleHubMembership, hubDetail, worksInHub,
     getAdminSettings, setAdminPassword, createEvent, updateEvent, deleteEvent, createHub, updateHub, deleteHub, adminDeleteWork,
+    listExchanges, getExchange, createExchange, updateExchange, deleteExchange,
+    mySignup, joinExchange, withdrawSignup, listSignups, signupCounts, runMatching, myAssignment, myGift, attachGift,
     getWorksByIds, myBookmarks, myHistory, clearHistory,
     myLists, createList, deleteList, listContents, addToList, removeFromList,
     myHighlights, saveHighlight, deleteHighlight, submitReport, saveProgress, latestProgress, readingStats,

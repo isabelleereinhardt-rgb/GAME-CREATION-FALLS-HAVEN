@@ -2416,18 +2416,20 @@
   async function loadCommunity() {
     loadingScreen("#screen-community");
     try {
-      const [events, mine, hubs, myHubs, hubCounts] = await Promise.all([
+      const [events, mine, hubs, myHubs, hubCounts, exchanges] = await Promise.all([
         WispDB.listEvents(),
         WispDB.myEventIds().catch(() => new Set()),
         WispDB.listHubs().catch(() => []),
         WispDB.myHubIds().catch(() => new Set()),
-        WispDB.hubMemberCounts().catch(() => ({}))
+        WispDB.hubMemberCounts().catch(() => ({})),
+        WispDB.listExchanges().catch(() => [])
       ]);
       LIVE.events = events;
       LIVE.myEvents = mine;
       LIVE.hubs = hubs;
       LIVE.myHubs = myHubs;
       LIVE.hubCounts = hubCounts;
+      LIVE.exchanges = exchanges;
     } catch (e) { console.error("[wisp] community load failed:", e); }
     renderCommunity();
   }
@@ -2467,8 +2469,26 @@
             }).join("");
             return rows || `<p class="muted" style="font-size:14px;padding:14px 2px;line-height:1.6">No events running right now. New collections and challenges will appear here when they open.</p>`;
           })()}
-          <p class="muted" style="font-size:12.5px;margin-top:10px">Collections now; full gift exchanges will come as the community grows.</p>
         </div>
+
+        ${isLive() ? `<div class="shelf">
+          <div class="shelf__head"><span class="shelf__title">Gift exchanges</span><span class="muted" style="font-size:13px">Sign up with a request and an offer; you'll be matched to write for someone</span></div>
+          ${(() => {
+            const list = LIVE.exchanges || [];
+            if (!list.length) return `<p class="muted" style="font-size:14px;padding:12px 2px;line-height:1.6">No gift exchanges yet. When one opens, you can sign up here.</p>`;
+            return list.map(x => {
+              const st = EX_STATUS[x.status] || EX_STATUS.signups;
+              const cta = x.status === "signups" ? "Sign up" : x.status === "matched" ? "Your assignment" : x.status === "revealed" ? "Your gift" : "View";
+              return `<div class="event">
+                <div style="flex:1">
+                  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="font:600 18px var(--font-display);color:var(--ink)">${esc(x.title)}</span><span class="pill">${st.label}</span></div>
+                  ${x.note ? `<p class="soft" style="font-size:14px;margin:6px 0 0;line-height:1.6">${esc(x.note)}</p>` : ""}
+                </div>
+                <button class="btn btn--ghost btn--sm" data-exchange-open="${x.id}">${cta}</button>
+              </div>`;
+            }).join("");
+          })()}
+        </div>` : ""}
 
         <div class="shelf">
           <div class="shelf__head"><span class="shelf__title">Hubs</span></div>
@@ -3839,6 +3859,9 @@
       if (isLive()) WispDB.toggleFollow(aid, on).catch(err => toast((err && err.message) || "Could not update."));
       return;
     }
+    const exOpen = e.target.closest("[data-exchange-open]");
+    if (exOpen) { openExchange(exOpen.dataset.exchangeOpen); return; }
+
     const hopen = e.target.closest("[data-hub-open]");
     if (hopen && !e.target.closest("[data-hub-follow]")) { navigate("hub/" + hopen.dataset.hubOpen); return; }
     const hbf = e.target.closest("[data-hub-follow]");
@@ -4355,10 +4378,14 @@
     const title = $("#" + pfx + "-cal-title"); if (title) title.textContent = DP_MONTHS[mo] + " " + y;
     const firstDow = new Date(Date.UTC(y, mo, 1)).getUTCDay();
     const days = new Date(Date.UTC(y, mo + 1, 0)).getUTCDate();
+    // Today, in Eastern Time, so past days can't be picked (a countdown to the past is meaningless).
+    const nowET = easternParts(new Date()), ty = +nowET.year, tmo = +nowET.month - 1, td = +nowET.day;
     let cells = DP_DOW.map(function (x) { return '<span class="dpick__dow">' + x + '</span>'; }).join("");
     for (let i = 0; i < firstDow; i++) cells += '<span class="dpick__cell dpick__cell--pad"></span>';
     for (let day = 1; day <= days; day++) {
       const sel = st.sel && st.sel.y === y && st.sel.mo === mo && st.sel.d === day;
+      const past = (y < ty) || (y === ty && mo < tmo) || (y === ty && mo === tmo && day < td);
+      if (past) { cells += '<span class="dpick__cell dpick__cell--past">' + day + '</span>'; continue; }
       cells += '<button type="button" class="dpick__cell' + (sel ? ' is-sel' : '') + '" data-dp-day="' + pfx + ':' + day + '">' + day + '</button>';
     }
     const grid = $("#" + pfx + "-grid"); if (grid) grid.innerHTML = cells;
@@ -4386,14 +4413,31 @@
 
   async function renderAdminPanel() {
     openModal(`<div class="admin-panel"><p class="muted admin-empty">Loading the control panel...</p></div>`, "Admin control panel");
-    let events = [], hubs = [], works = [];
+    let events = [], hubs = [], works = [], exchanges = [], exCounts = {};
     try {
-      [events, hubs, works] = await Promise.all([
+      [events, hubs, works, exchanges, exCounts] = await Promise.all([
         WispDB.listEvents().catch(() => []),
         WispDB.listHubs().catch(() => []),
-        WispDB.listWorks({ limit: 200 }).catch(() => [])
+        WispDB.listWorks({ limit: 200 }).catch(() => []),
+        WispDB.listExchanges().catch(() => []),
+        WispDB.signupCounts().catch(() => ({}))
       ]);
     } catch (e) {}
+    const exRows = exchanges.length ? exchanges.map(x => {
+      const st = EX_STATUS[x.status] || EX_STATUS.signups;
+      const n = exCounts[x.id] || 0;
+      const acts = [];
+      if (x.status === "signups") acts.push(`<button class="btn btn--primary btn--sm" data-admin-ex-match="${esc(x.id)}">Run matching</button>`);
+      if (x.status === "matched") acts.push(`<button class="btn btn--primary btn--sm" data-admin-ex-status="${esc(x.id)}:revealed">Reveal</button>`);
+      if (x.status === "matched" || x.status === "revealed" || x.status === "closed") acts.push(`<button class="btn btn--quiet btn--sm" data-admin-ex-status="${esc(x.id)}:signups">Reopen sign-ups</button>`);
+      if (x.status !== "closed") acts.push(`<button class="btn btn--quiet btn--sm" data-admin-ex-status="${esc(x.id)}:closed">Close</button>`);
+      acts.push(`<button class="btn btn--quiet btn--sm" data-admin-ex-edit="${esc(x.id)}">Edit</button>`);
+      acts.push(`<button class="btn btn--danger btn--sm" data-admin-ex-del="${esc(x.id)}" data-label="${esc(x.title)}">Delete</button>`);
+      return `<div class="admin-row admin-row--wrap">
+        <div class="admin-row__main"><b>${esc(x.title)}</b><span class="muted">${st.label} &middot; ${n} ${n === 1 ? "sign-up" : "sign-ups"}</span></div>
+        <div class="admin-row__acts admin-row__acts--wrap">${acts.join("")}</div>
+      </div>`;
+    }).join("") : `<p class="muted admin-empty">No gift exchanges yet.</p>`;
 
     const evRows = events.length ? events.map(e => {
       const when = e.starts_at ? fmtEasternStamp(e.starts_at) : (e.month ? (e.month + " " + (e.day || "")).trim() : "");
@@ -4458,6 +4502,19 @@
             <div class="admin-add__row">
               <input type="text" id="ah-icon" placeholder="Icon (tag or book)" style="width:170px">
               <button class="btn btn--primary btn--sm" data-admin-add-hub>Add hub</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="admin-sec">
+          <h3>Gift exchanges</h3>
+          <div class="admin-list">${exRows}</div>
+          <div class="admin-add">
+            <input type="text" id="ax-title" placeholder="Exchange title (e.g. Winter Gift Exchange)">
+            <input type="text" id="ax-note" placeholder="Short note (optional)">
+            <div class="admin-add__row">
+              <button class="btn btn--primary btn--sm" data-admin-ex-add>Create exchange</button>
+              <span class="muted" style="font-size:12px">Create it, let readers sign up, then Run matching.</span>
             </div>
           </div>
         </section>
@@ -4549,6 +4606,51 @@
     });
     const resetBtn = card.querySelector("[data-admin-reset]");
     resetBtn && resetBtn.addEventListener("click", adminEmailReset);
+
+    // Gift exchanges.
+    const addEx = card.querySelector("[data-admin-ex-add]");
+    addEx && addEx.addEventListener("click", async () => {
+      const title = $("#ax-title").value.trim();
+      if (!title) { toast("Give the exchange a title."); return; }
+      try { await WispDB.createExchange({ title, note: $("#ax-note").value.trim() }); toast("Exchange created. Readers can sign up now."); renderAdminPanel(); }
+      catch (e) { toast((e && e.message) || "Could not create the exchange."); }
+    });
+    card.querySelectorAll("[data-admin-ex-status]").forEach(b => b.addEventListener("click", async () => {
+      const parts = b.dataset.adminExStatus.split(":"), id = parts[0], status = parts[1];
+      try { await WispDB.updateExchange(id, { status }); toast("Exchange updated."); renderAdminPanel(); }
+      catch (e) { toast((e && e.message) || "Could not update."); }
+    }));
+    card.querySelectorAll("[data-admin-ex-match]").forEach(b => b.addEventListener("click", () => {
+      confirmDialog({ title: "Run matching now?", body: "Everyone signed up will be paired to write for one another. You can re-run this while sign-ups are open.", confirmText: "Run matching" },
+        async () => { try { const n = await WispDB.runMatching(b.dataset.adminExMatch); toast(n + " writers matched."); } catch (e) { toast((e && e.message) || "Could not match."); } renderAdminPanel(); });
+    }));
+    card.querySelectorAll("[data-admin-ex-edit]").forEach(b => b.addEventListener("click", async () => {
+      const ex = (exchanges || []).find(x => String(x.id) === b.dataset.adminExEdit); if (ex) openEditExchange(ex);
+    }));
+    card.querySelectorAll("[data-admin-ex-del]").forEach(b => b.addEventListener("click", () => {
+      const id = b.dataset.adminExDel, label = b.dataset.label || "this exchange";
+      confirmDialog({ title: "Delete this exchange?", body: `&ldquo;${esc(label)}&rdquo;, its sign-ups, and its matches are all removed. This cannot be undone.`, confirmText: "Delete exchange", danger: true },
+        async () => { try { await WispDB.deleteExchange(id); toast("Exchange deleted."); } catch (e) { toast((e && e.message) || "Could not delete."); } renderAdminPanel(); });
+    }));
+  }
+
+  function openEditExchange(ex) {
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <h2 style="font-size:20px">Edit exchange</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <div class="field"><label>Title</label><input type="text" id="ax-e-title" value="${esc(ex.title || "")}"></div>
+      <div class="field"><label>Note</label><textarea id="ax-e-note" rows="2">${esc(ex.note || "")}</textarea></div>
+      <div class="modal-actions">
+        <button class="btn btn--quiet" data-modal-cancel>Cancel</button>
+        <button class="btn btn--primary" id="ax-e-save">Save exchange</button>
+      </div>`, "Edit exchange");
+    $("#ax-e-save").addEventListener("click", async () => {
+      const title = $("#ax-e-title").value.trim(); if (!title) { toast("Give the exchange a title."); return; }
+      try { await WispDB.updateExchange(ex.id, { title, note: $("#ax-e-note").value.trim() }); toast("Exchange updated."); renderAdminPanel(); }
+      catch (e) { toast((e && e.message) || "Could not update the exchange."); }
+    });
   }
 
   function openEditEvent(ev) {
@@ -4594,6 +4696,104 @@
       const name = $("#eh-name").value.trim(); if (!name) { toast("Give the hub a name."); return; }
       try { await WispDB.updateHub(h.id, { name, kind: $("#eh-kind").value.trim(), note: $("#eh-note").value.trim(), icon: ($("#eh-icon").value.trim() || "tag") }); toast("Hub updated."); renderAdminPanel(); }
       catch (e) { toast((e && e.message) || "Could not update the hub."); }
+    });
+  }
+
+  /* ---- gift exchange: the reader-facing view ----------------------------- */
+  const EX_STATUS = {
+    signups:  { label: "Sign-ups open" },
+    matched:  { label: "Matched" },
+    revealed: { label: "Revealed" },
+    closed:   { label: "Closed" }
+  };
+  async function openExchange(id) {
+    if (!isLive()) { toast("Gift exchanges need the connected site."); return; }
+    openModal(`<div class="admin-panel"><p class="muted admin-empty">Loading the exchange...</p></div>`, "Gift exchange");
+    let ex = null, signup = null, assignment = null, gift = null, giftWork = null, giverName = "";
+    try {
+      ex = await WispDB.getExchange(id);
+      if (ex && WispDB.signedIn) {
+        [signup, assignment, gift] = await Promise.all([
+          WispDB.mySignup(id).catch(() => null),
+          WispDB.myAssignment(id).catch(() => null),
+          WispDB.myGift(id).catch(() => null)
+        ]);
+        if (gift && gift.work_id) { giftWork = await WispDB.getWork(gift.work_id).catch(() => null); }
+        if (gift && gift.giver_id) { const gp = await WispDB.getProfile(gift.giver_id).catch(() => null); giverName = gp ? (gp.display_name || "a writer") : "a writer"; }
+      }
+    } catch (e) {}
+    if (!ex) { openModal(`<div class="admin-panel"><div class="admin-panel__head"><h2>Gift exchange</h2><button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button></div><p class="muted">This exchange could not be found.</p></div>`, "Gift exchange"); return; }
+
+    const st = EX_STATUS[ex.status] || EX_STATUS.signups;
+    let bodyHTML = "";
+    if (!WispDB.signedIn) {
+      bodyHTML = `<p class="soft" style="font-size:14px">Sign in to take part in this exchange.</p><button class="btn btn--primary" data-auth="in">Sign in</button>`;
+    } else if (ex.status === "signups") {
+      bodyHTML = `
+        <p class="soft" style="font-size:14px;margin:0 0 12px">Tell us what you'd love to receive, and what you're happy to write. When sign-ups close, you'll be matched to write for someone.</p>
+        <div class="field"><label>Your request (what you want to receive)</label><textarea id="ex-request" rows="3" placeholder="A slow-burn reunion, found family, a happy ending...">${esc(signup ? signup.request : "")}</textarea></div>
+        <div class="field"><label>Your offer (what you can write)</label><textarea id="ex-offer" rows="3" placeholder="Fluff, casefic, anything in this fandom...">${esc(signup ? signup.offer : "")}</textarea></div>
+        <div class="modal-actions" style="justify-content:space-between">
+          ${signup ? `<button class="btn--link" id="ex-withdraw" style="color:#a2444f">Withdraw</button>` : "<span></span>"}
+          <button class="btn btn--primary" id="ex-join">${signup ? "Save changes" : "Join the exchange"}</button>
+        </div>`;
+    } else if (ex.status === "matched") {
+      if (assignment) {
+        bodyHTML = `
+          <p class="soft" style="font-size:14px;margin:0 0 4px">You're writing a gift for this request (the recipient stays anonymous until the reveal):</p>
+          <blockquote class="ex-request">${esc(assignment.request || "No request was written.")}</blockquote>
+          <div class="field" style="margin-top:14px"><label>Attach your gift work</label>
+            <select id="ex-work"><option value="">Choose one of your works...</option></select>
+          </div>
+          <div class="modal-actions"><button class="btn btn--primary" id="ex-attach">Attach as my gift</button></div>
+          <p class="muted" id="ex-attached" style="font-size:13px;margin:4px 0 0">${assignment.work_id ? "A gift is attached. You can change it any time before the reveal." : ""}</p>`;
+      } else {
+        bodyHTML = `<p class="soft" style="font-size:14px">Matching is done and you're not in this round. Keep an eye out for the next one.</p>`;
+      }
+    } else if (ex.status === "revealed") {
+      const rec = gift && giftWork
+        ? `<p class="soft" style="font-size:14px">Your gift is here: <a href="#/work/${giftWork.id}" data-modal-cancel style="text-decoration:underline">${esc(giftWork.title)}</a>, written for you by ${esc(giverName)}.</p>`
+        : `<p class="soft" style="font-size:14px">Your gift hasn't been posted yet. Check back soon.</p>`;
+      const gave = assignment ? `<p class="soft" style="font-size:14px;margin-top:10px">You wrote for a request${assignment.work_id ? " and attached your gift" : ""}. Thank you for taking part.</p>` : "";
+      bodyHTML = rec + gave;
+    } else {
+      bodyHTML = `<p class="soft" style="font-size:14px">This exchange has closed.</p>`;
+    }
+
+    openModal(`
+      <div class="admin-panel">
+        <div class="admin-panel__head">
+          <h2>${esc(ex.title)}</h2>
+          <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+        </div>
+        <p class="admin-panel__note"><span class="pill">${st.label}</span>${ex.note ? " " + esc(ex.note) : ""}</p>
+        ${bodyHTML}
+      </div>`, "Gift exchange");
+
+    const card = $("#modalCard");
+    const join = card.querySelector("#ex-join");
+    join && join.addEventListener("click", async () => {
+      try { await WispDB.joinExchange(id, { request: $("#ex-request").value.trim(), offer: $("#ex-offer").value.trim() }); toast(signup ? "Sign-up updated." : "You're in. You'll be matched when sign-ups close."); closeModal(); loadCommunity(); }
+      catch (e) { toast((e && e.message) || "Could not sign up."); }
+    });
+    const withdraw = card.querySelector("#ex-withdraw");
+    withdraw && withdraw.addEventListener("click", () => {
+      confirmDialog({ title: "Withdraw from this exchange?", body: "Your sign-up is removed. You can join again while sign-ups are open.", confirmText: "Withdraw", danger: true },
+        async () => { try { await WispDB.withdrawSignup(id); toast("Withdrawn."); closeModal(); loadCommunity(); } catch (e) { toast((e && e.message) || "Could not withdraw."); } });
+    });
+    // Populate the giver's own works for the gift picker.
+    const sel = card.querySelector("#ex-work");
+    if (sel) {
+      WispDB.myWorks().then(works => {
+        (works || []).forEach(w => { const o = document.createElement("option"); o.value = w.id; o.textContent = w.title; if (assignment && assignment.work_id === w.id) o.selected = true; sel.appendChild(o); });
+      }).catch(() => {});
+    }
+    const attach = card.querySelector("#ex-attach");
+    attach && attach.addEventListener("click", async () => {
+      const wid = sel ? sel.value : "";
+      if (!wid) { toast("Pick one of your works first."); return; }
+      try { await WispDB.attachGift(assignment.id, wid); toast("Gift attached. Thank you."); $("#ex-attached").textContent = "A gift is attached. You can change it any time before the reveal."; }
+      catch (e) { toast((e && e.message) || "Could not attach the gift."); }
     });
   }
 
