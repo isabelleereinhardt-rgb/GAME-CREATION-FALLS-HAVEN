@@ -451,6 +451,36 @@ window.WispDB = (function () {
     const { data } = await client.from("event_participants").select("event_id").eq("user_id", user.id);
     return new Set((data || []).map(r => r.event_id));
   }
+  async function getEvent(id) {
+    const { data, error } = await client.from("events").select("*").eq("id", id).maybeSingle();
+    if (error) throw error;
+    return data || null;
+  }
+  async function eventMemberCount(eventId) {
+    const { count } = await client.from("event_participants").select("user_id", { count: "exact", head: true }).eq("event_id", eventId);
+    return count || 0;
+  }
+  // The event space feed. RLS returns rows only to members (or admins).
+  async function listEventPosts(eventId) {
+    const { data, error } = await client.from("event_posts").select("*").eq("event_id", eventId).order("created_at", { ascending: false });
+    if (error) return [];
+    // Attach author names in one follow-up query (the posts view has no join).
+    const ids = Array.from(new Set((data || []).map(r => r.user_id)));
+    let names = {};
+    if (ids.length) { const { data: profs } = await client.from("profiles").select("id, display_name, handle").in("id", ids); (profs || []).forEach(p => { names[p.id] = p; }); }
+    return (data || []).map(r => Object.assign({}, r, { author: names[r.user_id] || null }));
+  }
+  async function postToEvent(eventId, body) {
+    if (!user) throw new Error("Sign in first.");
+    const { data, error } = await client.from("event_posts").insert({ event_id: eventId, user_id: user.id, body: body }).select().single();
+    if (error) throw error;
+    return data;
+  }
+  async function deleteEventPost(id) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("event_posts").delete().eq("id", id);
+    if (error) throw error;
+  }
   async function toggleEventJoin(eventId, on) {
     if (!user) throw new Error("Sign in to join.");
     if (on) {
@@ -1029,7 +1059,7 @@ window.WispDB = (function () {
     toggle, myRelations, getComments, postComment, editComment, deleteComment, getReactions, toggleReaction, uploadCover,
     toggleFollow, amFollowing, followCounts, myFollowingIds, getNotifications,
     updateProfile, getProfile, worksByAuthor,
-    listEvents, myEventIds, toggleEventJoin,
+    listEvents, myEventIds, toggleEventJoin, getEvent, eventMemberCount, listEventPosts, postToEvent, deleteEventPost,
     listHubs, myHubIds, hubMemberCounts, toggleHubMembership, hubDetail, worksInHub,
     getAdminSettings, setAdminPassword, createEvent, updateEvent, deleteEvent, createHub, updateHub, deleteHub, adminDeleteWork,
     listExchanges, getExchange, createExchange, updateExchange, deleteExchange,

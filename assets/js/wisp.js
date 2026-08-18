@@ -248,7 +248,7 @@
     try {
       LIVE.works = await WispDB.listWorks({ sort: "recent", limit: 30 });
       LIVE.works.forEach(w => { LIVE.byId[w.id] = w; });
-      LIVE.resume = null; LIVE.followingWorks = [];
+      LIVE.resume = null; LIVE.followingWorks = []; LIVE.joinedEvents = [];
       if (WispDB.signedIn) {
         const p = await WispDB.latestProgress().catch(() => null);
         if (p) {
@@ -257,6 +257,9 @@
         }
         const ids = await WispDB.myFollowingIds().catch(() => []);
         LIVE.followingWorks = ids.length ? await WispDB.listWorks({ authors: ids, sort: "recent", limit: 30 }).catch(() => []) : [];
+        // Events the reader has joined show as a compact strip they can click into.
+        const [evs, mine] = await Promise.all([WispDB.listEvents().catch(() => []), WispDB.myEventIds().catch(() => new Set())]);
+        LIVE.joinedEvents = (evs || []).filter(e => mine.has(e.id));
         loadReadingStats(true);   // refresh the week widget with anything read since
       }
     } catch (e) { console.error("[wisp] home load failed:", e); LIVE.works = LIVE.works || []; }
@@ -298,6 +301,19 @@
           </span>
           <span style="color:var(--rose);display:flex;align-items:center">${icon("chev",20)}</span>
         </button>` : ""}
+        ${(LIVE.joinedEvents && LIVE.joinedEvents.length) ? `<section class="home-events">
+          <div class="section-head"><h2>Your events</h2></div>
+          <div class="home-events__row">
+            ${LIVE.joinedEvents.map(e => {
+              const dm = e.starts_at ? easternDayMonth(e.starts_at) : { day: e.day || "", month: e.month || "" };
+              return `<a class="home-event" href="#/event/${e.id}">
+                <span class="home-event__date"><b>${esc(dm.day)}</b><span>${esc(dm.month)}</span></span>
+                <span class="home-event__body"><span class="home-event__title">${esc(e.title)}</span><span class="home-event__kind">${esc(e.kind || "Event")}</span></span>
+                <span class="home-event__go">${icon("chev",16)}</span>
+              </a>`;
+            }).join("")}
+          </div>
+        </section>` : ""}
         ${works.length ? `<div class="section-head"><h2>${following ? "From authors you follow" : "Latest works"}</h2>${!following ? '<button class="btn--link" data-nav="browse">Browse all &rsaquo;</button>' : ""}</div>` : ""}
         ${grid}
       </div>`;
@@ -2469,7 +2485,10 @@
                   <p class="soft" style="font-size:14px;margin:6px 0 0;line-height:1.6">${esc(e.note)}</p>
                   ${countdown}
                 </div>
-                <button class="btn ${joined ? "btn--quiet" : "btn--ghost"} btn--sm" ${btnAttr} aria-pressed="${joined}">${joined ? "Joined" : "Join"}</button>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                  ${live && joined ? `<a class="btn btn--ghost btn--sm" href="#/event/${e.id}">Open space</a>` : ""}
+                  <button class="btn ${joined ? "btn--quiet" : "btn--ghost"} btn--sm" ${btnAttr} aria-pressed="${joined}">${joined ? "Joined" : "Join"}</button>
+                </div>
               </div>`;
             }).join("");
             return rows || `<p class="muted" style="font-size:14px;padding:14px 2px;line-height:1.6">No events running right now. New collections and challenges will appear here when they open.</p>`;
@@ -2564,9 +2583,118 @@
       <div class="page page--wide">
         <button class="btn--link" data-nav="community" style="margin-bottom:18px">&lsaquo; All hubs</button>
         <div class="editorial" style="text-align:center;padding:50px 20px">
-          <p class="soft" style="font-size:16px">Hub pages open once the site is connected to its backend.</p>
+          <p class="soft" style="font-size:16px">These pages open once the site is connected to its backend.</p>
         </div>
       </div>`;
+  }
+
+  /* ---- event space: a private feed for the event's members --------------- */
+  async function loadEventSpace(id) {
+    loadingScreen("#screen-community");
+    let ev = null, isMember = false, count = 0, posts = [];
+    try {
+      ev = await WispDB.getEvent(id);
+      if (ev) {
+        const mine = await WispDB.myEventIds().catch(() => new Set());
+        isMember = mine.has(id);
+        count = await WispDB.eventMemberCount(id).catch(() => 0);
+        if (isMember) posts = await WispDB.listEventPosts(id).catch(() => []);
+      }
+    } catch (e) { console.error("[wisp] event space load failed:", e); }
+    LIVE.eventSpace = { ev: ev, isMember: isMember, count: count, posts: posts };
+    renderEventSpace();
+  }
+  function eventCountdownHTML(ev) {
+    const now = Date.now();
+    const startMs = ev.starts_at ? new Date(ev.starts_at).getTime() : null;
+    const endMs = ev.ends_at ? new Date(ev.ends_at).getTime() : null;
+    if (startMs && now < startMs) return `<span class="ch-countdown" data-countdown="${esc(ev.starts_at)}" data-countdown-label="Starts in" data-countdown-done="Happening now">Starts in: &hellip;</span>`;
+    if (startMs && endMs && now >= endMs) return `Ended ${esc(fmtEasternStamp(ev.ends_at))}`;
+    if (startMs) return `Happening now${endMs ? ", ends " + esc(fmtEasternStamp(ev.ends_at)) : ""}`;
+    return "";
+  }
+  function renderEventSpace() {
+    const sp = LIVE.eventSpace; if (!sp) return;
+    const ev = sp.ev;
+    if (!ev) {
+      $("#screen-community").innerHTML = `<div class="page page--wide"><button class="btn--link" data-nav="community" style="margin-bottom:18px">&lsaquo; Community</button><div class="editorial" style="text-align:center;padding:50px 20px"><p class="soft" style="font-size:16px">That event could not be found.</p></div></div>`;
+      return;
+    }
+    const dm = ev.starts_at ? easternDayMonth(ev.starts_at) : { day: ev.day || "", month: ev.month || "" };
+    const cd = eventCountdownHTML(ev);
+    const head = `
+      <button class="btn--link" data-nav="community" style="margin-bottom:16px">&lsaquo; Community</button>
+      <div class="event-space__head">
+        <div class="event__date" style="align-self:flex-start">${dm.day ? `<b>${esc(dm.day)}</b><span class="muted" style="font-size:12px">${esc(dm.month)}</span>` : ""}</div>
+        <div style="flex:1;min-width:220px">
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h1 class="display" style="font-size:26px">${esc(ev.title)}</h1><span class="pill">${esc(ev.kind || "Event")}</span></div>
+          ${ev.note ? `<p class="soft" style="font-size:15px;margin:8px 0 0;line-height:1.6">${esc(ev.note)}</p>` : ""}
+          <div class="muted" style="font-size:13px;margin-top:8px;display:flex;gap:14px;flex-wrap:wrap">
+            ${cd ? `<span class="event-space__count">${cd}</span>` : ""}
+            <span>${sp.count} ${sp.count === 1 ? "member" : "members"}</span>
+          </div>
+        </div>
+      </div>`;
+
+    let bodyHTML;
+    if (!sp.isMember) {
+      bodyHTML = `<div class="event-space__gate">
+        <p class="soft" style="font-size:15px">This space is for people taking part in the event. Join to see and share posts.</p>
+        <button class="btn btn--primary" data-event-space-join="${esc(ev.id)}">Join this event</button>
+      </div>`;
+    } else {
+      const compose = `<div class="event-post-compose">
+        <textarea id="ev-post" rows="3" placeholder="Share an update, a question, or a link with the event..."></textarea>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+          <button class="btn--link" data-event-space-leave="${esc(ev.id)}" style="color:#a2444f;font-size:13px">Leave the event</button>
+          <button class="btn btn--primary btn--sm" data-event-post="${esc(ev.id)}">Post</button>
+        </div>
+      </div>`;
+      const feed = sp.posts.length
+        ? sp.posts.map(p => {
+            const name = p.author ? (p.author.display_name || "A reader") : "A reader";
+            const mine = WispDB.user && p.user_id === WispDB.user.id;
+            return `<div class="event-post">
+              <div class="event-post__head">
+                <span class="event-post__who">${esc(name)}</span>
+                <span class="event-post__when">${esc(WispDB.relTime(p.created_at))}</span>
+                ${mine ? `<button class="btn--link event-post__del" data-event-post-del="${esc(p.id)}" style="font-size:12px;color:#a2444f;margin-left:auto">Delete</button>` : ""}
+              </div>
+              <div class="event-post__body">${mdInline(p.body)}</div>
+            </div>`;
+          }).join("")
+        : `<p class="muted" style="font-size:14px;padding:14px 2px">No posts yet. Be the first to say something.</p>`;
+      bodyHTML = compose + `<div class="event-space__feed">${feed}</div>`;
+    }
+
+    $("#screen-community").innerHTML = `<div class="page page--wide">${head}${bodyHTML}</div>`;
+    startCountdowns();
+    wireEventSpace(ev.id);
+  }
+  function wireEventSpace(id) {
+    const scr = $("#screen-community");
+    const join = scr.querySelector("[data-event-space-join]");
+    join && join.addEventListener("click", async () => {
+      try { await WispDB.toggleEventJoin(id, true); toast("Joined. Welcome to the event space."); loadEventSpace(id); }
+      catch (e) { toast((e && e.message) || "Could not join."); }
+    });
+    const leave = scr.querySelector("[data-event-space-leave]");
+    leave && leave.addEventListener("click", () => {
+      confirmDialog({ title: "Leave this event?", body: "You'll leave the event space and stop seeing its posts. You can rejoin any time.", confirmText: "Leave event", danger: true },
+        async () => { try { await WispDB.toggleEventJoin(id, false); toast("Left the event."); navigate("community"); } catch (e) { toast((e && e.message) || "Could not leave."); } });
+    });
+    const post = scr.querySelector("[data-event-post]");
+    post && post.addEventListener("click", async () => {
+      const body = ($("#ev-post").value || "").trim();
+      if (!body) { toast("Write something first."); return; }
+      post.disabled = true;
+      try { await WispDB.postToEvent(id, body); loadEventSpace(id); }
+      catch (e) { post.disabled = false; toast((e && e.message) || "Could not post."); }
+    });
+    scr.querySelectorAll("[data-event-post-del]").forEach(b => b.addEventListener("click", () => {
+      confirmDialog({ title: "Delete this post?", body: "Your post is removed from the event space.", confirmText: "Delete", danger: true },
+        async () => { try { await WispDB.deleteEventPost(b.dataset.eventPostDel); loadEventSpace(id); } catch (e) { toast((e && e.message) || "Could not delete."); } });
+    }));
   }
   function renderHubPage() {
     const hp = LIVE.hubPage;
@@ -3747,6 +3875,7 @@
     if (seg === "read") screen = "reading";
     if (seg === "user") screen = "profile";
     if (seg === "hub") screen = "community";   // hub pages live in the community surface
+    if (seg === "event") screen = "community"; // event spaces live in the community surface
     if (seg === "series") screen = "browse";   // series pages live in the browse surface
 
     setActive(screen);
@@ -3775,6 +3904,7 @@
     else if (screen === "library") { LIVE.viewingList = null; renderLibrary(); }
     else if (screen === "community") {
       if (seg === "hub") { live ? loadHubPage(arg) : renderHubUnavailable(); }
+      else if (seg === "event") { live ? loadEventSpace(arg) : renderHubUnavailable(); }
       else { live ? loadCommunity() : renderCommunity(); }
     }
     else if (screen === "profile") { (seg === "user" && live) ? loadUserProfile(arg) : renderProfile(); }
