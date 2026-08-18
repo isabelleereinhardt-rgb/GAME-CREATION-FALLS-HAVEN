@@ -602,6 +602,27 @@ window.WispDB = (function () {
     if (error) throw error;
   }
 
+  /* ---- categories (kinds for events and hubs) --------------------------- */
+  async function listCategories(scope) {
+    if (!client) return [];
+    let q = client.from("categories").select("*");
+    if (scope) q = q.eq("scope", scope);
+    const { data, error } = await q.order("sort", { ascending: true }).order("name", { ascending: true });
+    if (error) return [];
+    return data || [];
+  }
+  async function createCategory(scope, name) {                 // admin only (RLS)
+    if (!user) throw new Error("Sign in first.");
+    const row = { scope: scope, name: name, sort: 100 };
+    const { error } = await client.from("categories").insert(row);
+    if (error && error.code !== "23505") throw error;          // ignore duplicates
+  }
+  async function deleteCategory(id) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("categories").delete().eq("id", id);
+    if (error) throw error;
+  }
+
   /* ---- gift exchanges --------------------------------------------------- */
   async function listExchanges() {
     if (!client) return [];
@@ -1159,6 +1180,7 @@ window.WispDB = (function () {
     mySignup, joinExchange, withdrawSignup, listSignups, signupCounts, runMatching, myAssignment, myGift, attachGift,
     listHubWidgets, createWidget, updateWidget, deleteWidget, pollTally, myPollVote, castPollVote,
     pinEventPost, myEventNotify, setEventNotify,
+    listCategories, createCategory, deleteCategory,
     getWorksByIds, myBookmarks, myHistory, clearHistory,
     myLists, createList, deleteList, listContents, addToList, removeFromList,
     myHighlights, saveHighlight, deleteHighlight, submitReport, saveProgress, latestProgress, readingStats,

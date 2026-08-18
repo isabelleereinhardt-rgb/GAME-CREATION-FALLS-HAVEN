@@ -4889,18 +4889,34 @@
     return st.sel.y + "-" + pad(st.sel.mo + 1) + "-" + pad(st.sel.d) + "T" + st.hh + ":" + st.mm;
   }
 
+  // A <select> of category names for a kind field. Includes the current value
+  // even if it isn't in the list any more, so editing an old record is safe.
+  function kindSelectHTML(id, cats, current) {
+    const names = (cats || []).map(c => c.name);
+    const cur = current || "";
+    if (cur && names.indexOf(cur) < 0) names.unshift(cur);
+    const opts = names.map(n => `<option value="${esc(n)}"${n === cur ? " selected" : ""}>${esc(n)}</option>`).join("");
+    return `<select id="${id}" class="admin-select">${opts || `<option value="">No kinds yet</option>`}</select>`;
+  }
   async function renderAdminPanel() {
     openModal(`<div class="admin-panel"><p class="muted admin-empty">Loading the control panel...</p></div>`, "Admin control panel");
-    let events = [], hubs = [], works = [], exchanges = [], exCounts = {};
+    let events = [], hubs = [], works = [], exchanges = [], exCounts = {}, eventCats = [], hubCats = [];
     try {
-      [events, hubs, works, exchanges, exCounts] = await Promise.all([
+      [events, hubs, works, exchanges, exCounts, eventCats, hubCats] = await Promise.all([
         WispDB.listEvents().catch(() => []),
         WispDB.listHubs().catch(() => []),
         WispDB.listWorks({ limit: 200 }).catch(() => []),
         WispDB.listExchanges().catch(() => []),
-        WispDB.signupCounts().catch(() => ({}))
+        WispDB.signupCounts().catch(() => ({})),
+        WispDB.listCategories("event").catch(() => []),
+        WispDB.listCategories("hub").catch(() => [])
       ]);
     } catch (e) {}
+    // Remember the kind lists so the edit dialogs can build their dropdowns.
+    LIVE.cats = { event: eventCats, hub: hubCats };
+    const catRows = (scope, list) => list.length
+      ? list.map(c => `<span class="cat-chip">${esc(c.name)}<button class="cat-chip__x" data-admin-cat-del="${esc(c.id)}" data-label="${esc(c.name)}" aria-label="Delete ${esc(c.name)}">&times;</button></span>`).join("")
+      : `<span class="muted" style="font-size:12.5px">No ${scope} kinds yet.</span>`;
     const exRows = exchanges.length ? exchanges.map(x => {
       const st = EX_STATUS[x.status] || EX_STATUS.signups;
       const n = exCounts[x.id] || 0;
@@ -4961,7 +4977,8 @@
           <div class="admin-list">${evRows}</div>
           <div class="admin-add">
             <input type="text" id="ae-title" placeholder="Event title">
-            <input type="text" id="ae-kind" placeholder="Kind (Collection, Exchange, Nomination...)">
+            <label class="admin-add__lbl" style="margin:0">Kind</label>
+            ${kindSelectHTML("ae-kind", eventCats, "")}
             <input type="text" id="ae-note" placeholder="Short note (optional)">
             <label class="admin-add__lbl">Start date and time (Eastern Time), optional. Readers see a live countdown to it.</label>
             ${datePickerHTML("ae")}
@@ -4978,7 +4995,8 @@
           <div class="admin-list">${hubRows}</div>
           <div class="admin-add">
             <input type="text" id="ah-name" placeholder="Hub name">
-            <input type="text" id="ah-kind" placeholder="Kind (Tag, Fandom, Format...)">
+            <label class="admin-add__lbl" style="margin:0">Kind</label>
+            ${kindSelectHTML("ah-kind", hubCats, "")}
             <input type="text" id="ah-note" placeholder="Short note (optional)">
             <div class="admin-add__row">
               <input type="text" id="ah-icon" placeholder="Icon (tag or book)" style="width:170px">
@@ -5003,6 +5021,27 @@
         </section>
 
         <section class="admin-sec">
+          <h3>Categories</h3>
+          <p class="muted admin-panel__note" style="margin-top:0">The kinds you can pick from for events and hubs. Add or remove them here.</p>
+          <div class="cat-group">
+            <span class="cat-group__label">Event kinds</span>
+            <div class="cat-list">${catRows("event", eventCats)}</div>
+            <div class="admin-add__row">
+              <input type="text" id="cat-event-new" placeholder="New event kind" class="admin-filter" style="margin:0;max-width:220px">
+              <button class="btn btn--quiet btn--sm" data-admin-cat-add="event">Add</button>
+            </div>
+          </div>
+          <div class="cat-group" style="margin-top:14px">
+            <span class="cat-group__label">Hub kinds</span>
+            <div class="cat-list">${catRows("hub", hubCats)}</div>
+            <div class="admin-add__row">
+              <input type="text" id="cat-hub-new" placeholder="New hub kind" class="admin-filter" style="margin:0;max-width:220px">
+              <button class="btn btn--quiet btn--sm" data-admin-cat-add="hub">Add</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="admin-sec">
           <h3>Works and books</h3>
           <input type="text" id="admin-work-filter" placeholder="Filter by title or author" class="admin-filter">
           <div class="admin-list" id="admin-work-list">${workRows}</div>
@@ -5021,7 +5060,7 @@
         </section>
       </div>`, "Admin control panel");
 
-    wireAdminPanel(events, hubs);
+    wireAdminPanel(events, hubs, exchanges);
   }
 
   // Build the Eastern start time, derived badge, and end time (from a duration
@@ -5061,7 +5100,7 @@
     </div>`;
   }
 
-  function wireAdminPanel(events, hubs) {
+  function wireAdminPanel(events, hubs, exchanges) {
     const card = $("#modalCard");
     const withConfirm = (sel, prop, delFn, noun) => card.querySelectorAll(sel).forEach(b => b.addEventListener("click", () => {
       const rid = b.dataset[prop], label = b.dataset.label || ("this " + noun);
@@ -5116,6 +5155,21 @@
         row.style.display = row.textContent.toLowerCase().includes(q) ? "" : "none";
       });
     });
+
+    // Categories: add and delete event/hub kinds.
+    card.querySelectorAll("[data-admin-cat-add]").forEach(b => b.addEventListener("click", async () => {
+      const scope = b.dataset.adminCatAdd;
+      const input = card.querySelector("#cat-" + scope + "-new");
+      const name = (input && input.value.trim()) || "";
+      if (!name) { toast("Type a name first."); return; }
+      try { await WispDB.createCategory(scope, name); toast("Category added."); renderAdminPanel(); }
+      catch (e) { toast((e && e.message) || "Could not add the category."); }
+    }));
+    card.querySelectorAll("[data-admin-cat-del]").forEach(b => b.addEventListener("click", () => {
+      const id = b.dataset.adminCatDel, label = b.dataset.label || "this category";
+      confirmDialog({ title: "Remove this kind?", body: `&ldquo;${esc(label)}&rdquo; is removed from the dropdowns. Events and hubs already using it keep their label.`, confirmText: "Remove", danger: true },
+        async () => { try { await WispDB.deleteCategory(id); toast("Category removed."); } catch (e) { toast((e && e.message) || "Could not remove."); } renderAdminPanel(); });
+    }));
 
     const setPw = card.querySelector("[data-admin-set-pw]");
     setPw && setPw.addEventListener("click", async () => {
@@ -5197,7 +5251,7 @@
         <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
       </div>
       <div class="field"><label>Title</label><input type="text" id="ee-title" value="${esc(ev.title || "")}"></div>
-      <div class="field"><label>Kind</label><input type="text" id="ee-kind" value="${esc(ev.kind || "")}"></div>
+      <div class="field"><label>Kind</label>${kindSelectHTML("ee-kind", (LIVE.cats && LIVE.cats.event) || [], ev.kind || "")}</div>
       <div class="field"><label>Note</label><textarea id="ee-note" rows="2">${esc(ev.note || "")}</textarea></div>
       <div class="field"><label>Start date and time (Eastern Time)</label>${datePickerHTML("ee")}${durationHTML("ee", eeDur.d, eeDur.h, eeDur.m)}<p class="muted" id="ee-echo" style="font-size:12px;margin:6px 0 0"></p></div>
       <div class="modal-actions">
@@ -5229,7 +5283,7 @@
         <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
       </div>
       <div class="field"><label>Name</label><input type="text" id="eh-name" value="${esc(h.name || "")}"></div>
-      <div class="field"><label>Kind</label><input type="text" id="eh-kind" value="${esc(h.kind || "")}"></div>
+      <div class="field"><label>Kind</label>${kindSelectHTML("eh-kind", (LIVE.cats && LIVE.cats.hub) || [], h.kind || "")}</div>
       <div class="field"><label>Note</label><textarea id="eh-note" rows="2">${esc(h.note || "")}</textarea></div>
       <div class="field"><label>Icon (tag or book)</label><input type="text" id="eh-icon" value="${esc(h.icon || "tag")}"></div>
       <div class="modal-actions">
