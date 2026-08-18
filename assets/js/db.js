@@ -243,6 +243,13 @@ window.WispDB = (function () {
     const { error } = await client.from("works").delete().eq("id", workId).eq("author_id", user.id);
     if (error) throw error;
   }
+  // Unpublish (status 'draft', hidden from readers but kept) or republish a work
+  // the signed-in user owns. RLS scopes it to the author.
+  async function setWorkStatus(workId, status) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("works").update({ status: status }).eq("id", workId).eq("author_id", user.id);
+    if (error) throw error;
+  }
 
   // Update the editable fields of a work the signed-in user owns.
   async function updateWork(id, fields) {
@@ -1168,7 +1175,7 @@ window.WispDB = (function () {
     onRecovery(fn) { recoveryListeners.add(fn); return () => recoveryListeners.delete(fn); },
     init, signUp, signIn, signOut, resetPassword, updatePassword,
     listWorks, getWork, getChapters, myWorks,
-    createWork, updateWork, deleteWork, firstChapter, saveChapter, getUpcoming, setTags,
+    createWork, updateWork, deleteWork, setWorkStatus, firstChapter, saveChapter, getUpcoming, setTags,
     mySeries, getSeries, worksInSeries, findOrCreateSeries, updateSeries, deleteSeries, countInSeries,
     toggle, myRelations, getComments, postComment, editComment, deleteComment, getReactions, toggleReaction, uploadCover,
     toggleFollow, amFollowing, followCounts, myFollowingIds, getNotifications,

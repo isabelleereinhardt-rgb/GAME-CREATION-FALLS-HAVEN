@@ -1913,11 +1913,18 @@
     const w = findWriterWork(id); if (!w) return;
     const items = [{ icon: "edit", label: "Edit", run: () => navigate("write/" + id) }];
     if (w.series) items.push({ icon: "book", label: "Make standalone", run: () => { makeStandalone(id); renderWriteDashboard(); toast("Moved to your standalone works."); } });
+    const pub = w.status === "ongoing" || w.status === "complete" || w.status === undefined;
+    if (pub) items.push({ icon: "lock", label: "Unpublish", run: () => confirmDialog({
+        title: "Unpublish this work?",
+        body: `${esc(w.title)} will be hidden from readers and moved back to your drafts. You can publish it again any time.`,
+        confirmText: "Unpublish"
+      }, () => { w.status = "draft"; renderWriteDashboard(); toast("Unpublished. It's back in your drafts."); }) });
+    else items.push({ icon: "unlock", label: "Publish now", run: () => { w.status = "ongoing"; renderWriteDashboard(); toast("Published. It's live for readers."); } });
     items.push({
       icon: "trash", label: "Delete work", danger: true, run: () => {
         confirmDialog({
           title: "Delete this work?",
-          body: `${esc(w.title)} and its ${w.chapters} ${w.chapters === 1 ? "chapter" : "chapters"} will be deleted. You can't undo this.`,
+          body: `${esc(w.title)} and its ${w.chapters} ${w.chapters === 1 ? "chapter" : "chapters"} will be deleted. You can't undo this. To take it down for now, use Unpublish instead.`,
           confirmText: "Delete work", danger: true
         }, () => { deleteWork(id); renderWriteDashboard(); toast("Work deleted."); });
       }
@@ -2087,7 +2094,7 @@
         <div class="comic-editor__head">
           <span>Pages <span class="muted">(${editorPages.length})</span></span>
           <span class="comic-editor__add">
-            <label class="btn btn--quiet btn--sm" for="we-page-file">${icon("plus",13)} Upload<input type="file" id="we-page-file" accept="image/*" hidden></label>
+            <label class="btn btn--quiet btn--sm" for="we-page-file">${icon("upload",13)} Upload<input type="file" id="we-page-file" accept="image/*" hidden></label>
             <button type="button" class="btn btn--quiet btn--sm" data-page-url>${icon("plus",13)} Add by URL</button>
           </span>
         </div>
@@ -2254,7 +2261,7 @@
               <h4>Cover</h4>
               <label class="cover-drop" id="coverDrop" for="we-cover-file">
                 <input type="file" id="we-cover-file" accept="image/*" hidden>
-                ${icon("plus",18)}<div style="margin-top:6px" id="coverDropText">${coverIsImage ? "Replace cover" : "Upload a cover"}</div>
+                ${icon("upload",22)}<div style="margin-top:6px" id="coverDropText">${coverIsImage ? "Replace cover" : "Upload a cover"}</div>
                 <div style="font-size:11px;margin-top:2px">Required to publish</div>
               </label>
               <div id="coverPreview" style="margin-top:10px">${coverIsImage ? `<img src="${esc(work.cover)}" alt="Cover preview" style="width:100%;border-radius:10px;display:block">` : ""}</div>
@@ -4130,19 +4137,39 @@
   function liveWorkMenu(id) {
     const b = (LIVE.desk || []).find(x => x.id === id) || LIVE.byId[id] || {};
     const title = b.title || "this work";
-    menuDialog(title, [
+    const status = b.status || b._dbStatus;
+    const isPublic = status === "ongoing" || status === "complete";
+    const items = [
       { icon: "edit", label: "Edit", run: () => navigate("write/" + id) },
       { icon: "book", label: "View as reader", run: () => navigate("work/" + id) },
-      { icon: "share", label: "Copy link", run: () => copyLink(id) },
-      { icon: "trash", label: "Delete work", danger: true, run: () => confirmDialog({
-          title: "Delete this work?",
-          body: `${esc(title)} and its chapters will be deleted. You can't undo this.`,
-          confirmText: "Delete work", danger: true
+      { icon: "share", label: "Copy link", run: () => copyLink(id) }
+    ];
+    // Unpublish keeps the work and its chapters but hides it from readers; the
+    // author can publish it again any time. A quieter step than deleting.
+    if (isPublic) {
+      items.push({ icon: "lock", label: "Unpublish", run: () => confirmDialog({
+          title: "Unpublish this work?",
+          body: `${esc(title)} will be hidden from readers and moved back to your drafts. Its chapters and stats are kept, and you can publish it again any time.`,
+          confirmText: "Unpublish"
         }, async () => {
-          try { await WispDB.deleteWork(id); toast("Work deleted."); loadWriteDashboard(); }
-          catch (e) { toast((e && e.message) || "Could not delete."); }
-        }) }
-    ]);
+          try { await WispDB.setWorkStatus(id, "draft"); toast("Unpublished. It's back in your drafts."); loadWriteDashboard(); }
+          catch (e) { toast((e && e.message) || "Could not unpublish."); }
+        }) });
+    } else if (status === "draft" || status === "scheduled") {
+      items.push({ icon: "unlock", label: "Publish now", run: async () => {
+          try { await WispDB.setWorkStatus(id, "ongoing"); toast("Published. It's live for readers."); loadWriteDashboard(); }
+          catch (e) { toast((e && e.message) || "Could not publish."); }
+        } });
+    }
+    items.push({ icon: "trash", label: "Delete work", danger: true, run: () => confirmDialog({
+        title: "Delete this work?",
+        body: `${esc(title)} and its chapters will be deleted. You can't undo this. If you only want to take it down for now, use Unpublish instead.`,
+        confirmText: "Delete work", danger: true
+      }, async () => {
+        try { await WispDB.deleteWork(id); toast("Work deleted."); loadWriteDashboard(); }
+        catch (e) { toast((e && e.message) || "Could not delete."); }
+      }) });
+    menuDialog(title, items);
   }
 
   /* ---- manage a live series ---------------------------------------------- */
