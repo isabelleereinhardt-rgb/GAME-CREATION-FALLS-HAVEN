@@ -243,14 +243,20 @@
     '.lucky-treat{position:absolute;bottom:4px;left:-30px;line-height:0;opacity:0}' +
     '.lucky-walk.treating .lucky-treat{animation:treat-appear 4.6s ease-out forwards}' +
     '@keyframes treat-appear{0%{opacity:0;transform:translateY(-6px) scale(.7)}14%{opacity:1;transform:none}70%{opacity:1}100%{opacity:0}}' +
-    /* Lucky is an opt-in companion the reader chose, so OS Low Power Mode does not
-       freeze him — his own walk toggle is the off switch. Only Wisp's explicit
-       "reduce motion" setting parks him: still, but blinking and breathing. */
-    ':root[data-motion="reduce"] .lucky-walk{animation:none;left:26px}' +
-    ':root[data-motion="reduce"] .lucky-leg{animation:none}' +
-    ':root[data-motion="reduce"] .lucky-tip{animation:none;opacity:1}' +
-    ':root[data-motion="reduce"] .lucky-bob{animation:lucky-breathe 4.4s ease-in-out infinite}' +
-    '@keyframes lucky-breathe{0%,100%{transform:translateY(0) scaleY(1)}50%{transform:translateY(-.5px) scaleY(1.012)}}' +
+    /* Lucky is an opt-in companion the reader turned on, and he has his own
+       "Walk across the screen" switch in his settings — that is his off switch.
+       The site's global Reduce-motion rule kills every animation with
+       `* { animation: none !important }`, which would freeze him; but a
+       class-specific !important beats a universal one, so we re-enable his walk
+       here. Turning him off is a deliberate choice, not a motion-setting side
+       effect. (Petals, confetti, and page flourishes still respect Reduce motion.) */
+    ':root[data-motion="reduce"] .lucky-walk{animation:lucky-walk var(--pace,34s) linear infinite !important}' +
+    ':root[data-motion="reduce"] .lucky-walk.treating{animation:lucky-hopaway 4.6s ease-in forwards !important}' +
+    ':root[data-motion="reduce"] .lucky-bob{animation:lucky-bob .6s ease-in-out infinite !important}' +
+    ':root[data-motion="reduce"] .lucky-leg{animation:lucky-leg .62s ease-in-out infinite !important}' +
+    ':root[data-motion="reduce"] .lucky-tail{animation:lucky-tail 1.6s ease-in-out infinite !important}' +
+    ':root[data-motion="reduce"] .lucky-eye{animation:lucky-blink 4.2s ease-in-out infinite !important}' +
+    ':root[data-motion="reduce"] .lucky-tip{animation:tip-window var(--pace,34s) linear infinite !important}' +
     /* settings modal */
     '.lucky-modal-back{position:fixed;inset:0;z-index:120;background:color-mix(in srgb,var(--ink) 34%,transparent);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:40px 16px}' +
     '.lucky-modal{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:0 20px 60px var(--shadow-lg);width:min(640px,100%);padding:22px 22px 26px}' +
