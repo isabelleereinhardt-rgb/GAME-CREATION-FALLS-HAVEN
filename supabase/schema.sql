@@ -17,6 +17,7 @@ create table if not exists public.profiles (
   bio          text default '',
   accent       text default '#ab5a67',
   is_admin     boolean not null default false,
+  widgets      jsonb not null default '{}'::jsonb,
   created_at   timestamptz not null default now()
 );
 alter table public.profiles enable row level security;

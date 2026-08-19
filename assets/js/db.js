@@ -512,6 +512,20 @@ window.WispDB = (function () {
     emit();
     return data;
   }
+  // The installable widget station, stored on the profile so it follows a reader
+  // across devices. Reads come free with the profile row (select *). Writes fail
+  // softly if the `widgets` column has not been migrated yet, so the app keeps
+  // working on localStorage alone until the migration is run.
+  function getWidgets() { return profile ? profile.widgets : null; }
+  async function saveWidgets(obj) {
+    if (!user || !client) return false;
+    try {
+      const { error } = await client.from("profiles").update({ widgets: obj || {} }).eq("id", user.id);
+      if (error) { if (missingColumn(error)) return false; throw error; }
+      if (profile) profile.widgets = obj || {};
+      return true;
+    } catch (e) { if (missingColumn(e)) return false; console.warn("[wisp] saveWidgets failed:", e && e.message); return false; }
+  }
   async function getProfile(idOrHandle) {
     if (!idOrHandle) return null;
     let q = client.from("profiles").select("*");
@@ -1281,7 +1295,7 @@ window.WispDB = (function () {
     mySeries, getSeries, worksInSeries, findOrCreateSeries, updateSeries, deleteSeries, countInSeries,
     toggle, myRelations, getComments, postComment, editComment, deleteComment, getReactions, toggleReaction, uploadCover,
     toggleFollow, amFollowing, followCounts, myFollowingIds, getNotifications,
-    updateProfile, getProfile, worksByAuthor,
+    updateProfile, getProfile, getWidgets, saveWidgets, worksByAuthor,
     listEvents, myEventIds, toggleEventJoin, getEvent, eventMemberCount, listEventPosts, postToEvent, deleteEventPost,
     listHubs, myHubIds, hubMemberCounts, toggleHubMembership, hubDetail, worksInHub, worksByTag,
     getAdminSettings, setAdminPassword, createEvent, updateEvent, deleteEvent, createHub, updateHub, deleteHub, adminDeleteWork,
