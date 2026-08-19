@@ -1102,7 +1102,7 @@
               ${w.words ? `<span>${w.words} words</span>` : ""}
               ${w.read ? `<span>${icon("clock",14)} ${w.read}</span>` : ""}
             </div>
-            <p class="soft" style="font-size:16px;line-height:1.6;max-width:620px">${esc(w.summary)}</p>
+            <p class="soft" style="font-size:16px;line-height:1.6;max-width:620px">${w.summary ? esc(w.summary) : '<span class="muted">No synopsis yet. Open the work to start reading.</span>'}</p>
             ${w.schedule && !w.complete ? `<p class="work-schedule">${icon("clock",14)} Updates ${esc(w.schedule)}</p>` : ""}
             <div style="margin:16px 0">${tagRow(w.tags, 12)}</div>
             <div class="work-actions">
@@ -2095,10 +2095,40 @@
       <button data-tool="theme-sepia" class="${settings.theme === "sepia" ? "is-on" : ""}" aria-pressed="${settings.theme === "sepia"}" title="Sepia" style="color:#8a6a3a">Aa</button>
       <button data-tool="theme-oled" class="${settings.theme === "oled" ? "is-on" : ""}" aria-pressed="${settings.theme === "oled"}" title="OLED black" style="background:#111;color:#eee">Aa</button>
       <span class="sep"></span>
+      <button data-tool="autoscroll" id="autoScrollBtn" title="Auto-scroll"><span style="display:inline-flex;transform:rotate(90deg)">${icon("chev",16)}</span></button>
+      <button data-tool="top" title="Back to the top"><span style="display:inline-flex;transform:rotate(-90deg)">${icon("chev",16)}</span></button>
+      <span class="sep"></span>
       <button data-tool="margins" class="${settings.margins ? "is-on" : ""}" aria-pressed="${settings.margins}" title="Toggle margin comments">${icon("comment",16)}</button>
       <button data-tool="listen" id="listenBtn" title="Read aloud">${icon("play",16)}</button>
       <button data-tool="settings" title="More reading settings">${icon("gear",16)}</button>
     </div>`;
+  }
+  // Hands-free reading: tap to cycle off / slow / medium / fast.
+  const AUTO_SPEEDS = [0, 0.5, 1.1, 2.1];
+  let autoScrollState = 0, autoScrollTimer = null;
+  // Whichever element actually scrolls the reader (the app shell or the window).
+  function readerScroller() {
+    const m = $("#main");
+    if (m && m.scrollHeight > m.clientHeight + 4) return m;
+    return document.scrollingElement || document.documentElement;
+  }
+  function tickAutoScroll() {
+    const el = readerScroller(); const px = AUTO_SPEEDS[autoScrollState] || 0;
+    if (!el || px <= 0) { stopAutoScroll(); return; }
+    el.scrollTop += px;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 2) { stopAutoScroll(); toast("You reached the end of the page."); }
+  }
+  function stopAutoScroll() { autoScrollState = 0; if (autoScrollTimer) clearInterval(autoScrollTimer); autoScrollTimer = null; updateAutoScrollBtn(); }
+  function cycleAutoScroll() {
+    autoScrollState = (autoScrollState + 1) % AUTO_SPEEDS.length;
+    if (autoScrollTimer) { clearInterval(autoScrollTimer); autoScrollTimer = null; }
+    if (autoScrollState > 0) { autoScrollTimer = setInterval(tickAutoScroll, 16); toast("Auto-scroll: " + ["off", "slow", "medium", "fast"][autoScrollState]); }
+    updateAutoScrollBtn();
+  }
+  function updateAutoScrollBtn() {
+    const b = $("#autoScrollBtn"); if (!b) return;
+    b.classList.toggle("is-on", autoScrollState > 0);
+    b.setAttribute("title", autoScrollState === 0 ? "Auto-scroll" : "Auto-scroll: " + ["off", "slow", "medium", "fast"][autoScrollState]);
   }
 
   let speaking = false;
@@ -2112,6 +2142,8 @@
         else if (t === "margins") { settings.margins = !settings.margins; applySettings(); b.classList.toggle("is-on", settings.margins); b.setAttribute("aria-pressed", String(settings.margins)); }
         else if (t === "settings") { openTheme(); }
         else if (t === "listen") { toggleListen(b); }
+        else if (t === "autoscroll") { cycleAutoScroll(); }
+        else if (t === "top") { const el = readerScroller(); if (el && el.scrollTo) el.scrollTo({ top: 0, behavior: "smooth" }); else if (el) el.scrollTop = 0; stopAutoScroll(); }
       });
     });
   }
@@ -4847,9 +4879,10 @@
 
   let currentScreen = null;
   function setActive(screen) {
-    // Leaving the reader stops any read-aloud in progress.
-    if (currentScreen === "reading" && screen !== "reading" && window.speechSynthesis) {
-      window.speechSynthesis.cancel(); speaking = false;
+    // Leaving the reader stops any read-aloud and auto-scroll in progress.
+    if (currentScreen === "reading" && screen !== "reading") {
+      if (window.speechSynthesis) { window.speechSynthesis.cancel(); speaking = false; }
+      stopAutoScroll();
     }
     currentScreen = screen;
     $$(".screen").forEach(s => s.classList.toggle("is-active", s.dataset.screen === screen));
