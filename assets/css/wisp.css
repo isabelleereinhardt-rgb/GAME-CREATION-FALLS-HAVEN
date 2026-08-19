@@ -1381,6 +1381,16 @@ mark.hl {
   display: flex; gap: 16px; align-items: center; border: 1px solid var(--line); border-radius: var(--radius);
   background: var(--surface); padding: 16px 18px; margin-bottom: 12px;
 }
+/* The middle column must be allowed to shrink (min-width:0). Without it a long
+   event title or note refuses to give ground and shoves the Join / Open space
+   buttons off the right edge on a phone. */
+.event > div { min-width: 0; }
+@media (max-width: 560px) {
+  .event { flex-wrap: wrap; }
+  /* Action buttons (last child) drop to their own full-width row so Join / Joined
+     and Open space always sit fully on screen instead of overflowing. */
+  .event > div:last-child { width: 100%; }
+}
 .event__date {
   flex: none; width: 58px; text-align: center; border-right: 1px solid var(--line); padding-right: 14px;
 }
