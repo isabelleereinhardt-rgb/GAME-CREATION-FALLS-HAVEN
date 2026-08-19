@@ -1148,7 +1148,11 @@
     if (!info) return linkCardHTML(url, label);
     const allow = info.kind === "video" ? 'allow="fullscreen; picture-in-picture; encrypted-media"'
       : info.kind === "audio" ? 'allow="encrypted-media; clipboard-write"' : "";
-    return `<div class="embed embed--${info.kind}"><iframe src="${esc(info.src)}" loading="lazy" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation" ${allow} allowfullscreen title="${esc(label || "Embedded content")}"></iframe></div>`;
+    let host = ""; try { host = new URL(url).hostname.replace(/^www\./, ""); } catch (e) {}
+    const frame = `<div class="embed--${info.kind}"><iframe src="${esc(info.src)}" loading="lazy" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation" ${allow} allowfullscreen title="${esc(label || "Embedded content")}"></iframe></div>`;
+    // A caption link so readers can jump straight to the source (like the sample).
+    const src = `<figcaption class="embed__source"><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc((label && label.trim()) || ("Open on " + host))} <span aria-hidden="true">&#8599;</span></a></figcaption>`;
+    return `<figure class="embed embed--rich">${frame}${src}</figure>`;
   }
 
   function renderBlock(block) {
@@ -6012,6 +6016,7 @@
       if (!embedInfo(url)) toast("That address will show as a link. Interactive embeds support YouTube, Vimeo, Google Maps, OpenStreetMap, and Spotify.");
       const label = (window.prompt("Label (optional)", "") || "").trim();
       insertEmbedBlock("@[" + label + "](" + url + ")");
+      if (embedInfo(url)) toast("Embed added. It shows as a player in Preview and for readers.");
     }
   }
   // Insert a Markdown embed line as its own paragraph, so it round-trips to a

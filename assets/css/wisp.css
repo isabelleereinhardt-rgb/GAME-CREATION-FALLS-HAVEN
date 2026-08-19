@@ -1744,3 +1744,9 @@ button.pill--link:hover { border-color: var(--rose); color: var(--rose-ink); bac
 /* Chapter delete control in the editor's chapter list. */
 .part-mv--del svg { transform: none; }
 .part-mv--del:hover:not(:disabled) { background: var(--rose-wash); color: #a2444f; }
+
+/* Rich embed: the frame plus a caption link to the source. */
+.embed--rich { margin: 20px 0; }
+.embed__source { margin-top: 7px; font-size: 13px; text-align: right; }
+.embed__source a { color: var(--link); text-decoration: none; }
+.embed__source a:hover { text-decoration: underline; }
