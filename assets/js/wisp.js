@@ -2934,7 +2934,14 @@
         ]);
         polls[w.id] = { tally: tally, mine: mine };
       }));
-      LIVE.hubPage = { detail, works, widgets, polls };
+      const stats = {
+        followers: detail.count || 0,
+        works: works.length,
+        hearts: works.reduce((s, w) => s + (w.heartsN || 0), 0),
+        reads: works.reduce((s, w) => s + (w.readsN || 0), 0),
+        comments: works.reduce((s, w) => s + (w.commentsN || 0), 0)
+      };
+      LIVE.hubPage = { detail, works, widgets, polls, stats };
     } catch (e) {
       console.error("[wisp] hub load failed:", e);
       renderHubNotFound(); return;
@@ -3128,7 +3135,8 @@
     button: "Button", video: "Video", faq: "FAQ"
   };
   function safeUrl(u) { try { const x = new URL(u); return (x.protocol === "https:" || x.protocol === "http:") ? x.href : ""; } catch (e) { return ""; } }
-  function hubWidgetHTML(w, polls) {
+  const PROGRESS_SOURCES = { manual: "Manual", followers: "followers", hearts: "hearts", reads: "reads", works: "works", comments: "comments" };
+  function hubWidgetHTML(w, polls, stats) {
     const cfg = w.config || {};
     const title = w.title ? `<div class="hubw__title">${esc(w.title)}</div>` : "";
     let body = "";
@@ -3167,10 +3175,13 @@
         ? `<ul class="hubw__list">${items.map(it => `<li>${esc(it)}</li>`).join("")}</ul>`
         : `<p class="muted" style="font-size:13px;margin:0">No items yet.</p>`;
     } else if (w.kind === "progress") {
-      const cur = Math.max(0, +cfg.current || 0), tot = Math.max(0, +cfg.target || 0);
+      const src = cfg.source || "manual";
+      const cur = src !== "manual" && stats && stats[src] != null ? stats[src] : Math.max(0, +cfg.current || 0);
+      const tot = Math.max(0, +cfg.target || 0);
       const pct = tot > 0 ? Math.min(100, Math.round((cur / tot) * 100)) : 0;
+      const unit = src !== "manual" ? PROGRESS_SOURCES[src] : (cfg.unit || "");
       body = `<div class="hubw__progress"><span class="hubw__progress-bar" style="width:${pct}%"></span></div>
-        <p class="muted hubw__sub">${cur}${tot ? " / " + tot : ""}${cfg.unit ? " " + esc(cfg.unit) : ""} &middot; ${pct}%</p>`;
+        <p class="muted hubw__sub">${cur}${tot ? " / " + tot : ""}${unit ? " " + esc(unit) : ""} &middot; ${pct}%</p>`;
     } else if (w.kind === "button") {
       const url = safeUrl(cfg.url || "");
       body = url
@@ -3231,7 +3242,7 @@
     const widgets = hp.widgets || [];
     const countLabel = count === 0 ? "No followers yet" : count + (count === 1 ? " follower" : " followers");
     const widgetRail = widgets.length
-      ? `<div class="hub-widgets">${widgets.map(w => hubWidgetHTML(w, hp.polls)).join("")}</div>`
+      ? `<div class="hub-widgets">${widgets.map(w => hubWidgetHTML(w, hp.polls, hp.stats)).join("")}</div>`
       : "";
     $("#screen-community").innerHTML = `
       <div class="page page--wide">
@@ -5666,10 +5677,21 @@
     if (kind === "countdown") return titleField + `<div class="field"><label>Counts down to (Eastern Time)</label>${datePickerHTML(pfx)}</div><div class="field"><label>When it arrives, show</label><input type="text" id="${pfx}-done" value="${esc(cfg.done || "")}" placeholder="It's here."></div>`;
     if (kind === "links") return titleField + `<div class="field"><label>Links, one per line as: Label | https://...</label><textarea id="${pfx}-links" rows="4" placeholder="Discord | https://discord.gg/...">${esc(linksToText(cfg.items))}</textarea></div>`;
     if (kind === "poll") return titleField + `<div class="field"><label>Question</label><input type="text" id="${pfx}-q" value="${esc(cfg.question || "")}" placeholder="What should we read next?"></div><div class="field"><label>Options, one per line</label><textarea id="${pfx}-opts" rows="4" placeholder="Option one&#10;Option two">${esc((cfg.options || []).join("\n"))}</textarea></div>`;
-    if (kind === "image") return titleField + `<div class="field"><label>Image URL (https://...)</label><input type="text" id="${pfx}-url" value="${esc(cfg.url || "")}" placeholder="https://..."></div><div class="field"><label>Caption (optional)</label><input type="text" id="${pfx}-caption" value="${esc(cfg.caption || "")}"></div><div class="field"><label>Links to (optional)</label><input type="text" id="${pfx}-link" value="${esc(cfg.link || "")}" placeholder="https://..."></div>`;
+    if (kind === "image") return titleField + `<div class="field"><label>Image</label>
+        <div class="admin-add__row" style="margin-bottom:6px">
+          <input type="text" id="${pfx}-url" value="${esc(cfg.url || "")}" placeholder="Paste an https:// URL, or upload" style="flex:1;min-width:150px">
+          <input type="file" id="${pfx}-img-file" accept="image/*" hidden>
+          <button type="button" class="btn btn--quiet btn--sm" id="${pfx}-img-upload">${icon("upload",13)} Upload</button>
+        </div>
+      </div><div class="field"><label>Caption (optional)</label><input type="text" id="${pfx}-caption" value="${esc(cfg.caption || "")}"></div><div class="field"><label>Links to (optional)</label><input type="text" id="${pfx}-link" value="${esc(cfg.link || "")}" placeholder="https://..."></div>`;
     if (kind === "quote") return titleField + `<div class="field"><label>Quote</label><textarea id="${pfx}-text" rows="3" placeholder="A line worth pinning up.">${esc(cfg.text || "")}</textarea></div><div class="field"><label>Attribution (optional)</label><input type="text" id="${pfx}-cite" value="${esc(cfg.cite || "")}" placeholder="Who said it"></div>`;
     if (kind === "list") return titleField + `<div class="field"><label>Items, one per line</label><textarea id="${pfx}-items" rows="5" placeholder="Read the pinned intro&#10;Tag your warnings&#10;Be kind">${esc((cfg.items || []).join("\n"))}</textarea></div>`;
-    if (kind === "progress") return titleField + `<div class="field"><label>Current</label><input type="number" id="${pfx}-current" value="${esc(String(cfg.current || 0))}" min="0"></div><div class="field"><label>Target</label><input type="number" id="${pfx}-target" value="${esc(String(cfg.target || 0))}" min="0"></div><div class="field"><label>Unit (optional)</label><input type="text" id="${pfx}-unit" value="${esc(cfg.unit || "")}" placeholder="sign-ups, words, ..."></div>`;
+    if (kind === "progress") return titleField + `<div class="field"><label>Track</label>
+        <select id="${pfx}-source" class="admin-select">${Object.keys(PROGRESS_SOURCES).map(s => `<option value="${s}"${(cfg.source || "manual") === s ? " selected" : ""}>${s === "manual" ? "Manual number" : "Hub " + PROGRESS_SOURCES[s]}</option>`).join("")}</select>
+        <p class="muted" style="font-size:11.5px;margin:4px 0 0">Auto options fill the current value from this hub's live totals; Manual lets you type it.</p></div>
+      <div class="field"><label>Current (manual only)</label><input type="number" id="${pfx}-current" value="${esc(String(cfg.current || 0))}" min="0"></div>
+      <div class="field"><label>Target (goal)</label><input type="number" id="${pfx}-target" value="${esc(String(cfg.target || 0))}" min="0"></div>
+      <div class="field"><label>Unit label (manual only)</label><input type="text" id="${pfx}-unit" value="${esc(cfg.unit || "")}" placeholder="sign-ups, words, ..."></div>`;
     if (kind === "button") return titleField + `<div class="field"><label>Button label</label><input type="text" id="${pfx}-label" value="${esc(cfg.label || "")}" placeholder="Sign up"></div><div class="field"><label>Links to (https://...)</label><input type="text" id="${pfx}-url" value="${esc(cfg.url || "")}" placeholder="https://..."></div>`;
     if (kind === "video") return titleField + `<div class="field"><label>Video URL (YouTube, Vimeo, ...)</label><input type="text" id="${pfx}-url" value="${esc(cfg.url || "")}" placeholder="https://..."></div>`;
     if (kind === "faq") return titleField + `<div class="field"><label>Questions and answers, one per line as: Question :: Answer</label><textarea id="${pfx}-faq" rows="5" placeholder="When do sign-ups close? :: Friday at midnight ET.">${esc((cfg.items || []).map(it => (it.q || "") + " :: " + (it.a || "")).join("\n"))}</textarea></div>`;
@@ -5713,7 +5735,8 @@
     } else if (kind === "progress") {
       const target = Math.max(0, +(($("#" + pfx + "-target") || {}).value || 0));
       if (!(target > 0)) throw new Error("Set a target greater than zero.");
-      config = { current: Math.max(0, +(($("#" + pfx + "-current") || {}).value || 0)), target: target, unit: (($("#" + pfx + "-unit") || {}).value || "").trim() };
+      const source = (($("#" + pfx + "-source") || {}).value || "manual");
+      config = { source: source, current: Math.max(0, +(($("#" + pfx + "-current") || {}).value || 0)), target: target, unit: (($("#" + pfx + "-unit") || {}).value || "").trim() };
     } else if (kind === "button") {
       const url = safeUrl((($("#" + pfx + "-url") || {}).value || "").trim());
       const label = (($("#" + pfx + "-label") || {}).value || "").trim();
@@ -5733,6 +5756,20 @@
       config = { items: items };
     }
     return { title: title, config: config };
+  }
+  // Wire the image widget's Upload button: send the file to storage and drop the
+  // resulting URL into the widget's URL field, so admins can upload or paste.
+  function wireWidgetImageUpload(pfx) {
+    const btn = $("#" + pfx + "-img-upload"), file = $("#" + pfx + "-img-file"), url = $("#" + pfx + "-url");
+    if (!btn || !file) return;
+    btn.addEventListener("click", () => { if (!isLive()) { toast("Connect the site to upload images."); return; } file.click(); });
+    file.addEventListener("change", async () => {
+      const f = file.files && file.files[0]; if (!f) return;
+      btn.disabled = true; btn.textContent = "Uploading...";
+      try { const u = await WispDB.uploadCover(f); if (url) url.value = u; toast("Image uploaded."); }
+      catch (e) { toast((e && e.message) || "Could not upload the image."); }
+      btn.disabled = false; btn.innerHTML = icon("upload", 13) + " Upload"; file.value = "";
+    });
   }
   async function openHubWidgets(hub) {
     if (!isLive()) { toast("Widgets need the connected site."); return; }
@@ -5785,6 +5822,7 @@
     const rebuild = () => {
       $("#wadd-form").innerHTML = widgetKindForm("wadd", kindSel.value, null);
       if (kindSel.value === "countdown") initDatePicker("wadd", "", function () {});
+      if (kindSel.value === "image") wireWidgetImageUpload("wadd");
     };
     kindSel && kindSel.addEventListener("change", rebuild);
 
@@ -5826,6 +5864,7 @@
       const cur = (w.config && w.config.target) ? toEasternInputValue(new Date(w.config.target)) : "";
       initDatePicker("wedit", cur, function () {});
     }
+    if (w.kind === "image") wireWidgetImageUpload("wedit");
     $("#wedit-save").addEventListener("click", async () => {
       let payload; try { payload = readWidgetKind("wedit", w.kind); } catch (e) { toast(e.message); return; }
       try { await WispDB.updateWidget(w.id, { title: payload.title, config: payload.config }); toast("Widget updated."); openHubWidgets(hub); }
