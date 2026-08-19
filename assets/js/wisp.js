@@ -2192,8 +2192,8 @@
         <button type="button" title="Numbered list" data-fmt="ol">1.</button>
         <button type="button" title="Link" data-fmt="link">${icon("tag",15)}</button>
         <span class="sep"></span>
-        <button type="button" title="Insert an image" data-fmt="image">Image</button>
-        <button type="button" title="Embed a video, map, or audio" data-fmt="embed">Embed</button>
+        <button type="button" title="Upload an image from your device" data-fmt="image">${icon("upload",13)} Image</button>
+        <button type="button" title="Embed a video, map, or audio by link" data-fmt="embed">${icon("external",13)} Embed</button>
         <span class="sep"></span>
         <button type="button" title="Horizontal rule" data-fmt="hr"><span style="display:inline-block;width:16px;height:2px;background:currentColor;border-radius:2px"></span></button>
         <span style="margin-left:auto;font-size:12px;color:var(--ink3);padding:0 8px">Markdown shortcuts on</span>
@@ -5992,11 +5992,18 @@
       else toast("Links need to start with https:// or mailto:");
     }
     else if (kind === "image") {
-      const url = (window.prompt("Image address (https://...)", "https://") || "").trim();
-      if (!url || url === "https://") return;
-      if (!/^https:\/\//i.test(url)) { toast("Images need to start with https://"); return; }
-      const alt = (window.prompt("Caption or description (optional)", "") || "").trim();
-      insertEmbedBlock("![" + alt + "](" + url + ")");
+      // Image uploads a picture from the device (phone, laptop) the same way a
+      // cover does. Embed, below, is the one that takes a link.
+      if (!isLive()) { toast("Connect the site to upload images from your device."); return; }
+      const inp = document.createElement("input");
+      inp.type = "file"; inp.accept = "image/*";
+      inp.addEventListener("change", async () => {
+        const f = inp.files && inp.files[0]; if (!f) return;
+        toast("Uploading image...");
+        try { const url = await WispDB.uploadCover(f); insertEmbedBlock("![](" + url + ")"); toast("Image added to the chapter."); }
+        catch (e) { toast((e && e.message) || "Could not upload the image."); }
+      });
+      inp.click();
     }
     else if (kind === "embed") {
       const url = (window.prompt("Embed address: a YouTube or Vimeo link, a Google Maps or OpenStreetMap embed URL, or a Spotify link.", "https://") || "").trim();
