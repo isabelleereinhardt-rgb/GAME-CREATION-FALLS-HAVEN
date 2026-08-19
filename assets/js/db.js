@@ -204,6 +204,42 @@ window.WispDB = (function () {
     return data || [];
   }
 
+  // Staff picks: an admin-curated list of featured works, surfaced on the home.
+  // Reads are public; writes are admin-only (enforced by RLS). Degrades to an
+  // empty list if the featured_works table has not been migrated yet.
+  async function listFeatured() {
+    if (!client) return [];
+    try {
+      const { data: fw, error } = await client.from("featured_works").select("work_id, note, rank").order("rank").order("created_at");
+      if (error) { if (missingTable(error)) return []; throw error; }
+      const ids = (fw || []).map(r => r.work_id);
+      if (!ids.length) return [];
+      const { data: works } = await client.from("works_with_author").select("*").in("id", ids).in("status", ["ongoing", "complete"]);
+      const tagMap = await tagsFor((works || []).map(w => w.id));
+      const noteBy = {}, rankBy = {};
+      (fw || []).forEach(r => { noteBy[r.work_id] = r.note; rankBy[r.work_id] = r.rank; });
+      return (works || []).map(w => Object.assign(toUi(w, tagMap[w.id] || []), { featuredNote: noteBy[w.id] || "" }))
+        .sort((a, b) => (rankBy[a.id] || 0) - (rankBy[b.id] || 0));
+    } catch (e) { console.warn("[wisp] listFeatured failed:", e && e.message); return []; }
+  }
+  async function isFeatured(workId) {
+    try { const { data } = await client.from("featured_works").select("work_id").eq("work_id", workId).maybeSingle(); return !!data; }
+    catch (e) { return false; }
+  }
+  async function setFeatured(workId, note) {
+    if (!user) throw new Error("Sign in first.");
+    try {
+      const { error } = await client.from("featured_works").upsert({ work_id: workId, note: note || "" });
+      if (error) { if (missingTable(error)) return false; throw error; }
+      return true;
+    } catch (e) { if (missingTable(e)) return false; throw e; }
+  }
+  async function unsetFeatured(workId) {
+    if (!user) throw new Error("Sign in first.");
+    try { const { error } = await client.from("featured_works").delete().eq("work_id", workId); if (error && !missingTable(error)) throw error; return true; }
+    catch (e) { return false; }
+  }
+
   async function myWorks() {
     if (!user) return { series: [], standalone: [] };
     const { data, error } = await client.from("works_with_author").select("*").eq("author_id", user.id).order("updated_at", { ascending: false });
@@ -224,6 +260,13 @@ window.WispDB = (function () {
       return m ? (m[1] || m[2] || m[3]) : null;
     }
     return null;
+  }
+  // A table that has not been migrated yet (so an optional feature degrades to off
+  // rather than erroring for sites that haven't run the migration).
+  function missingTable(error) {
+    if (!error) return false;
+    const msg = error.message || error.details || "";
+    return error.code === "42P01" || error.code === "PGRST205" || /relation .* does not exist|could not find the table/i.test(msg);
   }
   // Run a mutation; when it fails on an unknown column, drop that key and try
   // again, so a missing optional column never blocks the whole save.
@@ -1290,7 +1333,7 @@ window.WispDB = (function () {
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     onRecovery(fn) { recoveryListeners.add(fn); return () => recoveryListeners.delete(fn); },
     init, signUp, signIn, signOut, resetPassword, updatePassword,
-    listWorks, getWork, getChapters, myWorks,
+    listWorks, getWork, getChapters, myWorks, listFeatured, isFeatured, setFeatured, unsetFeatured,
     createWork, updateWork, deleteWork, setWorkStatus, firstChapter, saveChapter, deleteChapter, setChapterNumber, swapChapterNumbers, listTags, listFandoms, getUpcoming, setTags,
     mySeries, getSeries, worksInSeries, findOrCreateSeries, updateSeries, deleteSeries, countInSeries,
     toggle, myRelations, getComments, postComment, editComment, deleteComment, getReactions, toggleReaction, uploadCover,

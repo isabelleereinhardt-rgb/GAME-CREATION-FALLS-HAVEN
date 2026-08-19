@@ -1941,6 +1941,8 @@
     try {
       LIVE.works = await WispDB.listWorks({ sort: "recent", limit: 30 });
       LIVE.works.forEach(w => { LIVE.byId[w.id] = w; });
+      LIVE.featured = await WispDB.listFeatured().catch(() => []);   // staff picks (admin-curated)
+      LIVE.featured.forEach(w => { LIVE.byId[w.id] = w; });
       LIVE.resume = null; LIVE.followingWorks = []; LIVE.joinedEvents = [];
       if (WispDB.signedIn) {
         const p = await WispDB.latestProgress().catch(() => null);
@@ -2007,6 +2009,20 @@
               </a>`;
             }).join("")}
           </div>
+        </section>` : ""}
+        ${(!following && LIVE.featured && LIVE.featured.length) ? `<section class="editorial" style="margin-bottom:26px">
+          <div class="eyebrow rose" style="margin-bottom:8px">Staff picks</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px">
+            ${LIVE.featured.map(w => `
+              <button class="list-tile" data-work="${w.id}" style="display:flex;gap:12px;align-items:flex-start;text-align:left">
+                <span class="mini-cover" style="width:44px;height:60px">${cover(w.cover, w.title)}</span>
+                <span>
+                  <span class="mini-work__title" style="display:block">${esc(w.title)}</span>
+                  <span class="muted" style="font-size:12.5px;display:block;margin:5px 0 0;line-height:1.5">${esc(w.featuredNote || ("by " + w.author))}</span>
+                </span>
+              </button>`).join("")}
+          </div>
+          <p class="muted" style="font-size:12.5px;margin-top:14px">Chosen by the Wisp editors.</p>
         </section>` : ""}
         ${works.length ? `<div class="section-head"><h2>${following ? "From authors you follow" : "Latest works"}</h2>${!following ? '<button class="btn--link" data-nav="browse">Browse all &rsaquo;</button>' : ""}</div>` : ""}
         ${grid}
@@ -7797,15 +7813,34 @@
     // author from the database, so it finds works far past any preloaded page.
     const workList = card.querySelector("#admin-work-list");
     const workFilter = card.querySelector("#admin-work-filter");
-    const workRowHTML = (w) => `<div class="admin-row">
+    // Staff picks: which works are currently featured (loaded once for the panel).
+    let featuredSet = new Set();
+    WispDB.listFeatured().then(list => { featuredSet = new Set((list || []).map(w => w.id)); }).catch(() => {});
+    const workRowHTML = (w) => { const on = featuredSet.has(w.id); return `<div class="admin-row">
         <div class="admin-row__main"><b>${esc(w.title || "Untitled")}</b><span class="muted">by ${esc(w.author || "Unknown")}</span></div>
+        <button class="btn btn--sm ${on ? "btn--primary" : "btn--quiet"}" data-admin-feature="${esc(w.id)}" aria-pressed="${on}">${on ? "Featured" : "Feature"}</button>
         <button class="btn btn--danger btn--sm" data-admin-del-work="${esc(w.id)}" data-label="${esc(w.title || "Untitled")}">Delete</button>
-      </div>`;
-    const bindWorkDeletes = () => workList && workList.querySelectorAll("[data-admin-del-work]").forEach(b => b.addEventListener("click", () => {
-      const id = b.dataset.adminDelWork, label = b.dataset.label || "this work";
-      confirmDialog({ title: "Delete this work?", body: `&ldquo;${esc(label)}&rdquo; will be removed for everyone. Its chapters go too. This cannot be undone.`, confirmText: "Delete work", danger: true },
-        async () => { try { await WispDB.adminDeleteWork(id); toast("Work deleted."); } catch (e) { toast((e && e.message) || "Could not delete."); } renderAdminPanel(); });
-    }));
+      </div>`; };
+    const bindWorkDeletes = () => {
+      workList && workList.querySelectorAll("[data-admin-del-work]").forEach(b => b.addEventListener("click", () => {
+        const id = b.dataset.adminDelWork, label = b.dataset.label || "this work";
+        confirmDialog({ title: "Delete this work?", body: `&ldquo;${esc(label)}&rdquo; will be removed for everyone. Its chapters go too. This cannot be undone.`, confirmText: "Delete work", danger: true },
+          async () => { try { await WispDB.adminDeleteWork(id); toast("Work deleted."); } catch (e) { toast((e && e.message) || "Could not delete."); } renderAdminPanel(); });
+      }));
+      // Feature / unfeature a work for the home "Staff picks" section.
+      workList && workList.querySelectorAll("[data-admin-feature]").forEach(b => b.addEventListener("click", async () => {
+        const id = b.dataset.adminFeature; const on = featuredSet.has(id);
+        b.disabled = true;
+        try {
+          if (on) { await WispDB.unsetFeatured(id); featuredSet.delete(id); toast("Removed from Staff picks."); }
+          else { const ok = await WispDB.setFeatured(id, ""); if (ok === false) { toast("Staff picks needs migration 023."); b.disabled = false; return; } featuredSet.add(id); toast("Added to Staff picks."); }
+          const nowOn = featuredSet.has(id);
+          b.classList.toggle("btn--primary", nowOn); b.classList.toggle("btn--quiet", !nowOn);
+          b.setAttribute("aria-pressed", String(nowOn)); b.textContent = nowOn ? "Featured" : "Feature";
+        } catch (e) { toast((e && e.message) || "Could not update Staff picks."); }
+        b.disabled = false;
+      }));
+    };
     const showWorkResults = (rows, q) => {
       if (!workList) return;
       if (!q) { workList.innerHTML = `<p class="muted admin-empty">Search by title or author to find a work.</p>`; return; }
