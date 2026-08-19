@@ -1371,6 +1371,9 @@
     // Highlight (==text==) and underline (++text++), before single * / _ italics.
     s = s.replace(/==([^=]+?)==/g, '<mark class="hl">$1</mark>');
     s = s.replace(/\+\+([^+]+?)\+\+/g, "<u>$1</u>");
+    // Per-word font size: {+bigger+} and {-smaller-}.
+    s = s.replace(/\{\+([^{}]+?)\+\}/g, '<span class="fs-lg">$1</span>');
+    s = s.replace(/\{-([^{}]+?)-\}/g, '<span class="fs-sm">$1</span>');
     s = s.replace(/(^|[^*\w])\*(?!\s)([^*]+?)\*(?!\*)/g, "$1<em>$2</em>")
          .replace(/(^|[^_\w])_(?!\s)([^_]+?)_(?!_)/g, "$1<em>$2</em>");
     s = s.replace(new RegExp(MD_CA + "(\\d+)" + MD_CB, "g"), (_, i) => `<code>${codes[+i]}</code>`);
@@ -1483,6 +1486,8 @@
       else if (tag === "em" || tag === "i") out += inner.trim() ? `*${inner}*` : inner;
       else if (tag === "u" || tag === "ins") out += inner.trim() ? `++${inner}++` : inner;
       else if (tag === "mark") out += inner.trim() ? `==${inner}==` : inner;
+      else if (tag === "span" && n.classList && n.classList.contains("fs-lg")) out += inner.trim() ? `{+${inner}+}` : inner;
+      else if (tag === "span" && n.classList && n.classList.contains("fs-sm")) out += inner.trim() ? `{-${inner}-}` : inner;
       else if (tag === "code") out += "`" + inner + "`";
       else if (tag === "a") { const href = n.getAttribute("href") || ""; out += /^(https?:|mailto:)/i.test(href) ? `[${inner}](${href})` : inner; }
       else out += inner;
@@ -2596,6 +2601,8 @@
         <button type="button" title="Italic" data-fmt="italic"><i>I</i></button>
         <button type="button" title="Underline" data-fmt="underline"><u>U</u></button>
         <button type="button" title="Highlight" data-fmt="highlight"><span style="background:color-mix(in srgb,var(--amber) 55%,transparent);border-radius:3px;padding:0 4px">H</span></button>
+        <button type="button" title="Bigger selected text" data-fmt="size-up" style="font-size:17px">A</button>
+        <button type="button" title="Smaller selected text" data-fmt="size-down" style="font-size:11px">A</button>
         <button type="button" title="Quote" data-fmt="quote">&ldquo;</button>
         <span class="sep"></span>
         <button type="button" title="Align left" data-fmt="align-left">${alignSVG("left")}</button>
@@ -6820,6 +6827,8 @@
     else if (kind === "italic") exec("italic");
     else if (kind === "underline") exec("underline");
     else if (kind === "highlight") applyHighlight();
+    else if (kind === "size-up") applyTextSize("fs-lg");
+    else if (kind === "size-down") applyTextSize("fs-sm");
     else if (kind === "align-left") exec("justifyLeft");
     else if (kind === "align-center") exec("justifyCenter");
     else if (kind === "align-right") exec("justifyRight");
@@ -6860,26 +6869,56 @@
     }
   }
   // Wrap the current selection in a highlight (or clear it if already highlighted).
-  function applyHighlight() {
+  // Which block element a node sits in, so an inline format stays within one.
+  function editorBlockOf(node, ed) {
+    while (node && node !== ed) {
+      if (node.nodeType === 1 && /^(P|DIV|H[1-6]|LI|BLOCKQUOTE|PRE)$/.test(node.nodeName)) return node;
+      node = node.parentNode;
+    }
+    return ed;
+  }
+  // Wrap the current selection in an inline tag+class (highlight, font size).
+  // Toggles off if the selection already carries it, stays inside one paragraph,
+  // and never leaves an empty wrapper behind (those were the stray colored bars).
+  function wrapSelectionInline(tag, cls, sameBlockMsg) {
     const ed = $("#we-body"); if (!ed) return;
     const sel = window.getSelection();
-    if (!sel || sel.isCollapsed || !sel.toString().trim()) { toast("Select some text to highlight."); return; }
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) { toast("Select some text first."); return; }
     const range = sel.getRangeAt(0);
-    let anc = range.commonAncestorContainer;
-    if (anc && anc.nodeType === 3) anc = anc.parentNode;
-    const inMark = anc && anc.closest ? anc.closest("mark.hl") : null;
+    if (editorBlockOf(range.startContainer, ed) !== editorBlockOf(range.endContainer, ed)) { toast(sameBlockMsg || "Format one paragraph at a time."); return; }
+    let anc = range.commonAncestorContainer; if (anc && anc.nodeType === 3) anc = anc.parentNode;
+    const sel1 = tag + (cls ? "." + cls : "");
+    const existing = anc && anc.closest ? anc.closest(sel1) : null;
     try {
-      if (inMark) {
-        const parent = inMark.parentNode;
-        while (inMark.firstChild) parent.insertBefore(inMark.firstChild, inMark);
-        parent.removeChild(inMark);
+      if (existing) {
+        const parent = existing.parentNode;
+        while (existing.firstChild) parent.insertBefore(existing.firstChild, existing);
+        parent.removeChild(existing);
       } else {
-        const mark = document.createElement("mark"); mark.className = "hl";
-        mark.appendChild(range.extractContents()); range.insertNode(mark);
+        const el = document.createElement(tag); if (cls) el.className = cls;
+        el.appendChild(range.extractContents()); range.insertNode(el);
       }
-    } catch (e) { toast("Highlight within one paragraph."); }
+    } catch (e) { toast(sameBlockMsg || "Try selecting within one paragraph."); }
+    // Sweep any empty inline wrappers so no thin colored slivers are left behind.
+    ed.querySelectorAll("mark.hl, span.fs-lg, span.fs-sm, u").forEach(m => {
+      if (!(m.textContent || "").trim()) { const p = m.parentNode; if (!p) return; while (m.firstChild) p.insertBefore(m.firstChild, m); p.removeChild(m); }
+    });
+    if (ed.normalize) ed.normalize();
     sel.removeAllRanges();
     updateEditorEmpty();
+  }
+  function applyHighlight() { wrapSelectionInline("mark", "hl", "Highlight one paragraph at a time."); }
+  function applyTextSize(which) {
+    const ed = $("#we-body"); if (!ed) return;
+    // Clear the opposite size first so sizes swap cleanly instead of nesting.
+    const other = which === "fs-lg" ? "fs-sm" : "fs-lg";
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) {
+      let anc = sel.getRangeAt(0).commonAncestorContainer; if (anc && anc.nodeType === 3) anc = anc.parentNode;
+      const opp = anc && anc.closest ? anc.closest("span." + other) : null;
+      if (opp) { const p = opp.parentNode; while (opp.firstChild) p.insertBefore(opp.firstChild, opp); p.removeChild(opp); }
+    }
+    wrapSelectionInline("span", which, "Resize within one paragraph at a time.");
   }
   // Dictation: speak and it types. Uses the browser's speech recognition; the
   // mic button toggles it on and off.

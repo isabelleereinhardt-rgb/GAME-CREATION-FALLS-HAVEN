@@ -912,13 +912,16 @@ body.hide-margins .para__marker { display: none; }
    theme: the text colour is inherited (never the browser's default black) and
    the background clones across line wraps so multi-line highlights look clean. */
 mark.hl {
-  background: color-mix(in srgb, var(--amber) 42%, transparent);
+  background: color-mix(in srgb, var(--amber) 46%, transparent);
   color: inherit;
   border-radius: 3px;
   padding: 0.05em 0.14em;
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
+/* Per-word font sizing, shared by the editor and the reader. */
+.fs-lg { font-size: 1.35em; }
+.fs-sm { font-size: 0.82em; }
 
 /* Floating reading toolbar. */
 .reader-tools {
