@@ -339,7 +339,51 @@
     "Lana Del Rey", "SZA", "The Weeknd", "Dua Lipa", "Melanie Martinez", "Mitski", "Hozier", "Conan Gray",
     // Creators and online fandoms.
     "Dream SMP", "Minecraft YouTubers", "Hermitcraft", "Game Grumps", "Dan and Phil",
-    "Genshin Impact Creators"
+    "Genshin Impact Creators",
+    // Nickelodeon teen/tween (2000s-2010s).
+    "Make It Pop", "Every Witch Way", "Talia in the Kitchen", "WITS Academy", "The Haunted Hathaways",
+    "Nicky, Ricky, Dicky & Dawn", "100 Things to Do Before High School", "Bella and the Bulldogs",
+    "Game Shakers", "School of Rock", "Knight Squad", "Cousins for Life", "Star Falls", "House of Anubis",
+    "True Jackson, VP", "How to Rock", "Supah Ninjas", "Marvin Marvin", "Fred: The Show", "The Thundermans",
+    "Danger Force", "The Amanda Show", "Unfabulous", "Romeo!", "The Naked Brothers Band", "Rags",
+    "Are You Afraid of the Dark?", "Side Hustle", "The Astronauts", "That Girl Lay Lay", "Ride",
+    "Hunter Street",
+    // Disney Channel teen/tween (2000s-2010s).
+    "The Suite Life on Deck", "Cory in the House", "So Random!", "A.N.T. Farm", "Dog with a Blog",
+    "Liv and Maddie", "Best Friends Whenever", "BUNK'D", "Stuck in the Middle", "Raven's Home",
+    "Sydney to the Max", "Coop & Cami Ask the World", "Just Roll with It", "Gabby Duran & the Unsittables",
+    "Phil of the Future", "Even Stevens", "Camp Rock", "The Cheetah Girls", "Zeke and Luther",
+    "Pair of Kings", "Kickin' It", "Lab Rats", "Mighty Med", "Lab Rats: Elite Force", "Crash & Bernstein",
+    "I Didn't Do It", "Mech-X4", "Gamer's Guide to Pretty Much Everything", "Aaron Stone", "Bizaardvark",
+    "Walk the Prank", "Randy Cunningham: 9th Grade Ninja", "Milo Murphy's Law", "ZOMBIES", "Teen Beach Movie",
+    "Lemonade Mouth", "Starstruck", "Princess Protection Program", "Radio Rebel", "Bad Hair Day",
+    "Girl vs. Monster", "Invisible Sister", "Frenemies", "How to Build a Better Boy", "Cloud 9", "Zapped",
+    "Wizards of Waverly Place: The Movie", "The Suite Life Movie", "Adventures in Babysitting",
+    // Teen dramas and comedies (2000s-2010s).
+    "The O.C.", "Dawson's Creek", "Everwood", "90210", "Life Unexpected", "Hellcats", "Privileged",
+    "The Secret Life of the American Teenager", "Greek", "Awkward.", "Faking It", "Skins", "Misfits",
+    "The Inbetweeners", "My Mad Fat Diary", "Waterloo Road", "Hollyoaks", "SKAM", "Young Royals", "Kyle XY",
+    "The Nine Lives of Chloe King", "Twisted", "Chasing Life", "Famous in Love", "Beyond", "The Lying Game",
+    "Make It or Break It", "Jane by Design", "Recovery Road", "Freaks and Geeks", "Friday Night Lights",
+    "Everything Sucks!", "I Am Not Okay with This", "Trinkets", "Daybreak", "On My Block", "Grand Army",
+    "The Society", "Panic", "Genera+ion", "Love, Victor",
+    // Canadian, British, and Australian teen shows.
+    "Degrassi: The Next Generation", "Degrassi", "Instant Star", "The Latest Buzz", "How to Be Indie",
+    "Mr. Young", "Some Assembly Required", "Max & Shred", "The Next Step", "Lost & Found Music Studios",
+    "Backstage", "Life with Derek", "Radio Free Roscoe", "Naturally, Sadie", "Dance Academy",
+    "Blue Water High", "H2O: Just Add Water", "Mako Mermaids", "The Elephant Princess", "Nowhere Boys",
+    "The Worst Witch", "Young Dracula", "Wolfblood", "The Sarah Jane Adventures", "M.I. High",
+    "Tracy Beaker Returns", "The Dumping Ground", "Wizards vs Aliens", "Evermoor", "The Lodge",
+    "Find Me in Paris", "The Bureau of Magical Things", "So Awkward", "The Worst Year of My Life, Again",
+    "Dead Gorgeous",
+    // Animated teen/tween.
+    "W.I.T.C.H.", "Totally Spies!", "Martin Mystery", "Monster High", "Ever After High", "Bratz",
+    "LoliRock", "Braceface", "6teen", "Stoked", "Grojband", "Detentionaire", "My Life as a Teenage Robot",
+    "Sabrina: The Animated Series", "As Told by Ginger", "The Weekenders", "Pepper Ann", "Lloyd in Space",
+    "The Proud Family", "Fillmore!", "American Dragon: Jake Long", "The Replacements", "Yin Yang Yo!",
+    "Wander Over Yonder", "Motorcity", "Sym-Bionic Titan", "Class of the Titans", "Storm Hawks",
+    "Bakugan Battle Brawlers", "Beyblade", "Winx Club: World of Winx", "Trollz", "Atomic Betty",
+    "Kappa Mikey", "The Cramp Twins", "Chalk Zone", "Angela Anaconda"
   ];
   // Build the attributes that make any element carry a hover/focus/tap tooltip.
   function tipAttrs(text) { const t = esc(text); return `data-tip="${t}" tabindex="0" aria-label="${t}"`; }
