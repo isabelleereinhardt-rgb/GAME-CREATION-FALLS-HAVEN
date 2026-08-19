@@ -3630,7 +3630,7 @@
     const scr = $("#screen-community");
     const join = scr.querySelector("[data-event-space-join]");
     join && join.addEventListener("click", async () => {
-      try { await WispDB.toggleEventJoin(id, true); toast("Joined. Welcome to the event space."); loadEventSpace(id); }
+      try { await WispDB.toggleEventJoin(id, true); celebrate("You're in!", "Welcome to the event space.", "🎉"); loadEventSpace(id); }
       catch (e) { toast((e && e.message) || "Could not join."); }
     });
     const leave = scr.querySelector("[data-event-space-leave]");
@@ -4610,6 +4610,51 @@
     document.body.appendChild(box);
     setTimeout(() => box.remove(), 2200);
   }
+  // A brief, gentle chime built with the Web Audio API (no sound files). Muted
+  // by the sound preference or reduced-motion; needs a user gesture to start.
+  let audioCtx = null;
+  function soundOn() { try { return localStorage.getItem("wisp.sound") !== "off"; } catch (e) { return true; } }
+  function reducedMotion() { return !!(settings && settings.motion) || !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); }
+  function playChime() {
+    if (!soundOn() || reducedMotion()) return;
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    try {
+      audioCtx = audioCtx || new AC();
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      const now = audioCtx.currentTime;
+      [523.25, 659.25, 783.99].forEach((f, i) => {
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.type = "sine"; o.frequency.value = f;
+        const t = now + i * 0.1;
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.12, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0008, t + 0.3);
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(t); o.stop(t + 0.32);
+      });
+    } catch (e) {}
+  }
+  // A small, brief celebration: a pop-in card, confetti, and the chime. It does
+  // not take over the screen and fades on its own.
+  function celebrate(title, sub, emoji) {
+    if (!reducedMotion()) confettiBurst();
+    playChime();
+    const el = document.createElement("div");
+    el.className = "celebrate";
+    el.innerHTML = `<div class="celebrate__card"><div class="celebrate__emoji">${emoji || "🎉"}</div><div class="celebrate__title">${esc(title || "Nice!")}</div>${sub ? `<div class="celebrate__sub">${esc(sub)}</div>` : ""}</div>`;
+    document.body.appendChild(el);
+    const close = () => { el.classList.remove("is-on"); setTimeout(() => el.remove(), 320); };
+    setTimeout(() => el.classList.add("is-on"), 10);
+    setTimeout(close, 1900);
+    el.addEventListener("click", close);
+  }
+  // A big heart that pops in the center and fades, the way a double-tap does.
+  function bigHeart() {
+    if (reducedMotion()) return;
+    const h = document.createElement("div"); h.className = "mw-bigheart"; h.textContent = "❤";
+    document.body.appendChild(h);
+    setTimeout(() => h.remove(), 820);
+  }
   // A small shower of hearts floating up from a button, for hearting a work.
   function heartBurst(el) {
     if (!el || !el.getBoundingClientRect) return;
@@ -4765,6 +4810,7 @@
     const set = (id, v) => { const e = $(id); if (e) e.checked = v; };
     set("#optDyslexia", settings.dyslexia); set("#optMotion", settings.motion);
     set("#optJustify", settings.justify); set("#optMargins", settings.margins);
+    set("#optSound", soundOn());
     syncReaderThemeButtons();
   }
 
@@ -4788,6 +4834,7 @@
     });
     $("#optDyslexia").addEventListener("change", e => { settings.dyslexia = e.target.checked; applySettings(); });
     $("#optMotion").addEventListener("change", e => { settings.motion = e.target.checked; applySettings(); });
+    { const os = $("#optSound"); if (os) os.addEventListener("change", e => { try { localStorage.setItem("wisp.sound", e.target.checked ? "on" : "off"); } catch (_) {} if (e.target.checked) playChime(); }); }
     $("#optJustify").addEventListener("change", e => { settings.justify = e.target.checked; applySettings(); });
     $("#optMargins").addEventListener("change", e => { settings.margins = e.target.checked; applySettings(); });
     $("#resetTheme").addEventListener("click", () => { settings = Object.assign({}, DEFAULTS, { adultOK: settings.adultOK, typography: typographyDefaults() }); applySettings(); buildTypographyPanel(); toast("Reset to defaults."); });
@@ -5599,7 +5646,7 @@
       const on = !LIVE.myEvents.has(id);
       on ? LIVE.myEvents.add(id) : LIVE.myEvents.delete(id);   // optimistic + persistent
       renderCommunity();
-      toast(on ? "Joined. It'll show on your home." : "Left the event.");
+      if (on) celebrate("You're in!", "It'll show on your home.", "🎉"); else toast("Left the event.");
       WispDB.toggleEventJoin(id, on).catch(err => {
         on ? LIVE.myEvents.delete(id) : LIVE.myEvents.add(id); renderCommunity();
         toast((err && err.message) || "Could not update that.");
@@ -5610,7 +5657,7 @@
     if (ev) {
       const i = +ev.dataset.event; const evt = W.EVENTS[i]; if (!evt) return;
       evt.joined = !evt.joined;
-      toast(evt.joined ? "Joined. It'll show on your home." : "Left the event.");
+      if (evt.joined) celebrate("You're in!", "It'll show on your home.", "🎉"); else toast("Left the event.");
       renderCommunity(); return;
     }
     const au = e.target.closest("[data-auth]");
@@ -5662,7 +5709,7 @@
         tog.classList.toggle("btn--primary", on);
         tog.classList.toggle("btn--ghost", !on);
         if (label) label.textContent = on ? "Hearted" : "Heart";
-        if (on) { tog.classList.remove("heart-pop"); void tog.offsetWidth; tog.classList.add("heart-pop"); heartBurst(tog); }
+        if (on) { tog.classList.remove("heart-pop"); void tog.offsetWidth; tog.classList.add("heart-pop"); bigHeart(); heartBurst(tog); }
         toast(on ? "This work has been hearted." : "Heart removed.");
       } else if (kind === "subscribe") {
         tog.classList.toggle("is-on-quiet", on);
@@ -6847,7 +6894,7 @@
     const card = $("#modalCard");
     const join = card.querySelector("#ex-join");
     join && join.addEventListener("click", async () => {
-      try { await WispDB.joinExchange(id, { request: $("#ex-request").value.trim(), offer: $("#ex-offer").value.trim() }); toast(signup ? "Sign-up updated." : "You're in. You'll be matched when sign-ups close."); closeModal(); loadCommunity(); }
+      try { await WispDB.joinExchange(id, { request: $("#ex-request").value.trim(), offer: $("#ex-offer").value.trim() }); if (signup) toast("Sign-up updated."); else celebrate("You're signed up!", "You'll be matched when sign-ups close.", "🎁"); closeModal(); loadCommunity(); }
       catch (e) { toast((e && e.message) || "Could not sign up."); }
     });
     const withdraw = card.querySelector("#ex-withdraw");
