@@ -1263,8 +1263,13 @@ mark.hl {
 @media (hover: none) { .part-move { opacity: 1; } }
 
 /* Serialization picker + work-page schedule line. */
-.sched-row { display: flex; gap: 8px; }
-.sched-row .admin-select { flex: 1; }
+.sched-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.sched-row .admin-select { flex: 1; min-width: 0; }
+.sched-row .sr-del {
+  flex: none; width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 9px;
+  background: var(--card); color: var(--ink3); cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+}
+.sched-row .sr-del:hover { border-color: #a2444f; color: #a2444f; }
 .sched-row input[type="time"] { flex: none; width: 120px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px;
   background: var(--surface); color: var(--ink); font-family: inherit; font-size: 13.5px; }
 .sched-row input[type="time"]:focus { outline: none; border-color: var(--rose); }

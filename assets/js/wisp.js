@@ -423,6 +423,26 @@
     }
     return { day: day, time: time };
   }
+  // Several update days, joined for readers with semicolons (brand: no dashes).
+  function composeScheduleMulti(pairs) {
+    return (pairs || []).map(p => composeSchedule(p.day, p.time)).filter(Boolean).join("; ");
+  }
+  // Parse a stored schedule (one or several) back into day/time pairs to edit.
+  function parseScheduleMulti(text) {
+    const parts = String(text || "").split(/;\s*/).map(s => s.trim()).filter(Boolean);
+    const pairs = parts.map(parseSchedule).filter(p => p.day);
+    return pairs.length ? pairs : [{ day: "", time: "" }];
+  }
+  // One editable schedule row: a day dropdown, a time, and a remove control.
+  function schedRowHTML(pair) {
+    const opts = SCHED_DAYS.map(d => `<option value="${esc(d.v)}"${d.v === (pair.day || "") ? " selected" : ""}>${esc(d.l)}</option>`).join("");
+    return `<div class="sched-row" data-sr>
+      <select class="sr-day admin-select" aria-label="Update day">${opts}</select>
+      <input type="time" class="sr-time" value="${esc(pair.time || "")}" aria-label="Update time (Eastern)">
+      <button type="button" class="sr-del" data-sr-del aria-label="Remove this day">${icon("trash", 13)}</button>
+    </div>`;
+  }
+  function schedRowsHTML(pairs) { return (pairs && pairs.length ? pairs : [{ day: "", time: "" }]).map(schedRowHTML).join(""); }
 
   // ---- a lightweight autocomplete for a comma-separated text input ----------
   // Completes the token after the last comma from suggestFn(); accept with click,
@@ -2663,7 +2683,7 @@
       : "<p><br></p>";
     editorProseHTML = bodyHTML;
 
-    const schedPre = parseSchedule(work && work.schedule);
+    const schedPairs = parseScheduleMulti(work && work.schedule);
     const liveChs = editingLive && liveEditor && liveEditor.allChapters ? liveEditor.allChapters : null;
     const partsHTML = liveChs
       ? liveChs.map((c, i) => `
@@ -2771,13 +2791,11 @@
             <div class="panel">
               <h4>Serialization</h4>
               <div class="field"><label>Update schedule, shown to readers</label>
-                <div class="sched-row">
-                  <select id="we-sched-day" class="admin-select">${SCHED_DAYS.map(d => `<option value="${esc(d.v)}"${d.v === schedPre.day ? " selected" : ""}>${esc(d.l)}</option>`).join("")}</select>
-                  <input type="time" id="we-sched-time" value="${esc(schedPre.time)}" aria-label="Usual update time (Eastern)">
-                </div>
-                <p class="muted" id="we-sched-echo" style="font-size:12px;margin:6px 0 0;line-height:1.5"></p>
+                <div id="we-sched-list">${schedRowsHTML(schedPairs)}</div>
+                <button type="button" class="btn--link" id="we-sched-add" style="margin-top:8px">${icon("plus",13)} Add another day</button>
+                <p class="muted" id="we-sched-echo" style="font-size:12px;margin:8px 0 0;line-height:1.5"></p>
               </div>
-              <p class="muted" style="font-size:12px;margin:0;line-height:1.55">Readers see this on the work page, under the synopsis. Use the chapter Schedule button to post automatically.</p>
+              <p class="muted" style="font-size:12px;margin:0;line-height:1.55">Add as many update days and times as you like. Readers see them on the work page, under the synopsis. Use the chapter Schedule button to post automatically.</p>
             </div>
 
             <div class="panel">
@@ -2822,12 +2840,31 @@
       toast("Cover removed. It reverts to the title-letter cover when you save.");
     });
 
-    // Serialization: live preview of what readers will see.
+    // Serialization: several update days, added or removed with the + / trash.
     const getv = (sel) => { const el = $(sel); return el ? el.value : ""; };
+    const schedPairsNow = () => $$("#we-sched-list [data-sr]").map(row => ({
+      day: (row.querySelector(".sr-day") || {}).value || "",
+      time: (row.querySelector(".sr-time") || {}).value || ""
+    }));
     const schedEcho = () => { const el = $("#we-sched-echo"); if (!el) return;
-      const s = composeSchedule(getv("#we-sched-day"), getv("#we-sched-time"));
+      const s = composeScheduleMulti(schedPairsNow());
       el.textContent = s ? "Readers will see: Updates " + s : "No schedule shown to readers."; };
-    ["#we-sched-day", "#we-sched-time"].forEach(sel => { const el = $(sel); if (el) el.addEventListener("input", schedEcho); });
+    const schedList = $("#we-sched-list");
+    if (schedList) {
+      schedList.addEventListener("input", schedEcho);
+      schedList.addEventListener("click", (e) => {
+        const del = e.target.closest("[data-sr-del]"); if (!del) return;
+        const rows = $$("#we-sched-list [data-sr]");
+        if (rows.length <= 1) { const r = rows[0]; if (r) { const d = r.querySelector(".sr-day"); const t = r.querySelector(".sr-time"); if (d) d.value = ""; if (t) t.value = ""; } }
+        else del.closest("[data-sr]").remove();
+        schedEcho();
+      });
+    }
+    const schedAdd = $("#we-sched-add");
+    if (schedAdd && schedList) schedAdd.addEventListener("click", () => {
+      schedList.insertAdjacentHTML("beforeend", schedRowHTML({ day: "", time: "" }));
+      schedEcho();
+    });
     schedEcho();
 
     // Hub names double as tags and fandoms: a hub gathers every work tagged
@@ -6688,8 +6725,10 @@
     const chk = (id) => { const e = $(id); return e ? !!e.checked : undefined; };
     const controls = { comments_enabled: chk("#we-comments"), logged_in_only: chk("#we-loggedin"), hide_stats: chk("#we-hidestats") };
     const source = val("#we-source");
-    const schedDay = val("#we-sched-day"), schedTime = val("#we-sched-time");
-    const schedule = composeSchedule(schedDay, schedTime);
+    const schedule = composeScheduleMulti($$("#we-sched-list [data-sr]").map(row => ({
+      day: (row.querySelector(".sr-day") || {}).value || "",
+      time: (row.querySelector(".sr-time") || {}).value || ""
+    })));
     const seriesName = val("#we-series");
     const scheduled_for = kind === "schedule" ? scheduleTime : null;
     // "Save draft" on an already-published work saves changes without pulling it
