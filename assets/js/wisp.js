@@ -2533,6 +2533,7 @@
     const w = W.byId[reqId] || W.byId.amber;
     markVisited(flagship ? "amber" : w.id);
     notifyReadActivity((flagship ? "amber" : w.id) + ":" + (chapterNum || 1));
+    startReadSession(wordCountOf((W.CHAPTER && W.CHAPTER.paragraphs ? W.CHAPTER.paragraphs.join(" ") : "")));
 
     if (!flagship) {
       // Honest preview for non-flagship works: full reader chrome, a short opening,
@@ -3054,6 +3055,7 @@
     const commentsOn = w.commentsEnabled !== false;
     const readable = releasedChapters(chapters);
     const ch = (chapterNum && readable.find(c => c.number === +chapterNum)) || readable[0] || chapters[0] || null;
+    startReadSession(ch ? wordCountOf(ch.body) : 0);   // learn the reader's pace quietly
     const idx = ch ? readable.findIndex(c => c.number === ch.number) : -1;
     const prev = idx > 0 ? readable[idx - 1] : null;
     const next = idx >= 0 && idx < readable.length - 1 ? readable[idx + 1] : null;
@@ -5734,6 +5736,31 @@
     }
     if (changed) renderWidgets();
   }
+
+  // Reading pace, learned quietly. A read session opens when a chapter opens and
+  // closes when the reader leaves it; if it lasted a sensible span, the words
+  // divided by the minutes feed a rolling average, so the pace widget fills in on
+  // its own with no typing. Idle tabs and skims are filtered out by the bounds.
+  let readSession = null;
+  function wordCountOf(text) { return String(text || "").trim().split(/\s+/).filter(Boolean).length; }
+  function startReadSession(words) {
+    finalizeReadSession();
+    if (words > 40 && mwLoad().indexOf("wpm") >= 0) readSession = { start: Date.now(), words: words };
+  }
+  function finalizeReadSession() {
+    if (!readSession) return;
+    const mins = (Date.now() - readSession.start) / 60000;
+    const words = readSession.words; readSession = null;
+    if (mins < 0.4 || mins > 40) return;                 // too brief to trust, or an idle tab
+    const wpm = Math.round(words / mins);
+    if (wpm < 60 || wpm > 1000) return;                  // outside a believable human range
+    if (mwLoad().indexOf("wpm") < 0) return;
+    const s = mwState("wpm");
+    const n = Math.min(s.n || 0, 19);                    // rolling window of the last ~20 reads
+    const avg = s.avg ? Math.round((s.avg * n + wpm) / (n + 1)) : wpm;
+    mwSetState("wpm", { avg: avg, n: (s.n || 0) + 1 });
+    renderWidgets();
+  }
   const todayKey = () => { const d = new Date(); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); };
   const rand = (arr) => arr[Math.floor(Math.random() * arr.length)];
   const fmtDur = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
@@ -5785,6 +5812,40 @@
       } };
   }
 
+  // A real die face: pips for a d6, the rolled number on a polygon for a d20.
+  function dieFaceSVG(sides, v) {
+    if (sides === 6) {
+      const P = { 1: [[10, 10]], 2: [[5, 5], [15, 15]], 3: [[5, 5], [10, 10], [15, 15]],
+        4: [[5, 5], [15, 5], [5, 15], [15, 15]], 5: [[5, 5], [15, 5], [10, 10], [5, 15], [15, 15]],
+        6: [[5, 5], [15, 5], [5, 10], [15, 10], [5, 15], [15, 15]] };
+      const pips = (P[v] || P[1]).map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="2.1" fill="var(--card)"/>`).join("");
+      return `<svg viewBox="0 0 20 20" width="56" height="56" aria-label="${v}"><rect x="1" y="1" width="18" height="18" rx="4.5" fill="var(--ink)"/>${pips}</svg>`;
+    }
+    return `<svg viewBox="0 0 20 20" width="56" height="56" aria-label="${v}"><path d="M10 1.4 18.6 6.3v7.4L10 18.6 1.4 13.7V6.3z" fill="var(--ink)"/><text x="10" y="13.4" text-anchor="middle" font-size="8" font-weight="700" fill="var(--card)" font-family="var(--font-text)">${v}</text></svg>`;
+  }
+  // A small figure that stretches while the break runs.
+  function stretchFigSVG() {
+    return `<svg class="mw-fig-svg" viewBox="0 0 60 64" width="72" height="76" fill="none" aria-hidden="true">
+      <circle cx="30" cy="12" r="7" fill="var(--rose)"/>
+      <rect class="mw-fig-torso" x="26" y="19" width="8" height="22" rx="4" fill="var(--rose-ink)"/>
+      <path class="mw-fig-arm mw-fig-arm--l" d="M28 24 L14 34" stroke="var(--rose)" stroke-width="4.5" stroke-linecap="round"/>
+      <path class="mw-fig-arm mw-fig-arm--r" d="M32 24 L46 34" stroke="var(--rose)" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="M27 40 L22 60" stroke="var(--rose-ink)" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="M33 40 L38 60" stroke="var(--rose-ink)" stroke-width="4.5" stroke-linecap="round"/>
+    </svg>`;
+  }
+  // Backward-compatible readers for the to-do list and sticky notes, which grew
+  // richer shapes (checkable items, multiple notes) than their first versions.
+  function normalizeTodo(items) {
+    if (!Array.isArray(items)) return [];
+    return items.map(it => typeof it === "string" ? { text: it, done: false } : { text: (it && it.text) || "", done: !!(it && it.done) });
+  }
+  function normalizeStickies(s) {
+    if (s && Array.isArray(s.notes)) return s.notes.map(n => ({ text: (n && n.text) || "" }));
+    if (s && typeof s.text === "string" && s.text) return [{ text: s.text }];
+    return [{ text: "" }];
+  }
+
   const MINI_WIDGETS = [
     { id: "clock", name: "Live clock", icon: "clock", blurb: "The current time.", render() { return `<div class="mw-big" data-mw-clock>--:--</div>`; },
       wire(el) { const t = el.querySelector("[data-mw-clock]"); const upd = () => { const d = new Date(); let h = d.getHours(); const ap = h >= 12 ? "PM" : "AM"; h = h % 12 || 12; t.textContent = h + ":" + String(d.getMinutes()).padStart(2, "0") + " " + ap; }; upd(); miniInterval(setInterval(upd, 1000)); } },
@@ -5824,26 +5885,60 @@
       render() { const t = rand(TAG_SUGGEST); return `<p class="mw-out" data-mw-out>${esc(t)}</p><button class="btn btn--ghost btn--full btn--sm" data-mw-roll>Spin</button>`; },
       wire(el) { const out = el.querySelector("[data-mw-out]"); el.querySelector("[data-mw-roll]").addEventListener("click", () => { const t = rand(TAG_SUGGEST); out.textContent = t; out.classList.remove("mw-pop"); void out.offsetWidth; out.classList.add("mw-pop"); }); out.style.cursor = "pointer"; out.addEventListener("click", () => navigate("tag/" + encodeURIComponent(out.textContent))); } },
     { id: "dice", name: "Dice roller", icon: "die", blurb: "Roll a d6 or a d20.",
-      render() { return `<div class="mw-big" data-mw-out>-</div><div class="mw-row"><button class="btn btn--ghost btn--sm" data-mw-die="6">d6</button><button class="btn btn--ghost btn--sm" data-mw-die="20">d20</button></div>`; },
-      wire(el) { const out = el.querySelector("[data-mw-out]"); el.querySelectorAll("[data-mw-die]").forEach(b => b.addEventListener("click", () => { out.textContent = 1 + Math.floor(Math.random() * (+b.dataset.mwDie)); out.classList.remove("mw-pop"); void out.offsetWidth; out.classList.add("mw-pop"); })); } },
+      render() { return `<div class="mw-die" data-mw-dieface>${dieFaceSVG(6, 1)}</div><div class="mw-row"><button class="btn btn--ghost btn--sm" data-mw-die="6">Roll d6</button><button class="btn btn--quiet btn--sm" data-mw-die="20">Roll d20</button></div>`; },
+      wire(el) {
+        const face = el.querySelector("[data-mw-dieface]");
+        el.querySelectorAll("[data-mw-die]").forEach(b => b.addEventListener("click", () => {
+          const sides = +b.dataset.mwDie;
+          face.classList.remove("is-rolling"); void face.offsetWidth; face.classList.add("is-rolling");
+          let ticks = 0;
+          const iv = setInterval(() => { const v = 1 + Math.floor(Math.random() * sides); face.innerHTML = dieFaceSVG(sides, v); ticks++; if (ticks >= 9) { clearInterval(iv); face.classList.remove("is-rolling"); } }, 65);
+          miniInterval(iv);
+        }));
+      } },
     { id: "coin", name: "Coin flip", icon: "shuffle", blurb: "Heads or tails.",
       render() { return `<div class="mw-big" data-mw-out>?</div><button class="btn btn--ghost btn--full btn--sm" data-mw-roll>Flip</button>`; },
       wire(el) { const out = el.querySelector("[data-mw-out]"); el.querySelector("[data-mw-roll]").addEventListener("click", () => { out.textContent = Math.random() < 0.5 ? "Heads" : "Tails"; out.classList.remove("mw-pop"); void out.offsetWidth; out.classList.add("mw-pop"); }); } },
     { id: "mood", name: "Mood check", icon: "heart", blurb: "Today's mood.",
       render() { const s = mwState("mood"); const set = ["😀", "🙂", "😐", "😔", "😠", "😴", "🥰", "🤔"]; return `<div class="mw-moods">${set.map(m => `<button class="mw-mood ${s.day === todayKey() && s.emoji === m ? "is-on" : ""}" data-mw-mood="${m}">${m}</button>`).join("")}</div><p class="mw-sub">${s.day === todayKey() ? "Saved for today" : "Pick one"}</p>`; },
       wire(el) { el.querySelectorAll("[data-mw-mood]").forEach(b => b.addEventListener("click", () => { mwSetState("mood", { emoji: b.dataset.mwMood, day: todayKey() }); renderWidgets(); })); } },
-    { id: "sticky", name: "Sticky note", icon: "edit", blurb: "A scrap of text.",
-      render() { const s = mwState("sticky"); return `<textarea class="mw-sticky" data-mw-sticky placeholder="Jot something...">${esc(s.text || "")}</textarea>`; },
-      wire(el) { const t = el.querySelector("[data-mw-sticky]"); let tm = null; t.addEventListener("input", () => { clearTimeout(tm); tm = setTimeout(() => mwSetState("sticky", { text: t.value }), 300); }); } },
-    { id: "to-read", name: "To-read list", icon: "bookmark", blurb: "A quick reading list.",
-      render() { const s = mwState("to-read"); const items = Array.isArray(s.items) ? s.items : []; return `<ul class="mw-list">${items.map((it, i) => `<li><button class="mw-li-del" data-mw-tr-del="${i}" aria-label="Remove">&times;</button><span>${esc(it)}</span></li>`).join("") || '<li class="muted">Nothing yet.</li>'}</ul><button class="btn btn--ghost btn--full btn--sm" data-mw-tr-add>Add a title</button>`; },
-      wire(el) { const add = el.querySelector("[data-mw-tr-add]"); add && add.addEventListener("click", () => { const v = (window.prompt("Add to your list") || "").trim(); if (!v) return; const s = mwState("to-read"); const items = Array.isArray(s.items) ? s.items.slice() : []; items.push(v); mwSetState("to-read", { items }); renderWidgets(); }); el.querySelectorAll("[data-mw-tr-del]").forEach(b => b.addEventListener("click", () => { const s = mwState("to-read"); const items = (s.items || []).slice(); items.splice(+b.dataset.mwTrDel, 1); mwSetState("to-read", { items }); renderWidgets(); })); } },
+    { id: "sticky", name: "Sticky notes", icon: "edit", blurb: "Notes that stick around.",
+      render() { const notes = normalizeStickies(mwState("sticky")); return `<div class="mw-stickies">${notes.map((nt, i) => `<div class="mw-sticky-card"><textarea class="mw-sticky" data-mw-sticky="${i}" placeholder="Jot something...">${esc(nt.text)}</textarea><button class="mw-sticky-del" data-mw-sticky-del="${i}" aria-label="Remove note">&times;</button></div>`).join("")}</div><button class="btn btn--ghost btn--full btn--sm" data-mw-sticky-add>${icon("plus", 13)} New note</button>`; },
+      wire(el) {
+        const notes = () => normalizeStickies(mwState("sticky"));
+        el.querySelectorAll("[data-mw-sticky]").forEach(t => { let tm = null; t.addEventListener("input", () => { clearTimeout(tm); tm = setTimeout(() => { const arr = notes(); const i = +t.dataset.mwSticky; if (arr[i]) { arr[i].text = t.value; mwSetState("sticky", { notes: arr }); } }, 300); }); });
+        const add = el.querySelector("[data-mw-sticky-add]"); if (add) add.addEventListener("click", () => { const arr = notes(); arr.push({ text: "" }); mwSetState("sticky", { notes: arr }); renderWidgets(); });
+        el.querySelectorAll("[data-mw-sticky-del]").forEach(b => b.addEventListener("click", () => { const arr = notes(); arr.splice(+b.dataset.mwStickyDel, 1); if (!arr.length) arr.push({ text: "" }); mwSetState("sticky", { notes: arr }); renderWidgets(); }));
+      } },
+    { id: "to-read", name: "To-read list", icon: "bookmark", blurb: "A checkable reading list.",
+      render() { const items = normalizeTodo(mwState("to-read").items); return `<ul class="mw-todo">${items.length ? items.map((it, i) => `<li class="${it.done ? "is-done" : ""}"><button class="mw-todo-box" data-mw-tr-toggle="${i}" aria-pressed="${it.done}" aria-label="${it.done ? "Mark not done" : "Mark done"}">${it.done ? icon("check", 12) : ""}</button><span class="mw-todo-txt">${esc(it.text)}</span><button class="mw-li-del" data-mw-tr-del="${i}" aria-label="Remove">&times;</button></li>`).join("") : '<li class="mw-todo-empty">Nothing yet. Add something to read.</li>'}</ul><form class="mw-todo-add" data-mw-tr-form><input type="text" class="mw-todo-in" data-mw-tr-in placeholder="Add a title or note" maxlength="140"><button class="btn btn--ghost btn--sm" type="submit">Add</button></form>`; },
+      wire(el) {
+        const items = () => normalizeTodo(mwState("to-read").items);
+        const form = el.querySelector("[data-mw-tr-form]"), input = el.querySelector("[data-mw-tr-in]");
+        if (form) form.addEventListener("submit", (e) => { e.preventDefault(); const v = (input.value || "").trim(); if (!v) return; const arr = items(); arr.push({ text: v, done: false }); mwSetState("to-read", { items: arr }); renderWidgets(); setTimeout(() => { const box = el.closest(".mini-widget") ? el : document; const nx = (box.querySelector ? box : document).querySelector('[data-mw="to-read"] [data-mw-tr-in]'); if (nx) nx.focus(); }, 0); });
+        el.querySelectorAll("[data-mw-tr-toggle]").forEach(b => b.addEventListener("click", () => { const arr = items(); const i = +b.dataset.mwTrToggle; if (arr[i]) { arr[i].done = !arr[i].done; mwSetState("to-read", { items: arr }); renderWidgets(); } }));
+        el.querySelectorAll("[data-mw-tr-del]").forEach(b => b.addEventListener("click", () => { const arr = items(); arr.splice(+b.dataset.mwTrDel, 1); mwSetState("to-read", { items: arr }); renderWidgets(); }));
+      } },
     { id: "water", name: "Water nudge", icon: "check", blurb: "Glasses of water today.",
       render() { const s = mwState("water"); const n = s.day === todayKey() ? (s.n || 0) : 0; return `<div class="mw-big">${n} 💧</div><p class="mw-sub">glasses today</p><div class="mw-row"><button class="btn btn--ghost btn--sm" data-mw-water="1">+1</button><button class="btn btn--quiet btn--sm" data-mw-water="-1">-1</button></div>`; },
       wire(el) { el.querySelectorAll("[data-mw-water]").forEach(b => b.addEventListener("click", () => { const s = mwState("water"); const n = Math.max(0, (s.day === todayKey() ? (s.n || 0) : 0) + (+b.dataset.mwWater)); mwSetState("water", { n, day: todayKey() }); renderWidgets(); })); } },
-    { id: "stretch", name: "Stretch nudge", icon: "leaf", blurb: "A reminder to move.",
-      render() { return `<p class="mw-sub">Been reading a while? Roll your shoulders, look away from the screen, breathe.</p><button class="btn btn--ghost btn--full btn--sm" data-mw-stretch>I stretched</button>`; },
-      wire(el) { el.querySelector("[data-mw-stretch]").addEventListener("click", () => toast("Nice. Your future self says thanks.")); } },
+    { id: "stretch", name: "Stretch break", icon: "leaf", blurb: "A guided little stretch.",
+      render() { return `<div class="mw-stretch" data-mw-stretch><div class="mw-fig" data-mw-fig>${stretchFigSVG()}</div><p class="mw-sub" data-mw-stretch-txt>Been reading a while? Take twenty seconds.</p><button class="btn btn--ghost btn--full btn--sm" data-mw-stretch-go>Stretch with me</button></div>`; },
+      wire(el) {
+        const wrap = el.querySelector("[data-mw-stretch]"), fig = el.querySelector("[data-mw-fig]"), txt = el.querySelector("[data-mw-stretch-txt]"), go = el.querySelector("[data-mw-stretch-go]");
+        const steps = [["Reach up, tall as you can", "up", 5000], ["Ease over to the left", "left", 4000], ["and over to the right", "right", 4000], ["Roll your shoulders back", "roll", 4000], ["Look far past the screen", "gaze", 3500]];
+        go.addEventListener("click", () => {
+          if (wrap.classList.contains("is-stretching")) return;
+          wrap.classList.add("is-stretching"); go.disabled = true;
+          let i = 0;
+          const run = () => {
+            if (i >= steps.length) { wrap.classList.remove("is-stretching"); fig.removeAttribute("data-pose"); txt.textContent = "Nice. Your shoulders thank you."; go.disabled = false; return; }
+            const s = steps[i]; txt.textContent = s[0]; fig.setAttribute("data-pose", s[1]); i++;
+            const t = setTimeout(run, s[2]); miniCleanup(() => clearTimeout(t));
+          };
+          run();
+        });
+      } },
     { id: "breathing", name: "Breathing", icon: "heart", blurb: "A 4-7-8 breathing circle.",
       render() { return `<div class="mw-breathe" data-mw-breathe><span class="mw-breathe__dot"></span><span class="mw-breathe__txt">Tap to begin</span></div>`; },
       wire(el) { const box = el.querySelector("[data-mw-breathe]"); const txt = box.querySelector(".mw-breathe__txt"); let on = false, ph = 0; const phases = [["Breathe in", 4000, "in"], ["Hold", 7000, "hold"], ["Breathe out", 8000, "out"]]; let tm = null; const step = () => { const [label, ms, cls] = phases[ph % 3]; txt.textContent = label; box.classList.remove("is-in", "is-hold", "is-out"); box.classList.add("is-" + cls); ph++; tm = setTimeout(step, ms); }; box.addEventListener("click", () => { on = !on; if (on) { ph = 0; step(); } else { clearTimeout(tm); box.classList.remove("is-in", "is-hold", "is-out"); txt.textContent = "Tap to begin"; } }); miniCleanup(() => clearTimeout(tm)); } },
@@ -5865,9 +5960,9 @@
     { id: "accent", name: "Accent shuffler", icon: "palette", blurb: "A new accent color.",
       render() { return `<p class="mw-sub">Current accent: <b>${esc(settings.accent || "default")}</b></p><button class="btn btn--ghost btn--full btn--sm" data-mw-accent>Shuffle</button>`; },
       wire(el) { el.querySelector("[data-mw-accent]").addEventListener("click", () => { const ids = ACCENTS.map(a => a.id).filter(x => x !== settings.accent); settings.accent = rand(ids); applySettings(); renderWidgets(); }); } },
-    { id: "wpm", name: "Reading pace", icon: "clock", blurb: "Your words per minute.",
-      render() { const s = mwState("wpm"); return `<div class="mw-row"><input class="mw-in" type="number" min="0" placeholder="words" data-mw-w value="${esc(s.w || "")}"><input class="mw-in" type="number" min="0" placeholder="minutes" data-mw-m value="${esc(s.m || "")}"></div><p class="mw-sub" data-mw-wpm>${s.w && s.m ? Math.round(s.w / s.m) + " words per minute" : "Enter words and minutes"}</p>`; },
-      wire(el) { const w = el.querySelector("[data-mw-w]"), m = el.querySelector("[data-mw-m]"), out = el.querySelector("[data-mw-wpm]"); const upd = () => { mwSetState("wpm", { w: w.value, m: m.value }); out.textContent = (+w.value && +m.value) ? Math.round(+w.value / +m.value) + " words per minute" : "Enter words and minutes"; }; w.addEventListener("input", upd); m.addEventListener("input", upd); } },
+    { id: "wpm", name: "Reading pace", icon: "clock", blurb: "Learned as you read.",
+      render() { const s = mwState("wpm"); return s.avg ? `<div class="mw-big">${s.avg}</div><p class="mw-sub">words per minute${s.n ? " · from " + s.n + " " + (s.n === 1 ? "read" : "reads") : ""}</p>` : `<p class="mw-sub">Read a chapter or two and I'll learn your pace on my own. No typing.</p>`; },
+      wire() {} },
     { id: "chapters-today", name: "Chapters today", icon: "book", blurb: "Chapters read today.",
       render() { const s = mwState("chapters-today"); const n = s.day === todayKey() ? (s.n || 0) : 0; return `<div class="mw-big">${n}</div><p class="mw-sub">chapters today</p><div class="mw-row"><button class="btn btn--ghost btn--sm" data-mw-ch="1">+1</button><button class="btn btn--quiet btn--sm" data-mw-ch="-1">-1</button></div>`; },
       wire(el) { el.querySelectorAll("[data-mw-ch]").forEach(b => b.addEventListener("click", () => { const s = mwState("chapters-today"); const n = Math.max(0, (s.day === todayKey() ? (s.n || 0) : 0) + (+b.dataset.mwCh)); mwSetState("chapters-today", { n, day: todayKey() }); renderWidgets(); })); } },
@@ -6832,6 +6927,7 @@
 
   function route() {
     flushAutosave();   // leaving the editor: write any pending draft before its DOM is torn down
+    finalizeReadSession();   // leaving a chapter: fold the elapsed read into the reading-pace average
     const hash = location.hash.replace(/^#\/?/, "");
     const parts = hash.split("/");
     const seg = parts[0], arg = parts[1], arg2 = parts[2];

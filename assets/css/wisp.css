@@ -1932,6 +1932,55 @@ button.pill--link:hover { border-color: var(--rose); color: var(--rose-ink); bac
 .mw-list li { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink2); }
 .mw-li-del { border: 0; background: none; color: var(--ink3); cursor: pointer; font-size: 15px; line-height: 1; }
 .mw-li-del:hover { color: #a2444f; }
+
+/* To-read: a real checkable list with an inline entry field */
+.mw-todo { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.mw-todo li { display: flex; align-items: flex-start; gap: 8px; font-size: 13.5px; color: var(--ink2); line-height: 1.4; }
+.mw-todo-empty { color: var(--ink3); font-style: italic; }
+.mw-todo-box { flex: none; width: 18px; height: 18px; margin-top: 1px; border: 1.5px solid var(--line); border-radius: 5px; background: var(--card); color: #fff; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; transition: background .14s, border-color .14s; }
+.mw-todo-box[aria-pressed="true"] { background: var(--rose); border-color: var(--rose); }
+.mw-todo-txt { flex: 1; min-width: 0; }
+.mw-todo li.is-done .mw-todo-txt { text-decoration: line-through; color: var(--ink3); }
+.mw-todo-add { display: flex; gap: 7px; }
+.mw-todo-in { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font: 13.5px var(--font-text); background: var(--card); color: var(--ink); outline: none; }
+.mw-todo-in:focus { border-color: var(--rose); }
+.mw-todo-add .btn { flex: none; }
+
+/* Sticky notes: several little cards, each its own textarea */
+.mw-stickies { display: flex; flex-direction: column; gap: 8px; margin-bottom: 9px; }
+.mw-sticky-card { position: relative; }
+.mw-sticky-card .mw-sticky { min-height: 58px; }
+.mw-sticky-del { position: absolute; top: 5px; right: 6px; border: 0; background: color-mix(in srgb, var(--card) 60%, transparent); color: var(--ink3); cursor: pointer; font-size: 15px; line-height: 1; border-radius: 5px; width: 20px; height: 20px; }
+.mw-sticky-del:hover { color: #a2444f; }
+
+/* Dice: a real die face with a roll tumble */
+.mw-die { display: flex; justify-content: center; padding: 8px 0 2px; }
+.mw-die svg { display: block; }
+.mw-die.is-rolling { animation: mw-die-roll .6s ease-in-out; }
+@keyframes mw-die-roll { 0% { transform: rotate(0) scale(1); } 25% { transform: rotate(140deg) scale(1.08); } 50% { transform: rotate(280deg) scale(.94); } 75% { transform: rotate(400deg) scale(1.05); } 100% { transform: rotate(540deg) scale(1); } }
+:root[data-motion="reduce"] .mw-die.is-rolling { animation: none; }
+
+/* Stretch break: a little figure that moves through the poses */
+.mw-stretch { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.mw-fig { height: 80px; display: flex; align-items: flex-end; justify-content: center; }
+.mw-fig-svg { overflow: visible; }
+.mw-fig-arm { transform-box: fill-box; transform-origin: 100% 0; transition: transform .8s ease; }
+.mw-fig-arm--r { transform-origin: 0 0; }
+.mw-fig-torso { transform-box: fill-box; transform-origin: 50% 100%; transition: transform .8s ease; }
+.mw-fig-svg { transition: transform .8s ease; }
+.mw-stretch.is-stretching .mw-fig-svg { animation: mw-fig-breathe 2.2s ease-in-out infinite; }
+@keyframes mw-fig-breathe { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+.mw-fig[data-pose="up"] .mw-fig-arm--l { transform: rotate(-150deg); }
+.mw-fig[data-pose="up"] .mw-fig-arm--r { transform: rotate(150deg); }
+.mw-fig[data-pose="left"] .mw-fig-svg { transform: rotate(-14deg); }
+.mw-fig[data-pose="left"] .mw-fig-arm--l { transform: rotate(-120deg); }
+.mw-fig[data-pose="right"] .mw-fig-svg { transform: rotate(14deg); }
+.mw-fig[data-pose="right"] .mw-fig-arm--r { transform: rotate(120deg); }
+.mw-fig[data-pose="roll"] .mw-fig-arm--l { transform: rotate(-40deg); }
+.mw-fig[data-pose="roll"] .mw-fig-arm--r { transform: rotate(40deg); }
+.mw-fig[data-pose="gaze"] .mw-fig-svg { transform: translateY(-2px); }
+:root[data-motion="reduce"] .mw-fig-arm, :root[data-motion="reduce"] .mw-fig-svg, :root[data-motion="reduce"] .mw-fig-torso { transition: none; }
+:root[data-motion="reduce"] .mw-stretch.is-stretching .mw-fig-svg { animation: none; }
 /* Breathing */
 .mw-breathe { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 8px 0; cursor: pointer; }
 .mw-breathe__dot { width: 46px; height: 46px; border-radius: 50%; background: var(--rose); opacity: .85; transition: transform 1s ease; }
