@@ -3907,6 +3907,7 @@
         <button type="button" title="Upload an image from your device" data-fmt="image">${icon("upload",13)} Image</button>
         <button type="button" title="Embed a video, map, or audio by link" data-fmt="embed">${icon("external",13)} Embed</button>
         <button type="button" title="Dictate: speak and it types for you" data-fmt="dictate" id="we-dictate">${micSVG}</button>
+        <button type="button" title="Check grammar and spelling" data-fmt="grammar" id="we-grammar">${icon("check",13)} Grammar</button>
         <span class="sep"></span>
         <button type="button" title="Horizontal rule" data-fmt="hr"><span style="display:inline-block;width:16px;height:2px;background:currentColor;border-radius:2px"></span></button>
         <label class="tb-space" title="Line spacing while you write">Spacing
@@ -4244,6 +4245,8 @@
       // Images carry their own controls: scale (small/medium/full) and remove.
       decorateEditorImages();
       bodyEd.addEventListener("click", (e) => {
+        const gm = e.target.closest(".gc-mark");
+        if (gm) { e.preventDefault(); openGrammarPop(gm); return; }
         const sz = e.target.closest("[data-img-size]");
         if (sz) { const fig = sz.closest("figure.embed--img"); if (fig) { const v = sz.dataset.imgSize; fig.setAttribute("data-size", v); fig.classList.remove("is-small", "is-medium", "is-full"); fig.classList.add("is-" + v); } e.preventDefault(); return; }
         const del = e.target.closest("[data-img-del]");
@@ -8325,6 +8328,131 @@
     ed.classList.toggle("is-empty", !hasMedia && !hasText);
   }
 
+  // ---- Grammar & spelling check ---------------------------------------------
+  // A local, rule-based pass (no network, nothing leaves the browser). It flags
+  // common, high-confidence mistakes and offers a one-tap fix, shown as a green
+  // underline like a word processor. Rules stay conservative to avoid nagging.
+  function gcWord(bad, good) { return { re: new RegExp("\\b" + bad + "\\b", "gi"), fix: good, caps: true }; }
+  function gcPhrase(bad, good) { return { re: new RegExp("\\b" + bad.replace(/ /g, "\\s+") + "\\b", "gi"), fix: good, caps: true }; }
+  const GRAMMAR_RULES = [
+    // Everyday misspellings.
+    gcWord("teh", "the"), gcWord("adn", "and"), gcWord("recieve", "receive"), gcWord("recieved", "received"),
+    gcWord("seperate", "separate"), gcWord("definately", "definitely"), gcWord("occured", "occurred"),
+    gcWord("untill", "until"), gcWord("wich", "which"), gcWord("thier", "their"), gcWord("beleive", "believe"),
+    gcWord("belive", "believe"), gcWord("wierd", "weird"), gcWord("freind", "friend"), gcWord("becuase", "because"),
+    gcWord("becasue", "because"), gcWord("tommorow", "tomorrow"), gcWord("tomorow", "tomorrow"),
+    gcWord("gaurd", "guard"), gcWord("neccessary", "necessary"), gcWord("neccesary", "necessary"),
+    gcWord("embarass", "embarrass"), gcWord("enviroment", "environment"), gcWord("goverment", "government"),
+    gcWord("existance", "existence"), gcWord("occassion", "occasion"), gcWord("privilage", "privilege"),
+    gcWord("rythm", "rhythm"), gcWord("suprise", "surprise"), gcWord("truely", "truly"), gcWord("accross", "across"),
+    gcWord("alot", "a lot"), gcWord("aswell", "as well"), gcWord("infront", "in front"),
+    gcWord("noone", "no one"), gcWord("everytime", "every time"), gcWord("payed", "paid"), gcWord("thru", "through"),
+    gcWord("wanna", "want to"), gcWord("gonna", "going to"), gcWord("kinda", "kind of"), gcWord("dont", "don't"),
+    // Missing apostrophes in common contractions.
+    gcWord("cant", "can't"), gcWord("wont", "won't"), gcWord("didnt", "didn't"), gcWord("doesnt", "doesn't"),
+    gcWord("isnt", "isn't"), gcWord("wasnt", "wasn't"), gcWord("werent", "weren't"), gcWord("arent", "aren't"),
+    gcWord("couldnt", "couldn't"), gcWord("shouldnt", "shouldn't"), gcWord("wouldnt", "wouldn't"),
+    gcWord("havent", "haven't"), gcWord("hasnt", "hasn't"), gcWord("hadnt", "hadn't"), gcWord("wouldve", "would've"),
+    gcWord("couldve", "could've"), gcWord("shouldve", "should've"), gcWord("im", "I'm"), gcWord("ive", "I've"),
+    gcWord("youre", "you're"), gcWord("youve", "you've"), gcWord("theyre", "they're"), gcWord("theyve", "they've"),
+    gcWord("thats", "that's"), gcWord("whats", "what's"), gcWord("lets", "let's"), gcWord("hes", "he's"),
+    gcWord("shes", "she's"), gcWord("weve", "we've"),
+    // Standalone lowercase "i".
+    { re: /\bi\b/g, fix: "I", caps: false },
+    // Subject-verb agreement and swapped phrases (high-confidence).
+    gcPhrase("i is", "I am"), gcPhrase("i are", "I am"), gcPhrase("i has", "I have"), gcPhrase("i were", "I was"),
+    gcPhrase("he don't", "he doesn't"), gcPhrase("she don't", "she doesn't"), gcPhrase("it don't", "it doesn't"),
+    gcPhrase("he dont", "he doesn't"), gcPhrase("she dont", "she doesn't"),
+    gcPhrase("they was", "they were"), gcPhrase("we was", "we were"), gcPhrase("you was", "you were"),
+    gcPhrase("he have", "he has"), gcPhrase("she have", "she has"),
+    gcPhrase("could of", "could have"), gcPhrase("would of", "would have"), gcPhrase("should of", "should have"),
+    gcPhrase("must of", "must have"), gcPhrase("your welcome", "you're welcome"), gcPhrase("each and every", "every")
+  ];
+  // A doubled word ("the the") collapses to one, whatever it was.
+  const GC_DOUBLE = /\b(\w+)\s+\1\b/gi;
+
+  function stripGrammarMarks(ed) {
+    const scope = ed || document;
+    scope.querySelectorAll(".gc-mark").forEach(m => { m.parentNode.replaceChild(document.createTextNode(m.textContent), m); });
+    if (scope.normalize) scope.normalize();
+    closeGrammarPop();
+  }
+  // Preserve the original capitalization for a respelling fix (Teh -> The).
+  function gcApplyCase(original, fix) {
+    if (original && original[0] === original[0].toUpperCase() && original[0] !== original[0].toLowerCase())
+      return fix.charAt(0).toUpperCase() + fix.slice(1);
+    return fix;
+  }
+
+  function runGrammarCheck() {
+    const ed = $("#we-body"); if (!ed) return;
+    stripGrammarMarks(ed);
+    const walker = document.createTreeWalker(ed, NodeFilter.SHOW_TEXT, {
+      acceptNode(n) {
+        if (!n.nodeValue || !n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+        if (n.parentElement && n.parentElement.closest("figure, a, code, .gc-mark")) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    const texts = []; let tn; while ((tn = walker.nextNode())) texts.push(tn);
+    let count = 0;
+    texts.forEach(node => {
+      const text = node.nodeValue;
+      const hits = [];
+      const claim = (s, e) => hits.every(h => e <= h.s || s >= h.e);
+      GRAMMAR_RULES.forEach(rule => {
+        rule.re.lastIndex = 0; let m;
+        while ((m = rule.re.exec(text))) {
+          const s = m.index, e = s + m[0].length;
+          if (claim(s, e)) { const fix = rule.caps ? gcApplyCase(m[0], rule.fix) : rule.fix; if (fix !== m[0]) hits.push({ s, e, orig: m[0], fix }); }
+          if (m.index === rule.re.lastIndex) rule.re.lastIndex++;
+        }
+      });
+      GC_DOUBLE.lastIndex = 0; let d;
+      while ((d = GC_DOUBLE.exec(text))) { const s = d.index, e = s + d[0].length; if (claim(s, e)) hits.push({ s, e, orig: d[0], fix: d[1] }); if (d.index === GC_DOUBLE.lastIndex) GC_DOUBLE.lastIndex++; }
+      if (!hits.length) return;
+      hits.sort((a, b) => a.s - b.s);
+      const frag = document.createDocumentFragment(); let pos = 0;
+      hits.forEach(h => {
+        if (h.s > pos) frag.appendChild(document.createTextNode(text.slice(pos, h.s)));
+        const span = document.createElement("span");
+        span.className = "gc-mark"; span.setAttribute("data-fix", h.fix); span.textContent = h.orig;
+        frag.appendChild(span); pos = h.e; count++;
+      });
+      if (pos < text.length) frag.appendChild(document.createTextNode(text.slice(pos)));
+      node.parentNode.replaceChild(frag, node);
+    });
+    if (count) toast(count + (count === 1 ? " suggestion. Tap the green word to fix it." : " suggestions. Tap a green word to fix it."));
+    else toast("No grammar issues found. Looks clean.");
+  }
+
+  // A small popover offering the fix for one flagged word.
+  let gcPop = null;
+  function closeGrammarPop() { if (gcPop) { gcPop.remove(); gcPop = null; } }
+  function openGrammarPop(mark) {
+    closeGrammarPop();
+    const fix = mark.getAttribute("data-fix") || "";
+    gcPop = document.createElement("div"); gcPop.className = "gc-pop";
+    gcPop.innerHTML = `<span class="gc-pop__lead">Change to</span>` +
+      `<button class="gc-pop__fix" data-gc-apply>${esc(fix)}</button>` +
+      `<button class="gc-pop__ignore" data-gc-ignore>Ignore</button>`;
+    document.body.appendChild(gcPop);
+    const r = mark.getBoundingClientRect(); const pw = gcPop.offsetWidth, ph = gcPop.offsetHeight;
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - pw - 8));
+    let top = r.top - ph - 8; if (top < 8) top = r.bottom + 8;
+    gcPop.style.left = left + "px"; gcPop.style.top = top + "px";
+    gcPop.querySelector("[data-gc-apply]").addEventListener("click", () => {
+      mark.parentNode.replaceChild(document.createTextNode(fix), mark);
+      const ed = $("#we-body"); if (ed) { ed.normalize(); updateEditorEmpty(); markEditorDirty(); }
+      closeGrammarPop();
+    });
+    gcPop.querySelector("[data-gc-ignore]").addEventListener("click", () => {
+      mark.parentNode.replaceChild(document.createTextNode(mark.textContent), mark);
+      const ed = $("#we-body"); if (ed) ed.normalize();
+      closeGrammarPop();
+    });
+  }
+
   // Toolbar: apply formatting to the current selection in the editor. Uses the
   // browser's built-in rich-text editing; the DOM it produces is serialized
   // back to Markdown on save (editorHtmlToMd).
@@ -8346,6 +8474,7 @@
     else if (kind === "align-center") exec("justifyCenter");
     else if (kind === "align-right") exec("justifyRight");
     else if (kind === "dictate") toggleDictation();
+    else if (kind === "grammar") runGrammarCheck();
     else if (kind === "h2") toggleBlock("h2");
     else if (kind === "quote") toggleBlock("blockquote");
     else if (kind === "ul") exec("insertUnorderedList");
@@ -8882,6 +9011,9 @@
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushAutosave(); });
     wirePullToRefresh();
     wireRailToggles();
+    // Dismiss the grammar suggestion popover on an outside tap or a scroll.
+    document.addEventListener("click", (e) => { if (gcPop && !e.target.closest(".gc-pop") && !e.target.closest(".gc-mark")) closeGrammarPop(); }, true);
+    window.addEventListener("scroll", () => closeGrammarPop(), true);
     initTips();
     if (!location.hash) location.replace("#/home");
     route();

@@ -2071,3 +2071,33 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   .check input { width: 18px; height: 18px; }
   .tag { padding: 6px 11px; }
 }
+
+/* ---------------------------------------------------------------------------
+   20. Grammar check  ·  green underline on a flagged word, with a fix popover
+   ------------------------------------------------------------------------- */
+.gc-mark {
+  text-decoration: underline wavy #2f9e5f;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  background: color-mix(in srgb, #2f9e5f 10%, transparent);
+  border-radius: 2px;
+}
+.gc-mark:hover { background: color-mix(in srgb, #2f9e5f 18%, transparent); }
+.gc-pop {
+  position: fixed; z-index: 4100; display: flex; align-items: center; gap: 8px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 7px 9px; box-shadow: 0 10px 30px var(--shadow-lg, var(--shadow));
+  font: 13.5px var(--font-text); max-width: min(320px, calc(100vw - 16px));
+}
+.gc-pop__lead { color: var(--ink3); font-size: 12px; white-space: nowrap; }
+.gc-pop__fix {
+  border: 0; background: #2f9e5f; color: #fff; border-radius: 7px; padding: 5px 11px;
+  font: 600 13.5px var(--font-text); cursor: pointer; white-space: nowrap;
+}
+.gc-pop__fix:hover { background: #278a53; }
+.gc-pop__ignore {
+  border: 0; background: none; color: var(--ink3); cursor: pointer; font-size: 12.5px; padding: 5px 4px;
+}
+.gc-pop__ignore:hover { color: var(--ink); }
+#we-grammar { white-space: nowrap; }
