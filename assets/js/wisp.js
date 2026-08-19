@@ -8692,6 +8692,27 @@
     }, { passive: true });
   }
 
+  // Collapsible rails: a reader can hide the Activity or Widgets panel to give the
+  // page the full width, the way many apps let you tuck a sidebar away. The choice
+  // is remembered on this device.
+  function railHidden(side) { try { return localStorage.getItem("wisp.rail." + side) === "hidden"; } catch (e) { return false; } }
+  function setRailHidden(side, hidden) {
+    try { localStorage.setItem("wisp.rail." + side, hidden ? "hidden" : "shown"); } catch (e) {}
+    document.body.classList.toggle("hide-rail-" + side, hidden);
+  }
+  function applyRailPrefs() {
+    document.body.classList.toggle("hide-rail-left", railHidden("left"));
+    document.body.classList.toggle("hide-rail-right", railHidden("right"));
+  }
+  function wireRailToggles() {
+    applyRailPrefs();
+    $$("[data-rail-hide]").forEach(b => b.addEventListener("click", () => {
+      const s = b.dataset.railHide; setRailHidden(s, true);
+      toast((s === "left" ? "Activity" : "Widgets") + " hidden. Use the tab on the edge to bring it back.");
+    }));
+    $$("[data-rail-show]").forEach(b => b.addEventListener("click", () => setRailHidden(b.dataset.railShow, false)));
+  }
+
   function boot() {
     (settings.muted || []).forEach(t => userState.mutedTags.add(t));       // restore prefs
     (settings.blocked || []).forEach(a => userState.blockedUsers.add(a));
@@ -8753,6 +8774,7 @@
     window.addEventListener("pagehide", flushAutosave);
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushAutosave(); });
     wirePullToRefresh();
+    wireRailToggles();
     initTips();
     if (!location.hash) location.replace("#/home");
     route();

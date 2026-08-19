@@ -425,6 +425,30 @@ img { max-width: 100%; display: block; }
 }
 .rail__title { font: 600 17px var(--font-display); color: var(--ink); }
 .rail__note  { margin: 0 0 18px; font-size: 12.5px; color: var(--ink3); letter-spacing: .02em; }
+.rail__head-actions { display: inline-flex; align-items: center; gap: 10px; }
+/* Collapse a rail to reclaim the width for the page. */
+.rail__collapse {
+  display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
+  border: 1px solid var(--line); border-radius: 7px; background: var(--card); color: var(--ink3);
+  font-size: 15px; line-height: 1; cursor: pointer; padding: 0; transition: background .14s, color .14s, border-color .14s;
+}
+.rail__collapse:hover { background: var(--paper2); color: var(--rose-ink); border-color: var(--rose); }
+/* When a rail is hidden the center (flex:1) simply takes the freed space. */
+body.hide-rail-left  #railLeft  { display: none; }
+body.hide-rail-right #railRight { display: none; }
+/* A slim tab on the screen edge brings a hidden rail back. Only meaningful at the
+   widths where that rail is shown at all, so it never appears on mobile. */
+.rail-handle {
+  position: fixed; top: 50%; transform: translateY(-50%); z-index: 30; display: none;
+  width: 22px; height: 60px; align-items: center; justify-content: center; padding: 0;
+  background: var(--surface); border: 1px solid var(--line); color: var(--ink3); cursor: pointer;
+  font-size: 16px; line-height: 1; box-shadow: 0 4px 14px var(--shadow);
+}
+.rail-handle:hover { color: var(--rose-ink); background: var(--paper2); }
+.rail-handle--left  { left: 0; border-left: 0; border-radius: 0 10px 10px 0; }
+.rail-handle--right { right: 0; border-right: 0; border-radius: 10px 0 0 10px; }
+@media (min-width: 1041px) { body.hide-rail-left  .rail-handle--left  { display: inline-flex; } }
+@media (min-width: 1241px) { body.hide-rail-right .rail-handle--right { display: inline-flex; } }
 .rail__group { font: 500 10.5px/1 var(--font-text); letter-spacing: .2em; text-transform: uppercase; color: var(--ink3); margin: 20px 0 10px; }
 .rail__group:first-of-type { margin-top: 6px; }
 

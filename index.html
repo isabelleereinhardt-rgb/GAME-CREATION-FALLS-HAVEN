@@ -95,7 +95,10 @@
     <aside class="rail rail-left col" id="railLeft" aria-label="Activity feed">
       <div class="rail__head">
         <h2 class="rail__title">Activity</h2>
-        <button class="btn--link" data-nav="library">See all</button>
+        <span class="rail__head-actions">
+          <button class="btn--link" data-nav="library">See all</button>
+          <button class="rail__collapse" data-rail-hide="left" title="Hide activity" aria-label="Hide the activity panel">&lsaquo;</button>
+        </span>
       </div>
       <p class="rail__note">Recent activity from the people and works you follow.</p>
       <div id="activityMount"></div>
@@ -117,11 +120,16 @@
     <aside class="rail rail-right col" id="railRight" aria-label="Widget station">
       <div class="rail__head" style="margin-bottom:16px">
         <h2 class="rail__title">Widgets</h2>
+        <button class="rail__collapse" data-rail-hide="right" title="Hide widgets" aria-label="Hide the widget panel">&rsaquo;</button>
       </div>
       <div id="widgetMount"></div>
     </aside>
 
   </div>
+
+  <!-- Reopen handles for the collapsed rails (desktop only, shown when hidden). -->
+  <button class="rail-handle rail-handle--left" data-rail-show="left" aria-label="Show the activity panel" title="Show activity">&rsaquo;</button>
+  <button class="rail-handle rail-handle--right" data-rail-show="right" aria-label="Show the widget panel" title="Show widgets">&lsaquo;</button>
 </div>
 
 <!-- ================= THEME DRAWER ================= -->
