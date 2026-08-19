@@ -3824,8 +3824,17 @@
   }
 
   // Turn a plain-text chapter body into editor paragraphs.
+  // The exact guidance shown in the empty editor. Old drafts (written before the
+  // placeholder became an overlay) may have this baked into the saved body; strip
+  // it on load so it never resurfaces as real content or in Preview.
+  const EDITOR_PLACEHOLDER = "Start typing, or paste from another editor. Format with the toolbar above, or use Markdown shortcuts.";
+  function stripEditorPlaceholder(body) {
+    let b = String(body || "");
+    b = b.replace(/Start typing,\s*or paste from another editor\.\s*(?:Format with the toolbar above,\s*or use Markdown shortcuts\.)?/gi, "");
+    return b.replace(/^\s+/, "");
+  }
   function bodyToEditorHTML(body) {
-    const blocks = mdToHtmlBlocks(body);
+    const blocks = mdToHtmlBlocks(stripEditorPlaceholder(body));
     return blocks.length ? blocks.join("") : "<p></p>";
   }
 
@@ -4010,7 +4019,7 @@
               ${st ? `<span class="ms-status"><span class="pip pip--${st.pip}"></span>${st.t}</span>` : "<span>Not published yet</span>"}
             </div>
           </div>
-          <div class="save-flag">${icon("check",14)} Saved just now</div>
+          <div class="save-flag" id="we-saveflag" aria-live="polite">${icon("check",14)} ${isNew ? "Not saved yet" : "Saved"}</div>
         </div>
 
         <div class="writer">
@@ -4214,6 +4223,15 @@
       });
       updateEditorEmpty();
     }
+    // Autosave: any edit to the body or the side fields marks the draft dirty and
+    // schedules a debounced write, so a chapter is never lost by navigating away.
+    const writerRoot = $("#screen-write");
+    if (writerRoot) {
+      writerRoot.addEventListener("input", markEditorDirty);
+      writerRoot.addEventListener("change", markEditorDirty);
+    }
+    // Set the initial flag honestly: a loaded work is saved; a new one is not yet.
+    setSaveFlag((liveEditor && liveEditor.work) ? "saved" : "idle");
     // Line spacing while writing (a comfort setting; readers keep their own).
     const lineSel = $("#we-linespace");
     if (lineSel) lineSel.addEventListener("change", () => {
@@ -6657,6 +6675,7 @@
   }
 
   function route() {
+    flushAutosave();   // leaving the editor: write any pending draft before its DOM is torn down
     const hash = location.hash.replace(/^#\/?/, "");
     const parts = hash.split("/");
     const seg = parts[0], arg = parts[1], arg2 = parts[2];
@@ -8373,25 +8392,84 @@
       </div>`, "Preview");
   }
 
-  async function handlePublish(kind, scheduleTime) {
+  // The header save indicator. It reflects real state now: dirty while there are
+  // unsaved edits, saving during a write, saved once the draft is on the server.
+  function setSaveFlag(state) {
+    const el = document.getElementById("we-saveflag"); if (!el) return;
+    const spin = '<span class="sf-spin" aria-hidden="true"></span>';
+    const dot = '<span class="sf-dot" aria-hidden="true"></span>';
+    const warn = '<span class="sf-warn" aria-hidden="true">!</span>';
+    const map = {
+      idle:   [icon("check", 14), "Not saved yet", "is-idle"],
+      dirty:  [dot, "Unsaved changes…", "is-dirty"],
+      saving: [spin, "Saving…", "is-saving"],
+      saved:  [icon("check", 14), "Saved", "is-saved"],
+      error:  [warn, "Couldn't save — will retry", "is-error"],
+      local:  [icon("check", 14), "Kept on this device", "is-idle"]
+    };
+    const row = map[state] || map.idle;
+    el.className = "save-flag " + row[2];
+    el.innerHTML = row[0] + " " + row[1];
+  }
+
+  // Debounced autosave so a writer never loses a chapter by navigating away. The
+  // static "Saved" flag used to lie; now edits schedule a real draft write.
+  let autosaveTimer = null, autosaveBusy = false;
+  function scheduleAutosave(delay) {
+    if (autosaveTimer) clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(() => { autosaveTimer = null; autosaveNow(); }, delay == null ? 1400 : delay);
+  }
+  function markEditorDirty() {
+    if (!$("#we-body") && editorFormat !== "comic") return;   // not on the editor
+    setSaveFlag("dirty");
+    scheduleAutosave();
+  }
+  async function autosaveNow() {
+    if (autosaveBusy) { scheduleAutosave(400); return; }        // a write is in flight; retry soon
+    if (!$("#screen-write .writer")) return;                    // left the editor
+    if (!window.WispDB || !WispDB.enabled || !WispDB.signedIn) { setSaveFlag("local"); return; }
+    autosaveBusy = true;
+    try { await persistEditor("draft", null, { silent: true }); }
+    finally { autosaveBusy = false; }
+  }
+  // Flush a pending autosave immediately (leaving the editor, hiding the tab).
+  function flushAutosave() {
+    if (autosaveTimer) { clearTimeout(autosaveTimer); autosaveTimer = null; autosaveNow(); }
+  }
+
+  function handlePublish(kind, scheduleTime) { return persistEditor(kind, scheduleTime, { silent: false }); }
+
+  // The one place a work is written. Manual saves (Publish / Save draft / Schedule)
+  // toast and return to the dashboard; a silent autosave writes a draft quietly,
+  // keeps the writer in the editor, and adopts a freshly created work so the next
+  // autosave updates it instead of spawning duplicates.
+  async function persistEditor(kind, scheduleTime, opts) {
+    opts = opts || {};
+    const silent = !!opts.silent;
     if (!window.WispDB || !WispDB.enabled) {
+      if (silent) { setSaveFlag("local"); return; }
       toast(kind === "schedule" ? "Scheduling needs the backend. Connect Supabase to schedule releases."
         : kind === "draft" ? "Saved as a draft. Connect Supabase to save it for real."
         : "Chapter published. Connect Supabase to save it for real.");
       return;
     }
-    if (!WispDB.signedIn) { openAuth("in"); return; }
+    if (!WispDB.signedIn) { if (silent) { setSaveFlag("local"); return; } openAuth("in"); return; }
     const val = (id) => { const e = $(id); return e ? e.value.trim() : ""; };
-    const title = val("#we-title") || "Untitled";
+    const rawTitle = val("#we-title");
+    const title = rawTitle || "Untitled";
     const format = editorFormat === "comic" ? "comic" : "prose";
     let body;
     if (format === "comic") {
-      if (kind === "publish" && !editorPages.length) { toast("Add at least one page before you publish."); return; }
+      if (!silent && kind === "publish" && !editorPages.length) { toast("Add at least one page before you publish."); return; }
       body = editorPages.join("\n");
     } else {
       const bodyEl = $("#we-body"); body = bodyEl ? editorHtmlToMd(bodyEl) : "";
-      if (kind === "publish" && !body.trim()) { toast("Write something before you publish this chapter."); return; }
+      if (!silent && kind === "publish" && !body.trim()) { toast("Write something before you publish this chapter."); return; }
     }
+    // Nothing worth an autosave yet: a brand-new, still-empty work. Don't spawn a
+    // phantom "Untitled" with no words.
+    if (silent && !(liveEditor && liveEditor.work) && !rawTitle && !body.trim()) { setSaveFlag("idle"); return; }
+    if (silent) setSaveFlag("saving");
     const typeBtn = $("#screen-write [data-wtype].is-on"); const type = typeBtn ? typeBtn.dataset.wtype : "original";
     const rateBtn = $("#screen-write [data-wrate].is-on"); const rating = rateBtn ? rateBtn.dataset.wrate : "G";
     const tags = val("#we-tags").split(",").map(s => s.trim()).filter(Boolean);
@@ -8405,20 +8483,22 @@
     })));
     const seriesName = val("#we-series");
     const scheduled_for = kind === "schedule" ? scheduleTime : null;
-    // "Save draft" on an already-published work saves changes without pulling it
-    // back to draft; only new works and existing drafts actually become drafts.
+    // "Save draft" (and autosave) on an already-published work saves changes without
+    // pulling it back to draft; only new works and existing drafts become drafts.
     const wasPublished = liveEditor && liveEditor.work &&
       (liveEditor.work._dbStatus === "ongoing" || liveEditor.work._dbStatus === "complete");
     let status = kind === "schedule" ? "scheduled"
       : kind === "draft" ? (wasPublished ? liveEditor.work._dbStatus : "draft")
       : "ongoing";
-    // The writer's In progress / Completed choice applies whenever the work ends
-    // up published (now or already), so a finished work reads as Complete.
     const wStatusBtn = $("#screen-write [data-wstatus].is-on");
     const wStatusSel = wStatusBtn ? wStatusBtn.dataset.wstatus : "ongoing";
     if (status === "ongoing" || status === "complete") status = wStatusSel === "complete" ? "complete" : "ongoing";
+    // A silent autosave never changes whether the chapter is published; a manual
+    // publish does. Preserve the loaded chapter's published state during autosave.
+    const chapterPublished = silent
+      ? !!(liveEditor && liveEditor.chapter && liveEditor.chapter.published)
+      : (kind === "publish");
     try {
-      // Resolve the series field to an id (find-or-create), or standalone.
       let series_id = null;
       if (seriesName) {
         const s = await WispDB.findOrCreateSeries(seriesName, { type, source });
@@ -8426,7 +8506,6 @@
       }
 
       if (liveEditor && liveEditor.work) {
-        // Editing an existing work: update its fields, its first chapter, and tags.
         const id = liveEditor.work.id;
         const fields = { title, type, source, rating, status, series_id, warnings, format, schedule,
           comments_enabled: controls.comments_enabled, logged_in_only: controls.logged_in_only, hide_stats: controls.hide_stats };
@@ -8437,24 +8516,36 @@
           id: liveEditor.chapter ? liveEditor.chapter.id : null,
           number: liveEditor.chapter ? liveEditor.chapter.number : 1,
           title: liveEditor.chapter ? liveEditor.chapter.title : "",
-          body, published: kind === "publish", scheduled_for      // this chapter's own state
+          body, published: chapterPublished, scheduled_for
         });
         await WispDB.setTags(id, tags);
-        toast(kind === "schedule" ? "Scheduled. It releases " + fmtEasternStamp(scheduled_for) + "."
+        if (liveEditor.chapter) liveEditor.chapter.published = chapterPublished;
+        if (!silent) toast(kind === "schedule" ? "Scheduled. It releases " + fmtEasternStamp(scheduled_for) + "."
           : kind === "draft" ? (wasPublished ? "Changes saved." : "Draft saved.") : "Changes published.");
       } else {
-        // New work.
         let book_number;
         if (series_id) book_number = (await WispDB.countInSeries(series_id).catch(() => 0)) + 1;
-        await WispDB.createWork({ title, type, source, rating, tags, warnings, chapterBody: body, status, format, schedule,
+        const created = await WispDB.createWork({ title, type, source, rating, tags, warnings, chapterBody: body, status, format, schedule,
           cover_image_url: editorCover, series_id, book_number, scheduled_for,
           comments_enabled: controls.comments_enabled, logged_in_only: controls.logged_in_only, hide_stats: controls.hide_stats });
-        toast(kind === "schedule" ? "Scheduled. It releases " + fmtEasternStamp(scheduled_for) + "."
-          : kind === "draft" ? "Draft saved to your account." : "Published. It is now in your works.");
+        if (silent && created && created.id) {
+          // Adopt the new work so every later autosave updates this same draft.
+          const ch = await WispDB.firstChapter(created.id).catch(() => null);
+          created._dbStatus = created.status;
+          liveEditor = { work: created, chapter: ch, allChapters: ch ? [ch] : [], seriesName: seriesName || "" };
+          try { history.replaceState(null, "", "#/write/" + created.id + "/1"); } catch (e) {}
+        } else if (!silent) {
+          toast(kind === "schedule" ? "Scheduled. It releases " + fmtEasternStamp(scheduled_for) + "."
+            : kind === "draft" ? "Draft saved to your account." : "Published. It is now in your works.");
+        }
       }
-      liveEditor = null; editorCover = null;
-      navigate("write");
-    } catch (e) { console.error("[wisp] save failed:", e); toast((e && e.message) || "Could not save. Please try again."); }
+      if (silent) { setSaveFlag("saved"); }
+      else { liveEditor = null; editorCover = null; navigate("write"); }
+    } catch (e) {
+      console.error("[wisp] save failed:", e);
+      if (silent) setSaveFlag("error");
+      else toast((e && e.message) || "Could not save. Please try again.");
+    }
   }
 
   // Ask for a release time, then schedule the chapter for it.
@@ -8603,6 +8694,9 @@
     $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
 
     window.addEventListener("hashchange", route);
+    // Best-effort: flush a pending draft autosave if the tab is hidden or closed.
+    window.addEventListener("pagehide", flushAutosave);
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushAutosave(); });
     wirePullToRefresh();
     initTips();
     if (!location.hash) location.replace("#/home");
