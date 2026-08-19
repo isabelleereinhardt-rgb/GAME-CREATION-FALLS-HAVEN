@@ -2572,7 +2572,7 @@
       <div class="comment">
         <span class="comment__av" ${c.author ? 'style="background:var(--rose);color:#fbf3e8"' : ""}>${esc(c.init)}</span>
         <div>
-          <div><span class="comment__who">${esc(c.who)}</span>${c.author ? ' <span class="pill" style="padding:2px 6px">Author</span>' : ""}${badgeMiniRow(c.badges || (c.author ? ["beloved", "kept-the-flame"] : []))}<span class="comment__when">${esc(c.when)}</span></div>
+          <div><span class="comment__who">${esc(c.who)}</span>${c.author ? ' <span class="pill" style="padding:2px 6px">Author</span>' : ""}${badgeMiniRow(c.badges || (c.author ? ["grand-winner", "first-publication"] : []))}<span class="comment__when">${esc(c.when)}</span></div>
           <div class="comment__text">${esc(c.text)}</div>
           <div class="comment__acts"><button data-heart-c>${icon("heart",12)} Heart</button><button data-reply>Reply</button></div>
         </div>
@@ -5647,7 +5647,7 @@
     const P = W.PROFILE;
     // A demo showcase so the badge case is populated to look at without a backend.
     const demoStored = readLocalBadges("me");
-    const demoBadges = demoStored.length ? demoStored : ["grand-prize", "kept-the-flame", "beloved", "night-owl", "spring-bloom", "kind-soul", "first-words"];
+    const demoBadges = demoStored.length ? demoStored : ["grand-winner", "first-place", "judges-choice", "guardian", "verified", "rising-star"];
     const earned = earnedBadgeIds(demoBadges, { works: P.stats.works, hearts: 640, words: 60000 });
     lastBadgeCase = { ids: earned, name: P.name };
     $("#screen-profile").innerHTML = `

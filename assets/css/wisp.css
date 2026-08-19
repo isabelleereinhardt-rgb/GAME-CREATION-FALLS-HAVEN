@@ -1484,11 +1484,13 @@ mark.hl {
    ------------------------------------------------------------------------- */
 .wisp-badge { display: inline-flex; line-height: 0; cursor: pointer; border-radius: 50%; outline: none;
   transition: transform .14s ease, filter .14s ease; -webkit-tap-highlight-color: transparent; }
-.wisp-badge svg { display: block; filter: drop-shadow(0 1px 2px rgba(40,30,20,.22)); }
+.wisp-badge svg, .wisp-badge img, .wisp-badge-img { display: block; object-fit: contain; }
+.wisp-badge svg { filter: drop-shadow(0 1px 2px rgba(40,30,20,.22)); }
+.wisp-badge img { filter: drop-shadow(0 2px 3px rgba(40,30,20,.16)); }
 .wisp-badge:hover, .wisp-badge:focus-visible { transform: translateY(-2px) scale(1.05); }
-.wisp-badge:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--rose) 45%, transparent); }
+.wisp-badge:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--rose) 45%, transparent); border-radius: 8px; }
 .wisp-badge--mini { cursor: default; }
-.wisp-badge--mini svg { filter: drop-shadow(0 1px 1px rgba(40,30,20,.2)); }
+.wisp-badge--mini img { filter: none; }
 
 .badge-row { display: flex; align-items: center; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
 .badge-more { border: 1px dashed var(--line); background: none; color: var(--ink2); border-radius: 999px;
