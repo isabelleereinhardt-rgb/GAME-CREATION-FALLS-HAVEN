@@ -1987,3 +1987,49 @@ button.pill--link:active, .tag:active { transform: scale(.95); }
 .toolbar .fs-ctrl button:hover { background: var(--paper2); color: var(--ink); }
 .toolbar .fs-ctrl input { width: 42px; height: 28px; border: 0; border-left: 1px solid var(--line); border-right: 1px solid var(--line); text-align: center; background: var(--card); color: var(--ink); font: 13px var(--font-text); -moz-appearance: textfield; }
 .toolbar .fs-ctrl input::-webkit-outer-spin-button, .toolbar .fs-ctrl input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* ---------------------------------------------------------------------------
+   19. Mobile and iOS  ·  most readers are on phones, so the touch pass is the
+   primary one: no zoom-on-focus, notch/home-indicator safe areas, comfy taps.
+   ------------------------------------------------------------------------- */
+
+/* Stop iOS from re-inflating text after a rotation, and drop the grey tap flash
+   (we draw our own :active feedback). */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+* { -webkit-tap-highlight-color: transparent; }
+
+/* iOS Safari zooms the whole page in whenever a focused field is under 16px,
+   which yanks the layout around every time someone taps a search or comment box.
+   Keep the compact sizing on desktop; on touch, float text fields up to 16px so
+   focusing one never triggers that jump. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  textarea, select {
+    font-size: 16px !important;   /* wins over component sizing; touch-only, so desktop keeps its compact type */
+  }
+}
+
+/* Safe areas: keep fixed and floating chrome clear of the notch and the home
+   indicator. viewport-fit=cover (set in the meta tag) makes these insets real on
+   notched iPhones; everywhere else they resolve to 0 and nothing moves. */
+.header { padding-top: env(safe-area-inset-top); }
+.reader-tools { bottom: max(20px, calc(env(safe-area-inset-bottom) + 8px)); }
+.toast { bottom: max(26px, calc(env(safe-area-inset-bottom) + 14px)); }
+.mw-catrun { bottom: max(14px, env(safe-area-inset-bottom)); }
+.sheet__panel {
+  padding-top: max(22px, calc(env(safe-area-inset-top) + 12px));
+  padding-bottom: max(22px, env(safe-area-inset-bottom));
+}
+.page { padding-bottom: max(60px, calc(env(safe-area-inset-bottom) + 40px)); }
+
+/* A scrolling overlay shouldn't drag the page behind it once it hits its end. */
+.sheet__panel, .notif-pop, .drawer, .scrim { overscroll-behavior: contain; }
+
+/* Comfortable touch targets on phones. Filter rows are labels, so the whole row
+   is already tappable, just give it height and a bigger box; tag pills get a
+   touch more padding so they clear a fingertip. */
+@media (pointer: coarse) {
+  .check { min-height: 34px; }
+  .check input { width: 18px; height: 18px; }
+  .tag { padding: 6px 11px; }
+}
