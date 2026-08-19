@@ -3077,7 +3077,11 @@
     });
   }
   // ---- hub widgets: small admin-placed blocks on a hub page ----------------
-  const WIDGET_KINDS = { note: "Note", countdown: "Countdown", links: "Links", poll: "Poll" };
+  const WIDGET_KINDS = {
+    note: "Note", countdown: "Countdown", links: "Links", poll: "Poll",
+    image: "Image", quote: "Quote", list: "List", progress: "Progress bar",
+    button: "Button", video: "Video", faq: "FAQ"
+  };
   function safeUrl(u) { try { const x = new URL(u); return (x.protocol === "https:" || x.protocol === "http:") ? x.href : ""; } catch (e) { return ""; } }
   function hubWidgetHTML(w, polls) {
     const cfg = w.config || {};
@@ -3103,6 +3107,38 @@
         : `<p class="muted" style="font-size:13px;margin:0">No links yet.</p>`;
     } else if (w.kind === "poll") {
       body = pollWidgetHTML(w, (polls && polls[w.id]) || { tally: {}, mine: null });
+    } else if (w.kind === "image") {
+      const url = safeUrl(cfg.url || "");
+      const inner = url ? `<img src="${esc(url)}" alt="${esc(cfg.caption || w.title || "")}" loading="lazy" decoding="async">` : `<p class="muted" style="font-size:13px;margin:0">No image set yet.</p>`;
+      const link = safeUrl(cfg.link || "");
+      body = `<figure class="hubw__image">${link ? `<a href="${esc(link)}" target="_blank" rel="noopener noreferrer">${inner}</a>` : inner}${cfg.caption ? `<figcaption>${esc(cfg.caption)}</figcaption>` : ""}</figure>`;
+    } else if (w.kind === "quote") {
+      body = cfg.text
+        ? `<blockquote class="hubw__quote">${esc(cfg.text)}</blockquote>${cfg.cite ? `<p class="hubw__cite">&mdash; ${esc(cfg.cite)}</p>` : ""}`
+        : `<p class="muted" style="font-size:13px;margin:0">No quote yet.</p>`;
+    } else if (w.kind === "list") {
+      const items = (Array.isArray(cfg.items) ? cfg.items : []).filter(Boolean);
+      body = items.length
+        ? `<ul class="hubw__list">${items.map(it => `<li>${esc(it)}</li>`).join("")}</ul>`
+        : `<p class="muted" style="font-size:13px;margin:0">No items yet.</p>`;
+    } else if (w.kind === "progress") {
+      const cur = Math.max(0, +cfg.current || 0), tot = Math.max(0, +cfg.target || 0);
+      const pct = tot > 0 ? Math.min(100, Math.round((cur / tot) * 100)) : 0;
+      body = `<div class="hubw__progress"><span class="hubw__progress-bar" style="width:${pct}%"></span></div>
+        <p class="muted hubw__sub">${cur}${tot ? " / " + tot : ""}${cfg.unit ? " " + esc(cfg.unit) : ""} &middot; ${pct}%</p>`;
+    } else if (w.kind === "button") {
+      const url = safeUrl(cfg.url || "");
+      body = url
+        ? `<a class="btn btn--primary btn--full hubw__button" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(cfg.label || "Open")}</a>`
+        : `<p class="muted" style="font-size:13px;margin:0">No link set yet.</p>`;
+    } else if (w.kind === "video") {
+      const url = safeUrl(cfg.url || "");
+      body = url ? richEmbedHTML(url, cfg.title || w.title || "") : `<p class="muted" style="font-size:13px;margin:0">No video set yet.</p>`;
+    } else if (w.kind === "faq") {
+      const items = (Array.isArray(cfg.items) ? cfg.items : []).filter(it => it && it.q);
+      body = items.length
+        ? `<div class="hubw__faq">${items.map(it => `<details><summary>${esc(it.q)}</summary><div class="hubw__faq-a">${mdToHtmlBlocks(it.a || "").join("")}</div></details>`).join("")}</div>`
+        : `<p class="muted" style="font-size:13px;margin:0">No questions yet.</p>`;
     }
     return `<section class="hubw hubw--${esc(w.kind)}">${title}${body}</section>`;
   }
@@ -5547,6 +5583,13 @@
     if (kind === "countdown") return titleField + `<div class="field"><label>Counts down to (Eastern Time)</label>${datePickerHTML(pfx)}</div><div class="field"><label>When it arrives, show</label><input type="text" id="${pfx}-done" value="${esc(cfg.done || "")}" placeholder="It's here."></div>`;
     if (kind === "links") return titleField + `<div class="field"><label>Links, one per line as: Label | https://...</label><textarea id="${pfx}-links" rows="4" placeholder="Discord | https://discord.gg/...">${esc(linksToText(cfg.items))}</textarea></div>`;
     if (kind === "poll") return titleField + `<div class="field"><label>Question</label><input type="text" id="${pfx}-q" value="${esc(cfg.question || "")}" placeholder="What should we read next?"></div><div class="field"><label>Options, one per line</label><textarea id="${pfx}-opts" rows="4" placeholder="Option one&#10;Option two">${esc((cfg.options || []).join("\n"))}</textarea></div>`;
+    if (kind === "image") return titleField + `<div class="field"><label>Image URL (https://...)</label><input type="text" id="${pfx}-url" value="${esc(cfg.url || "")}" placeholder="https://..."></div><div class="field"><label>Caption (optional)</label><input type="text" id="${pfx}-caption" value="${esc(cfg.caption || "")}"></div><div class="field"><label>Links to (optional)</label><input type="text" id="${pfx}-link" value="${esc(cfg.link || "")}" placeholder="https://..."></div>`;
+    if (kind === "quote") return titleField + `<div class="field"><label>Quote</label><textarea id="${pfx}-text" rows="3" placeholder="A line worth pinning up.">${esc(cfg.text || "")}</textarea></div><div class="field"><label>Attribution (optional)</label><input type="text" id="${pfx}-cite" value="${esc(cfg.cite || "")}" placeholder="Who said it"></div>`;
+    if (kind === "list") return titleField + `<div class="field"><label>Items, one per line</label><textarea id="${pfx}-items" rows="5" placeholder="Read the pinned intro&#10;Tag your warnings&#10;Be kind">${esc((cfg.items || []).join("\n"))}</textarea></div>`;
+    if (kind === "progress") return titleField + `<div class="field"><label>Current</label><input type="number" id="${pfx}-current" value="${esc(String(cfg.current || 0))}" min="0"></div><div class="field"><label>Target</label><input type="number" id="${pfx}-target" value="${esc(String(cfg.target || 0))}" min="0"></div><div class="field"><label>Unit (optional)</label><input type="text" id="${pfx}-unit" value="${esc(cfg.unit || "")}" placeholder="sign-ups, words, ..."></div>`;
+    if (kind === "button") return titleField + `<div class="field"><label>Button label</label><input type="text" id="${pfx}-label" value="${esc(cfg.label || "")}" placeholder="Sign up"></div><div class="field"><label>Links to (https://...)</label><input type="text" id="${pfx}-url" value="${esc(cfg.url || "")}" placeholder="https://..."></div>`;
+    if (kind === "video") return titleField + `<div class="field"><label>Video URL (YouTube, Vimeo, ...)</label><input type="text" id="${pfx}-url" value="${esc(cfg.url || "")}" placeholder="https://..."></div>`;
+    if (kind === "faq") return titleField + `<div class="field"><label>Questions and answers, one per line as: Question :: Answer</label><textarea id="${pfx}-faq" rows="5" placeholder="When do sign-ups close? :: Friday at midnight ET.">${esc((cfg.items || []).map(it => (it.q || "") + " :: " + (it.a || "")).join("\n"))}</textarea></div>`;
     return "";
   }
   // Read a widget-kind form back into { title, config }, or throw a message.
@@ -5572,6 +5615,39 @@
       if (!question) throw new Error("Give the poll a question.");
       if (options.length < 2) throw new Error("A poll needs at least two options.");
       config = { question: question, options: options };
+    } else if (kind === "image") {
+      const url = safeUrl((($("#" + pfx + "-url") || {}).value || "").trim());
+      if (!url) throw new Error("Add a valid image URL (https://...).");
+      config = { url: url, caption: (($("#" + pfx + "-caption") || {}).value || "").trim(), link: safeUrl((($("#" + pfx + "-link") || {}).value || "").trim()) };
+    } else if (kind === "quote") {
+      const text = (($("#" + pfx + "-text") || {}).value || "").trim();
+      if (!text) throw new Error("Write the quote first.");
+      config = { text: text, cite: (($("#" + pfx + "-cite") || {}).value || "").trim() };
+    } else if (kind === "list") {
+      const items = (($("#" + pfx + "-items") || {}).value || "").split("\n").map(s => s.trim()).filter(Boolean);
+      if (!items.length) throw new Error("Add at least one item.");
+      config = { items: items };
+    } else if (kind === "progress") {
+      const target = Math.max(0, +(($("#" + pfx + "-target") || {}).value || 0));
+      if (!(target > 0)) throw new Error("Set a target greater than zero.");
+      config = { current: Math.max(0, +(($("#" + pfx + "-current") || {}).value || 0)), target: target, unit: (($("#" + pfx + "-unit") || {}).value || "").trim() };
+    } else if (kind === "button") {
+      const url = safeUrl((($("#" + pfx + "-url") || {}).value || "").trim());
+      const label = (($("#" + pfx + "-label") || {}).value || "").trim();
+      if (!url) throw new Error("Add a valid link (https://...).");
+      if (!label) throw new Error("Give the button a label.");
+      config = { label: label, url: url };
+    } else if (kind === "video") {
+      const url = safeUrl((($("#" + pfx + "-url") || {}).value || "").trim());
+      if (!url || !embedInfo(url)) throw new Error("Add a video URL from a supported site (YouTube, Vimeo, ...).");
+      config = { url: url };
+    } else if (kind === "faq") {
+      const items = (($("#" + pfx + "-faq") || {}).value || "").split("\n").map(l => l.trim()).filter(Boolean).map(l => {
+        const i = l.indexOf("::"); if (i < 0) return { q: l, a: "" };
+        return { q: l.slice(0, i).trim(), a: l.slice(i + 2).trim() };
+      }).filter(it => it.q);
+      if (!items.length) throw new Error("Add at least one question.");
+      config = { items: items };
     }
     return { title: title, config: config };
   }
