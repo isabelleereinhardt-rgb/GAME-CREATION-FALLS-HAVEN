@@ -37,11 +37,22 @@
     { id: "unlocked",      name: "Milestone Unlocked", cat: "milestone", tier: "gold", img: "padlock-gold.png", desc: "Crossed a hearts milestone.",           how: "Reach 100 hearts across your works.", auto: function (s) { return (s.hearts || 0) >= 100; } },
     { id: "legend",        name: "Legend",         cat: "milestone", tier: "gold",   img: "star-black.png",    desc: "A rare, standout honor.",                 how: "Earn a special recognition from the team." },
     // Consistency & streaks --------------------------------------------------
-    { id: "rising-star",   name: "Rising Star",    cat: "streak",  tier: "gold",   img: "star-gold.png",     desc: "On a strong run of updates.",             how: "Keep a long update streak going." },
+    { id: "rising-star",   name: "Rising Star",    cat: "streak",  tier: "gold",   img: "star-gold.png",     desc: "Posted at least twice a week for a month.", how: "Update 2+ times a week, four weeks running. Earned automatically.", auto: function (s) { return !!s.consistentMonth; } },
     { id: "old-faithful",  name: "Old Faithful",   cat: "streak",  tier: "gold",   img: "ribbon-gold.png",   desc: "Never missed an update day.",             how: "Hit every scheduled update for a season." },
     // Community & kindness ---------------------------------------------------
     { id: "guardian",      name: "Guardian",       cat: "community", tier: "gold", img: "shield-gold.png",   desc: "Helps keep Wisp kind and safe.",          how: "Be a moderator or a trusted helper." },
-    { id: "verified",      name: "Verified",       cat: "community", tier: "gold", img: "check-gold.png",    desc: "A trusted, verified member.",             how: "Be verified by the Wisp team." }
+    { id: "verified",      name: "Verified",       cat: "community", tier: "gold", img: "check-gold.png",    desc: "A trusted, verified member.",             how: "Be verified by the Wisp team." },
+    // Member rank (a ladder the team can award as members grow with Wisp) -----
+    { id: "rank-newcomer", name: "Newcomer",       cat: "rank",    tier: "bronze", img: "chevron-dark-2.png",   desc: "New to Wisp and finding their feet.",   how: "Join Wisp." },
+    { id: "rank-regular",  name: "Regular",        cat: "rank",    tier: "bronze", img: "chevron-dark-3.png",   desc: "Around often; part of the furniture.",  how: "Keep showing up." },
+    { id: "rank-familiar", name: "Familiar Face",  cat: "rank",    tier: "silver", img: "chevron-silver-2.png", desc: "A face everyone knows.",                how: "Become a known member of the community." },
+    { id: "rank-veteran",  name: "Veteran",        cat: "rank",    tier: "silver", img: "chevron-silver-3.png", desc: "Been here through the seasons.",        how: "Stick with Wisp over the long haul." },
+    { id: "rank-oldguard", name: "Old Guard",      cat: "rank",    tier: "gold",   img: "chevron-gold-2.png",   desc: "One of the people who built the place.", how: "Be a long-standing pillar." },
+    { id: "rank-pillar",   name: "Pillar",         cat: "rank",    tier: "gold",   img: "chevron-gold-3.png",   desc: "A cornerstone of the community.",       how: "Earn the community's deep trust." },
+    // Ratings ----------------------------------------------------------------
+    { id: "well-rated",    name: "Well-Rated",     cat: "rating",  tier: "bronze", img: "star-3.png",        desc: "Readers rate their work highly.",         how: "Keep a solid reader rating." },
+    { id: "highly-rated",  name: "Highly Rated",   cat: "rating",  tier: "silver", img: "star-4.png",        desc: "Consistently four-star loved.",           how: "Hold a four-star reader rating." },
+    { id: "five-star",     name: "Five-Star Author", cat: "rating", tier: "gold",  img: "star-5.png",        desc: "A perfect five with readers.",            how: "Earn a five-star reader rating." }
   ];
   var BY = {}; CAT.forEach(function (b) { BY[b.id] = b; });
 
@@ -49,9 +60,11 @@
     contest: "Contests & competitions",
     milestone: "Milestones",
     streak: "Consistency & streaks",
-    community: "Community & kindness"
+    community: "Community & kindness",
+    rank: "Member rank",
+    rating: "Reader ratings"
   };
-  var CAT_ORDER = ["contest", "milestone", "streak", "community"];
+  var CAT_ORDER = ["contest", "milestone", "streak", "community", "rank", "rating"];
 
   function svg(id, size) {
     var def = BY[id]; if (!def) return "";

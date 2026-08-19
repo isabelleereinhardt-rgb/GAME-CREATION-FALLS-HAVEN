@@ -5415,6 +5415,40 @@
      in localStorage when there is no backend) plus what its own numbers earn.
      ========================================================================= */
   let lastBadgeCase = { ids: [], name: "" };   // powers the "+N" / View-all opener
+  // A local log of the reader's own publishes, so the Rising Star badge can be
+  // awarded automatically: two or more updates a week, four weeks running.
+  function recordPublish() {
+    try {
+      const log = JSON.parse(localStorage.getItem("wisp.publishLog") || "[]");
+      log.push(Date.now());
+      localStorage.setItem("wisp.publishLog", JSON.stringify(log.slice(-400)));
+    } catch (e) {}
+  }
+  function consistentMonth() {
+    let log; try { log = JSON.parse(localStorage.getItem("wisp.publishLog") || "[]"); } catch (e) { return false; }
+    if (!Array.isArray(log) || log.length < 8) return false;
+    const now = Date.now(), WEEK = 7 * 86400000;
+    for (let wk = 0; wk < 4; wk++) {
+      const hi = now - wk * WEEK, lo = hi - WEEK;
+      if (log.filter(t => t > lo && t <= hi).length < 2) return false;
+    }
+    return true;
+  }
+  // The stats an auto-earned badge is judged against.
+  function badgeStats(extra) {
+    return Object.assign({ consistentMonth: consistentMonth() }, extra || {});
+  }
+  // Once an auto badge is genuinely earned it should stick, even if the streak
+  // later lapses — so persist newly-earned auto ids onto the profile.
+  function persistNewAutoBadges(stored, earned, who) {
+    if (!window.WispBadges) return;
+    const have = new Set(stored || []);
+    const fresh = (earned || []).filter(id => { const d = WispBadges.byId(id); return d && d.auto && !have.has(id); });
+    if (!fresh.length) return;
+    const merged = Array.from(new Set((stored || []).concat(fresh)));
+    writeLocalBadges(who, merged);
+    if (window.WispDB && WispDB.saveMyBadges) WispDB.saveMyBadges(merged).catch(() => {});
+  }
   function badgeLocalKey(who) { return "wisp.badges." + (who || "me"); }
   function readLocalBadges(who) {
     try { const v = JSON.parse(localStorage.getItem(badgeLocalKey(who)) || "[]"); return Array.isArray(v) ? v : []; } catch (e) { return []; }
@@ -5521,7 +5555,10 @@
     const handle = p.handle ? "@" + p.handle : "";
     const published = (works || []).filter(w => w.status === "ongoing" || w.status === "complete");
     const hearts = (works || []).reduce((n, w) => n + (+w.hearts_count || 0), 0);
-    const earned = earnedBadgeIds(storedBadgesFor(p, WispDB.user && WispDB.user.id), { works: published.length, hearts: hearts, words: p.words || 0 });
+    const uid = WispDB.user && WispDB.user.id;
+    const storedB = storedBadgesFor(p, uid);
+    const earned = earnedBadgeIds(storedB, badgeStats({ works: published.length, hearts: hearts, words: p.words || 0 }));
+    persistNewAutoBadges(storedB, earned, uid);
     lastBadgeCase = { ids: earned, name: name };
     const pinnedCards = published.length
       ? `<div class="work-grid">${published.map(w => cardGallery(WispDB.toCard(w))).join("")}</div>`
@@ -9573,6 +9610,7 @@
             : kind === "draft" ? "Draft saved to your account." : "Published. It is now in your works.");
         }
       }
+      if (!silent && kind === "publish") recordPublish();   // feed the Rising Star cadence
       if (silent) { setSaveFlag("saved"); }
       else { liveEditor = null; editorCover = null; navigate("write"); }
     } catch (e) {
