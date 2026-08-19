@@ -294,6 +294,16 @@ window.WispDB = (function () {
     return data.id;
   }
 
+  async function deleteChapter(chapterId) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("chapters").delete().eq("id", chapterId);
+    if (error) throw error;
+  }
+  async function setChapterNumber(chapterId, number) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("chapters").update({ number: number }).eq("id", chapterId);
+    if (error) throw error;
+  }
   // Swap two chapters' positions. Goes through a temporary number so the
   // unique (work_id, number) constraint never trips mid-swap. Author-scoped by
   // the chapters RLS policy.
@@ -839,6 +849,27 @@ window.WispDB = (function () {
     if (error) throw error;
   }
 
+  // Every visible work carrying a tag, or set in a fandom/source, of this name.
+  // Powers the tag collection pages readers reach by clicking a tag.
+  async function worksByTag(name) {
+    if (!client || !name) return [];
+    const ids = new Set();
+    try {
+      const { data: tag } = await client.from("tags").select("id").ilike("name", name).maybeSingle();
+      if (tag) {
+        const { data: wt } = await client.from("work_tags").select("work_id").eq("tag_id", tag.id);
+        (wt || []).forEach(r => ids.add(r.work_id));
+      }
+    } catch (e) { /* ignore */ }
+    try {
+      const { data } = await client.from("works_with_author").select("id").ilike("source", name).in("status", ["ongoing", "complete"]);
+      (data || []).forEach(r => ids.add(r.id));
+    } catch (e) { /* ignore */ }
+    if (!ids.size) return [];
+    const works = await getWorksByIds([...ids]);
+    return works.filter(w => w && (w._dbStatus === "ongoing" || w._dbStatus === "complete"));
+  }
+
   /* ---- following -------------------------------------------------------- */
   async function toggleFollow(authorId, on) {
     if (!user) throw new Error("Sign in to follow.");
@@ -1196,13 +1227,13 @@ window.WispDB = (function () {
     onRecovery(fn) { recoveryListeners.add(fn); return () => recoveryListeners.delete(fn); },
     init, signUp, signIn, signOut, resetPassword, updatePassword,
     listWorks, getWork, getChapters, myWorks,
-    createWork, updateWork, deleteWork, setWorkStatus, firstChapter, saveChapter, swapChapterNumbers, listTags, getUpcoming, setTags,
+    createWork, updateWork, deleteWork, setWorkStatus, firstChapter, saveChapter, deleteChapter, setChapterNumber, swapChapterNumbers, listTags, getUpcoming, setTags,
     mySeries, getSeries, worksInSeries, findOrCreateSeries, updateSeries, deleteSeries, countInSeries,
     toggle, myRelations, getComments, postComment, editComment, deleteComment, getReactions, toggleReaction, uploadCover,
     toggleFollow, amFollowing, followCounts, myFollowingIds, getNotifications,
     updateProfile, getProfile, worksByAuthor,
     listEvents, myEventIds, toggleEventJoin, getEvent, eventMemberCount, listEventPosts, postToEvent, deleteEventPost,
-    listHubs, myHubIds, hubMemberCounts, toggleHubMembership, hubDetail, worksInHub,
+    listHubs, myHubIds, hubMemberCounts, toggleHubMembership, hubDetail, worksInHub, worksByTag,
     getAdminSettings, setAdminPassword, createEvent, updateEvent, deleteEvent, createHub, updateHub, deleteHub, adminDeleteWork,
     listExchanges, getExchange, createExchange, updateExchange, deleteExchange,
     mySignup, joinExchange, withdrawSignup, listSignups, signupCounts, runMatching, myAssignment, myGift, attachGift,

@@ -356,7 +356,7 @@
     return `<article class="card" data-work="${w.id}">
       <span class="card__cover">${cover(w.cover, w.title)}${rate(w.rating)}${flag}${readMark}</span>
       <span class="card__body">
-        <span class="tag-row"><span class="pill">${w.type === "fan" ? "Fanwork" : "Original"}</span><span class="pill">${esc(w.source)}</span></span>
+        <span class="tag-row"><button class="pill pill--link" data-browse-type="${w.type}">${w.type === "fan" ? "Fanwork" : "Original"}</button>${w.source ? `<button class="pill pill--link" data-tag="${esc(w.source)}">${esc(w.source)}</button>` : ""}</span>
         <a class="card__title" href="#/work/${w.id}">${esc(w.title)}</a>
         <span class="card__by">by ${esc(w.author)}</span>
         <span class="card__summary">${esc(w.summary)}</span>
@@ -385,8 +385,8 @@
         </span>
         <span class="list-card__summary">${esc(w.summary)}</span>
         <span class="list-card__meta">
-          <span class="pill pill--sm">${w.type === "fan" ? "Fanwork" : "Original"}</span>
-          <span class="pill pill--sm">${esc(w.source)}</span>
+          <button class="pill pill--sm pill--link" data-browse-type="${w.type}">${w.type === "fan" ? "Fanwork" : "Original"}</button>
+          ${w.source ? `<button class="pill pill--sm pill--link" data-tag="${esc(w.source)}">${esc(w.source)}</button>` : ""}
           ${flag ? `<span class="pill pill--sm">${esc(flag)}</span>` : ""}
           <span class="list-card__stats">
             <span class="stat stat--heart">${icon("heart",13)}${esc(w.hearts)}</span>
@@ -569,7 +569,12 @@
   /* ======================================================================= */
   /*  SCREEN: BROWSE  ·  progressive filters, mixed fan + original            */
   /* ======================================================================= */
-  const filterState = { q:"", type:"all", ratings:new Set(), tagsInc:new Set(), tagsExc:new Set(), sort:"hearts" };
+  const filterState = { q:"", type:"all", status:"all", ratings:new Set(), tagsInc:new Set(), tagsExc:new Set(), sort:"hearts" };
+  function statusFilter(list) {
+    if (filterState.status === "ongoing") return list.filter(w => !w.complete);
+    if (filterState.status === "complete") return list.filter(w => w.complete);
+    return list;
+  }
   function allTags() {
     const m = new Map();
     activeWorks().forEach(w => (w.tags || []).forEach(t => m.set(t, (m.get(t) || 0) + 1)));
@@ -578,6 +583,7 @@
   function filteredWorks() {
     let list = activeWorks().slice();
     if (filterState.type !== "all") list = list.filter(w => w.type === filterState.type);
+    list = statusFilter(list);
     if (filterState.ratings.size) list = list.filter(w => filterState.ratings.has(w.rating));
     if (filterState.tagsInc.size) list = list.filter(w => Array.from(filterState.tagsInc).every(t => w.tags.includes(t)));
     if (filterState.tagsExc.size) list = list.filter(w => !w.tags.some(t => filterState.tagsExc.has(t)));
@@ -599,6 +605,7 @@
   function browseResults() {
     if (!isLive()) return filteredWorks();
     let list = (LIVE.works || []).slice();
+    list = statusFilter(list);
     if (filterState.tagsInc.size) list = list.filter(w => Array.from(filterState.tagsInc).every(t => w.tags.includes(t)));
     if (filterState.tagsExc.size) list = list.filter(w => !w.tags.some(t => filterState.tagsExc.has(t)));
     if (userState.mutedTags.size) list = list.filter(w => !userState.mutedTags.has(w.source) && !(w.tags || []).some(t => userState.mutedTags.has(t)));
@@ -669,6 +676,7 @@
     const applied = [
       ...(filterState.q ? [`<button class="chip-x" data-clear="q">&ldquo;${esc(filterState.q)}&rdquo; &times;</button>`] : []),
       ...(filterState.type !== "all" ? [`<button class="chip-x" data-clear="type">${filterState.type === "fan" ? "Fanwork" : "Original"} ${icon("plus",12)}</button>`] : []),
+      ...(filterState.status !== "all" ? [`<button class="chip-x" data-clear="status">${filterState.status === "complete" ? "Complete" : "In progress"} &times;</button>`] : []),
       ...Array.from(filterState.ratings).map(r => `<button class="chip-x" data-clear="rating:${r}">${RATE[r]} &times;</button>`),
       ...Array.from(filterState.tagsInc).map(t => `<button class="chip-x" data-clear="inc:${esc(t)}">${esc(t)} &times;</button>`),
       ...Array.from(filterState.tagsExc).map(t => `<button class="chip-x exclude" data-clear="exc:${esc(t)}">${esc(t)} &times;</button>`)
@@ -694,7 +702,15 @@
                     <button data-type="original" class="${filterState.type === "original" ? "is-on" : ""}" aria-pressed="${filterState.type === "original"}">Original</button>
                   </div>
                 </div>
-                <div style="margin-top:6px">
+                <div style="margin-top:12px">
+                  <div class="muted" style="font-size:12px;margin-bottom:6px">Status</div>
+                  <div class="seg" role="group" aria-label="Status">
+                    <button data-status="all" class="${filterState.status === "all" ? "is-on" : ""}" aria-pressed="${filterState.status === "all"}">Any</button>
+                    <button data-status="ongoing" class="${filterState.status === "ongoing" ? "is-on" : ""}" aria-pressed="${filterState.status === "ongoing"}">In progress</button>
+                    <button data-status="complete" class="${filterState.status === "complete" ? "is-on" : ""}" aria-pressed="${filterState.status === "complete"}">Complete</button>
+                  </div>
+                </div>
+                <div style="margin-top:12px">
                   <div class="muted" style="font-size:12px;margin-bottom:6px">Rating</div>
                   ${["G","T","M","E"].map(r => `<label class="check"><input type="checkbox" data-rating="${r}" ${filterState.ratings.has(r) ? "checked" : ""}> ${RATE[r]}</label>`).join("")}
                 </div>
@@ -704,7 +720,9 @@
             <details class="filter-group">
               <summary>Tags ${icon("chev",16).replace("<svg","<svg class='chev'")}</summary>
               <div class="filter-body">
-                ${tags.map(([t, n]) => `<label class="check"><input type="checkbox" data-inc="${esc(t)}" ${filterState.tagsInc.has(t) ? "checked" : ""}> ${esc(t)} <span class="n">${n}</span></label>`).join("")}
+                ${tags.length
+                  ? tags.map(([t, n]) => `<label class="check"><input type="checkbox" data-inc="${esc(t)}" ${filterState.tagsInc.has(t) ? "checked" : ""}> ${esc(t)} <span class="n">${n}</span></label>`).join("")
+                  : `<p class="muted" style="font-size:12.5px;margin:0;line-height:1.55">No tags yet. As works are posted and tagged, the tags show up here to filter by.</p>`}
               </div>
             </details>
 
@@ -712,7 +730,9 @@
               <summary>Exclude ${excCount ? `<span class="filter-group__count">${excCount}</span>` : ""} ${icon("chev",16).replace("<svg","<svg class='chev'")}</summary>
               <div class="filter-body">
                 <p class="muted" style="font-size:12px;margin:0 0 4px">Works the same as include. Tags you have muted are always excluded.</p>
-                ${tags.map(([t, n]) => `<label class="check"><input type="checkbox" data-exc="${esc(t)}" ${filterState.tagsExc.has(t) ? "checked" : ""}> ${esc(t)} <span class="n">${n}</span></label>`).join("")}
+                ${tags.length
+                  ? tags.map(([t, n]) => `<label class="check"><input type="checkbox" data-exc="${esc(t)}" ${filterState.tagsExc.has(t) ? "checked" : ""}> ${esc(t)} <span class="n">${n}</span></label>`).join("")
+                  : `<p class="muted" style="font-size:12.5px;margin:0;line-height:1.55">No tags yet.</p>`}
               </div>
             </details>
 
@@ -791,7 +811,7 @@
         <div class="work-hero">
           <span class="work-hero__cover">${cover(w.cover, w.title)}</span>
           <div class="work-hero__main">
-            <span class="tag-row"><span class="pill">${w.type === "fan" ? "Fanwork" : "Original"}</span><span class="pill">${esc(w.source)}</span>${w.format === "comic" ? '<span class="pill">Comic</span>' : ""}</span>
+            <span class="tag-row"><button class="pill pill--link" data-browse-type="${w.type}">${w.type === "fan" ? "Fanwork" : "Original"}</button>${w.source ? `<button class="pill pill--link" data-tag="${esc(w.source)}">${esc(w.source)}</button>` : ""}${w.format === "comic" ? '<span class="pill">Comic</span>' : ""}</span>
             <h1 class="work-hero__title">${esc(w.title)}</h1>
             ${w._db && w.seriesId && w.seriesName ? `<div style="font-size:14px;margin:2px 0 4px"><a href="#/series/${w.seriesId}" class="series-crumb">${icon("book",13)} ${esc(w.seriesName)}${w.book ? `, book ${w.book}` : ""}</a></div>` : ""}
             <div class="soft" style="font-size:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -2281,6 +2301,7 @@
             <span class="part-move">
               <button class="part-mv" data-ch-move="${c.number}:up" ${i === 0 ? "disabled" : ""} aria-label="Move chapter up">${icon("chev", 13)}</button>
               <button class="part-mv part-mv--down" data-ch-move="${c.number}:down" ${i === liveChs.length - 1 ? "disabled" : ""} aria-label="Move chapter down">${icon("chev", 13)}</button>
+              <button class="part-mv part-mv--del" data-ch-del="${c.number}" ${liveChs.length <= 1 ? "disabled" : ""} aria-label="Delete chapter">${icon("trash", 13)}</button>
             </span>
           </div>`).join("")
       : (chapters > 0
@@ -2457,6 +2478,30 @@
         toast("Chapter moved.");
         navigate("write/" + wid + "/" + openNum);
       } catch (e) { toast((e && e.message) || "Could not reorder."); $$("#screen-write [data-ch-move]").forEach(x => x.disabled = false); }
+    }));
+
+    // Delete a single chapter, then renumber the rest so there are no gaps.
+    $$("#screen-write [data-ch-del]").forEach(b => b.addEventListener("click", () => {
+      if (!isLive() || !liveEditor || !liveEditor.work) { toast("Deleting chapters needs the connected site."); return; }
+      const num = +b.dataset.chDel;
+      const chs = liveEditor.allChapters || [];
+      if (chs.length <= 1) { toast("A work needs at least one chapter. Delete the work instead."); return; }
+      const ch = chs.find(c => c.number === num); if (!ch) return;
+      const wid = liveEditor.work.id;
+      const openId = liveEditor.chapter ? liveEditor.chapter.id : null;
+      confirmDialog({ title: "Delete this chapter?", body: `Chapter ${num}${ch.title ? " (" + esc(ch.title) + ")" : ""} will be removed. This can't be undone.`, confirmText: "Delete chapter", danger: true },
+        async () => {
+          try {
+            await WispDB.deleteChapter(ch.id);
+            // Close the gap: renumber remaining chapters to 1..n (ascending is safe).
+            const fresh = (await WispDB.getChapters(wid).catch(() => [])).slice().sort((a, b) => a.number - b.number);
+            for (let i = 0; i < fresh.length; i++) { if (fresh[i].number !== i + 1) await WispDB.setChapterNumber(fresh[i].id, i + 1); }
+            const still = (await WispDB.getChapters(wid).catch(() => [])).slice().sort((a, b) => a.number - b.number);
+            const openNum = ((still.find(c => c.id === openId)) || still[0] || { number: 1 }).number;
+            toast("Chapter deleted.");
+            navigate("write/" + wid + "/" + openNum);
+          } catch (e) { toast((e && e.message) || "Could not delete the chapter."); }
+        });
     }));
   }
 
@@ -3218,6 +3263,37 @@
   }
 
   // ---- Series landing page -------------------------------------------------
+  // ---- Tag collection page: every work carrying a tag/fandom ---------------
+  async function loadTagPage(name) {
+    name = decodeURIComponent(name || "").trim();
+    loadingScreen("#screen-browse");
+    let works = [];
+    try {
+      if (isLive()) { works = await WispDB.worksByTag(name).catch(() => []); works.forEach(w => { LIVE.byId[w.id] = w; }); }
+      else { const nl = name.toLowerCase(); works = W.WORKS.filter(w => (w.source || "").toLowerCase() === nl || (w.type === "fan" ? "fanwork" : "original") === nl || (w.tags || []).some(t => t.toLowerCase() === nl)); }
+    } catch (e) { console.error("[wisp] tag page load failed:", e); }
+    LIVE.tagPage = { name: name, works: works };
+    renderTagPage();
+  }
+  function renderTagPage() {
+    const tp = LIVE.tagPage; if (!tp) return;
+    const works = tp.works || [];
+    const grid = works.length
+      ? (settings.view === "list" ? `<div class="stack-list">${works.map(cardList).join("")}</div>` : `<div class="work-grid" style="margin-top:18px">${works.map(cardGallery).join("")}</div>`)
+      : `<div style="text-align:center;padding:64px 0;color:var(--ink3)"><p style="font-size:16px;color:var(--ink2)">Nothing tagged &ldquo;${esc(tp.name)}&rdquo; yet.</p><p style="font-size:14px">As works pick up this tag, they'll gather here.</p></div>`;
+    $("#screen-browse").innerHTML = `
+      <div class="page page--wide">
+        <button class="btn--link" data-nav="browse" style="margin-bottom:16px">&lsaquo; All works</button>
+        <div class="eyebrow rose" style="margin-bottom:6px">Tag</div>
+        <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+          <h1 class="display" style="font-size:30px;margin:0">${esc(tp.name)}</h1>
+          <span class="muted" style="font-size:14px">${works.length} ${works.length === 1 ? "work" : "works"}</span>
+        </div>
+        <p class="section-lead" style="margin-top:6px">Everything tagged or set in &ldquo;${esc(tp.name)}&rdquo;.</p>
+        ${grid}
+      </div>`;
+  }
+
   async function loadSeriesPage(id) {
     loadingScreen("#screen-browse");
     LIVE.seriesPage = null;
@@ -4452,6 +4528,7 @@
     if (seg === "hub") screen = "community";   // hub pages live in the community surface
     if (seg === "event") screen = "community"; // event spaces live in the community surface
     if (seg === "series") screen = "browse";   // series pages live in the browse surface
+    if (seg === "tag") screen = "browse";       // tag collection pages live in the browse surface
 
     setActive(screen);
     closeSheet();
@@ -4467,6 +4544,7 @@
     else if (screen === "work") { live ? loadWork(arg || "") : renderWork(arg); }
     else if (screen === "browse") {
       if (seg === "series") { live ? loadSeriesPage(arg) : renderSeriesUnavailable(); }
+      else if (seg === "tag") { loadTagPage(arg || ""); }
       else { live ? loadBrowse() : renderBrowse(); }
     }
     else if (screen === "home") { live ? loadHome() : renderHome(); }
@@ -4564,7 +4642,9 @@
     }
 
     const tagEl = e.target.closest("[data-tag]:not([data-tag-more])");
-    if (tagEl) { filterState.tagsInc.add(tagEl.dataset.tag); navigate("browse"); if (location.hash.includes("browse")) renderBrowse(); return; }
+    if (tagEl) { navigate("tag/" + encodeURIComponent(tagEl.dataset.tag)); return; }
+    const btype = e.target.closest("[data-browse-type]");
+    if (btype) { const onBrowse = location.hash.replace(/^#\/?/, "").split("/")[0] === "browse"; filterState.type = btype.dataset.browseType; navigate("browse"); if (onBrowse) refreshBrowse(); return; }
 
     const lm = e.target.closest("[data-live-menu]");
     if (lm) { liveWorkMenu(lm.dataset.liveMenu); return; }
@@ -4666,7 +4746,7 @@
     const openEv = e.target.closest("[data-open-event]");
     if (openEv) { closeNotifPop(); navigate("event/" + openEv.dataset.openEvent); return; }
     const work = e.target.closest("[data-work]");
-    if (work && !e.target.closest("[data-read]")) { navigate("work/" + work.dataset.work); return; }
+    if (work && !e.target.closest("[data-read]") && !e.target.closest("[data-tag]") && !e.target.closest("[data-browse-type]")) { navigate("work/" + work.dataset.work); return; }
 
     const back = e.target.closest("[data-back]");
     if (back) { history.length > 1 ? history.back() : navigate("home"); return; }
@@ -4776,10 +4856,13 @@
   document.addEventListener("click", (e) => {
     const type = e.target.closest("[data-type]");
     if (type) { filterState.type = type.dataset.type; refreshBrowse(); return; }
+    const statusBtn = e.target.closest("[data-status]");
+    if (statusBtn) { filterState.status = statusBtn.dataset.status; refreshBrowse(); return; }
     const clr = e.target.closest("[data-clear]");
     if (clr) {
       const [k, v] = clr.dataset.clear.split(":");
       if (k === "type") filterState.type = "all";
+      else if (k === "status") filterState.status = "all";
       else if (k === "rating") filterState.ratings.delete(v);
       else if (k === "inc") filterState.tagsInc.delete(v);
       else if (k === "exc") filterState.tagsExc.delete(v);
