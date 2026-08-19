@@ -5785,10 +5785,10 @@
     { id: "countdown", name: "Countdown", icon: "clock", blurb: "Days until a date.",
       render() { const s = mwState("countdown"); if (!s.target) return `<p class="mw-sub">No date set yet.</p><button class="btn btn--ghost btn--full btn--sm" data-mw-cd-set>Set a date</button>`; const days = Math.ceil((new Date(s.target).getTime() - Date.now()) / 86400000); return `<div class="mw-big">${days >= 0 ? days : 0}</div><p class="mw-sub">${days > 0 ? "days to " : days === 0 ? "today: " : "since "}${esc(s.label || "your date")}</p><button class="btn btn--quiet btn--full btn--sm" data-mw-cd-set>Change</button>`; },
       wire(el) { const b = el.querySelector("[data-mw-cd-set]"); b && b.addEventListener("click", () => { const t = (window.prompt("Date (YYYY-MM-DD)", mwState("countdown").target || "") || "").trim(); if (!t) return; const label = (window.prompt("What is it? (optional)", mwState("countdown").label || "") || "").trim(); mwSetState("countdown", { target: t, label }); renderWidgets(); }); } },
-    pickerWidget("quote", "Quote of the day", "sparkle", "A writing quote.", MW_QUOTES, "New quote"),
+    pickerWidget("quote", "Quote of the day", "quote", "A writing quote.", MW_QUOTES, "New quote"),
     pickerWidget("prompt", "Writing prompt", "edit", "A story prompt.", MW_PROMPTS, "New prompt"),
-    pickerWidget("fortune", "Fortune cookie", "sparkle", "A tiny fortune.", MW_FORTUNES, "Crack it open"),
-    pickerWidget("eightball", "Magic 8-ball", "sparkle", "Ask a question.", MW_EIGHTBALL, "Ask again"),
+    pickerWidget("fortune", "Fortune cookie", "quote", "A tiny fortune.", MW_FORTUNES, "Crack it open"),
+    pickerWidget("eightball", "Magic 8-ball", "eye", "Ask a question.", MW_EIGHTBALL, "Ask again"),
     pickerWidget("affirmation", "Affirmation", "heart", "A kind word.", MW_AFFIRM, "Another"),
     pickerWidget("didyouknow", "Did you know", "book", "A book fact.", MW_FACTS, "Tell me more"),
     { id: "fandom-roulette", name: "Fandom roulette", icon: "shuffle", blurb: "A random fandom.",
@@ -5797,10 +5797,10 @@
     { id: "tag-roulette", name: "Tag roulette", icon: "tag", blurb: "A random tag.",
       render() { const t = rand(TAG_SUGGEST); return `<p class="mw-out" data-mw-out>${esc(t)}</p><button class="btn btn--ghost btn--full btn--sm" data-mw-roll>Spin</button>`; },
       wire(el) { const out = el.querySelector("[data-mw-out]"); el.querySelector("[data-mw-roll]").addEventListener("click", () => { const t = rand(TAG_SUGGEST); out.textContent = t; out.classList.remove("mw-pop"); void out.offsetWidth; out.classList.add("mw-pop"); }); out.style.cursor = "pointer"; out.addEventListener("click", () => navigate("tag/" + encodeURIComponent(out.textContent))); } },
-    { id: "dice", name: "Dice roller", icon: "sparkle", blurb: "Roll a d6 or a d20.",
+    { id: "dice", name: "Dice roller", icon: "die", blurb: "Roll a d6 or a d20.",
       render() { return `<div class="mw-big" data-mw-out>-</div><div class="mw-row"><button class="btn btn--ghost btn--sm" data-mw-die="6">d6</button><button class="btn btn--ghost btn--sm" data-mw-die="20">d20</button></div>`; },
       wire(el) { const out = el.querySelector("[data-mw-out]"); el.querySelectorAll("[data-mw-die]").forEach(b => b.addEventListener("click", () => { out.textContent = 1 + Math.floor(Math.random() * (+b.dataset.mwDie)); out.classList.remove("mw-pop"); void out.offsetWidth; out.classList.add("mw-pop"); })); } },
-    { id: "coin", name: "Coin flip", icon: "sparkle", blurb: "Heads or tails.",
+    { id: "coin", name: "Coin flip", icon: "shuffle", blurb: "Heads or tails.",
       render() { return `<div class="mw-big" data-mw-out>?</div><button class="btn btn--ghost btn--full btn--sm" data-mw-roll>Flip</button>`; },
       wire(el) { const out = el.querySelector("[data-mw-out]"); el.querySelector("[data-mw-roll]").addEventListener("click", () => { out.textContent = Math.random() < 0.5 ? "Heads" : "Tails"; out.classList.remove("mw-pop"); void out.offsetWidth; out.classList.add("mw-pop"); }); } },
     { id: "mood", name: "Mood check", icon: "heart", blurb: "Today's mood.",
@@ -5815,25 +5815,25 @@
     { id: "water", name: "Water nudge", icon: "check", blurb: "Glasses of water today.",
       render() { const s = mwState("water"); const n = s.day === todayKey() ? (s.n || 0) : 0; return `<div class="mw-big">${n} 💧</div><p class="mw-sub">glasses today</p><div class="mw-row"><button class="btn btn--ghost btn--sm" data-mw-water="1">+1</button><button class="btn btn--quiet btn--sm" data-mw-water="-1">-1</button></div>`; },
       wire(el) { el.querySelectorAll("[data-mw-water]").forEach(b => b.addEventListener("click", () => { const s = mwState("water"); const n = Math.max(0, (s.day === todayKey() ? (s.n || 0) : 0) + (+b.dataset.mwWater)); mwSetState("water", { n, day: todayKey() }); renderWidgets(); })); } },
-    { id: "stretch", name: "Stretch nudge", icon: "sparkle", blurb: "A reminder to move.",
+    { id: "stretch", name: "Stretch nudge", icon: "leaf", blurb: "A reminder to move.",
       render() { return `<p class="mw-sub">Been reading a while? Roll your shoulders, look away from the screen, breathe.</p><button class="btn btn--ghost btn--full btn--sm" data-mw-stretch>I stretched</button>`; },
       wire(el) { el.querySelector("[data-mw-stretch]").addEventListener("click", () => toast("Nice. Your future self says thanks.")); } },
     { id: "breathing", name: "Breathing", icon: "heart", blurb: "A 4-7-8 breathing circle.",
       render() { return `<div class="mw-breathe" data-mw-breathe><span class="mw-breathe__dot"></span><span class="mw-breathe__txt">Tap to begin</span></div>`; },
       wire(el) { const box = el.querySelector("[data-mw-breathe]"); const txt = box.querySelector(".mw-breathe__txt"); let on = false, ph = 0; const phases = [["Breathe in", 4000, "in"], ["Hold", 7000, "hold"], ["Breathe out", 8000, "out"]]; let tm = null; const step = () => { const [label, ms, cls] = phases[ph % 3]; txt.textContent = label; box.classList.remove("is-in", "is-hold", "is-out"); box.classList.add("is-" + cls); ph++; tm = setTimeout(step, ms); }; box.addEventListener("click", () => { on = !on; if (on) { ph = 0; step(); } else { clearTimeout(tm); box.classList.remove("is-in", "is-hold", "is-out"); txt.textContent = "Tap to begin"; } }); miniCleanup(() => clearTimeout(tm)); } },
-    { id: "cat", name: "Screen cat", icon: "sparkle", blurb: "A cat strolls the screen.",
+    { id: "cat", name: "Screen cat", icon: "paw", blurb: "A cat strolls the screen.",
       render() { return `<p class="mw-sub">A cat wanders past when you call it.</p><button class="btn btn--ghost btn--full btn--sm" data-mw-cat>Here, kitty</button>`; },
       wire(el) { el.querySelector("[data-mw-cat]").addEventListener("click", catWalk); } },
-    { id: "confetti", name: "Confetti", icon: "sparkle", blurb: "A burst of confetti.",
+    { id: "confetti", name: "Confetti", icon: "party", blurb: "A burst of confetti.",
       render() { return `<p class="mw-sub">Finished a chapter? Give yourself a moment.</p><button class="btn btn--ghost btn--full btn--sm" data-mw-conf>Celebrate</button>`; },
       wire(el) { el.querySelector("[data-mw-conf]").addEventListener("click", confettiBurst); } },
-    { id: "petals", name: "Falling petals", icon: "sparkle", blurb: "Petals drifting down.",
+    { id: "petals", name: "Falling petals", icon: "leaf", blurb: "Petals drifting down.",
       render() { const on = !!mwState("petals").on; return `<p class="mw-sub">A quiet, drifting backdrop.</p><button class="btn ${on ? "btn--primary" : "btn--ghost"} btn--full btn--sm" data-mw-petals>${on ? "Turn off" : "Turn on"}</button>`; },
       wire(el) { el.querySelector("[data-mw-petals]").addEventListener("click", () => { const on = !mwState("petals").on; mwSetState("petals", { on }); togglePetals(on); renderWidgets(); }); } },
     { id: "focus", name: "Focus mode", icon: "book", blurb: "Everything but the page, dimmed.",
       render() { const on = !!mwState("focus").on; return `<p class="mw-sub">Quiets everything but the page.</p><button class="btn ${on ? "btn--primary" : "btn--ghost"} btn--full btn--sm" data-mw-focus>${on ? "Turn off" : "Turn on"}</button>`; },
       wire(el) { el.querySelector("[data-mw-focus]").addEventListener("click", () => { const on = !mwState("focus").on; mwSetState("focus", { on }); document.body.classList.toggle("focus-mode", on); renderWidgets(); }); } },
-    { id: "accent", name: "Accent shuffler", icon: "sparkle", blurb: "A new accent color.",
+    { id: "accent", name: "Accent shuffler", icon: "palette", blurb: "A new accent color.",
       render() { return `<p class="mw-sub">Current accent: <b>${esc(settings.accent || "default")}</b></p><button class="btn btn--ghost btn--full btn--sm" data-mw-accent>Shuffle</button>`; },
       wire(el) { el.querySelector("[data-mw-accent]").addEventListener("click", () => { const ids = ACCENTS.map(a => a.id).filter(x => x !== settings.accent); settings.accent = rand(ids); applySettings(); renderWidgets(); }); } },
     { id: "wpm", name: "Reading pace", icon: "clock", blurb: "Your words per minute.",
@@ -5861,7 +5861,7 @@
     const cards = ids.map(id => {
       const def = MINI_WIDGETS.find(w => w.id === id); if (!def) return "";
       return `<div class="widget mini-widget" data-mw="${esc(id)}">
-        <div class="widget__label mw-head"><span>${icon(def.icon || "sparkle", 13)} ${esc(def.name)}</span><button class="mw-remove" data-mw-remove="${esc(id)}" aria-label="Remove ${esc(def.name)}">&times;</button></div>
+        <div class="widget__label mw-head"><span>${icon(def.icon || "book", 13)} ${esc(def.name)}</span><button class="mw-remove" data-mw-remove="${esc(id)}" aria-label="Remove ${esc(def.name)}">&times;</button></div>
         <div class="mw-body">${def.render()}</div>
       </div>`;
     }).join("");
@@ -5890,7 +5890,7 @@
   function openWidgetPicker() {
     const installed = new Set(mwLoad());
     const rows = MINI_WIDGETS.map(def => `<button class="mw-pick-row ${installed.has(def.id) ? "is-in" : ""}" data-mw-pick="${esc(def.id)}">
-      <span class="mw-pick-ic">${icon(def.icon || "sparkle", 16)}</span>
+      <span class="mw-pick-ic">${icon(def.icon || "book", 16)}</span>
       <span class="mw-pick-txt"><span class="mw-pick-name">${esc(def.name)}</span><span class="mw-pick-blurb">${esc(def.blurb)}</span></span>
       <span class="mw-pick-act">${installed.has(def.id) ? icon("check", 15) + " Added" : icon("plus", 15) + " Add"}</span>
     </button>`).join("");
