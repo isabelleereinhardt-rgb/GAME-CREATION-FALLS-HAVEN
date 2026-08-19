@@ -212,6 +212,32 @@ window.WispDB = (function () {
   }
 
   /* ---- writes ----------------------------------------------------------- */
+
+  // If the database rejects a column that does not exist yet (an operator who
+  // has not run every migration), name it so the caller can drop it and retry.
+  // This keeps saving a work from silently failing on an optional field.
+  function missingColumn(error) {
+    if (!error) return null;
+    const msg = error.message || error.details || "";
+    if (error.code === "42703" || error.code === "PGRST204" || /does not exist|could not find|schema cache/i.test(msg)) {
+      const m = msg.match(/'([a-z_]+)'|"([a-z_]+)"|column ([a-z_]+)/i);
+      return m ? (m[1] || m[2] || m[3]) : null;
+    }
+    return null;
+  }
+  // Run a mutation; when it fails on an unknown column, drop that key and try
+  // again, so a missing optional column never blocks the whole save.
+  async function mutateResilient(run, patch) {
+    for (let i = 0; i < 12; i++) {
+      const res = await run(patch);
+      if (!res.error) return res;
+      const col = missingColumn(res.error);
+      if (col && Object.prototype.hasOwnProperty.call(patch, col)) { delete patch[col]; continue; }
+      throw res.error;
+    }
+    throw new Error("Could not save after dropping unknown columns.");
+  }
+
   async function createWork(f) {
     if (!user) throw new Error("Sign in to publish.");
     const row = {
@@ -226,16 +252,17 @@ window.WispDB = (function () {
     if (f.schedule !== undefined) row.schedule = f.schedule;
     if (f.format) row.format = f.format;
     ["comments_enabled", "logged_in_only", "hide_stats"].forEach(k => { if (f[k] !== undefined) row[k] = f[k]; });
-    const { data, error } = await client.from("works").insert(row).select().single();
-    if (error) throw error;
+    const { data } = await mutateResilient(
+      (r) => client.from("works").insert(r).select().single(), row);
     if (f.chapterBody != null) {
       const scheduled = !!f.scheduled_for;
       const published = !scheduled && (f.status || "draft") !== "draft";
-      await client.from("chapters").insert({
+      const chRow = {
         work_id: data.id, number: 1, title: f.chapterTitle || "", body: f.chapterBody,
         published, published_at: published ? new Date().toISOString() : null,
         scheduled_for: scheduled ? f.scheduled_for : null
-      });
+      };
+      await mutateResilient((r) => client.from("chapters").insert(r), chRow);
     }
     if (f.tags && f.tags.length) await addTags(data.id, f.tags);
     return data;
@@ -264,8 +291,8 @@ window.WispDB = (function () {
       if (fields[k] !== undefined) patch[k] = fields[k];
     });
     patch.updated_at = new Date().toISOString();
-    const { data, error } = await client.from("works").update(patch).eq("id", id).eq("author_id", user.id).select().single();
-    if (error) throw error;
+    const { data } = await mutateResilient(
+      (p) => client.from("works").update(p).eq("id", id).eq("author_id", user.id).select().single(), patch);
     return data;
   }
 
@@ -284,16 +311,15 @@ window.WispDB = (function () {
       const patch = { title: f.title || "", body: f.body || "", updated_at: new Date().toISOString(),
                       published, scheduled_for: scheduled ? f.scheduled_for : null };
       if (published) patch.published_at = new Date().toISOString();
-      const { error } = await client.from("chapters").update(patch).eq("id", f.id);
-      if (error) throw error;
+      await mutateResilient((p) => client.from("chapters").update(p).eq("id", f.id), patch);
       return f.id;
     }
-    const { data, error } = await client.from("chapters").insert({
+    const chRow = {
       work_id: workId, number: f.number || 1, title: f.title || "", body: f.body || "",
       published, published_at: published ? new Date().toISOString() : null,
       scheduled_for: scheduled ? f.scheduled_for : null
-    }).select("id").single();
-    if (error) throw error;
+    };
+    const { data } = await mutateResilient((r) => client.from("chapters").insert(r).select("id").single(), chRow);
     return data.id;
   }
 

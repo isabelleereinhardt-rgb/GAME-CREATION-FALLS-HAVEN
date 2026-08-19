@@ -585,6 +585,8 @@
     return `<span class="cv" style="background:${bg}">${letter ? `<span class="cv__letter">${esc(letter)}</span>` : ""}</span>`;
   }
   function rate(r) { return `<span class="rate rate--${r.toLowerCase()}" data-tip="${esc(rateTip(r))}" tabindex="0" role="img" aria-label="Rated ${esc((RATE_INFO[r] || {}).label || RATE[r] || r)}">${r}</span>`; }
+  // The rating as a small pill for the card body, so it never sits on the cover.
+  function ratePill(r) { const k = String(r || "G").toLowerCase(); return `<span class="pill pill--rate rate--${k}" data-tip="${esc(rateTip(r))}" tabindex="0" role="img" aria-label="Rated ${esc((RATE_INFO[r] || {}).label || RATE[r] || r)}">${esc(r)}</span>`; }
 
   function tagRow(tags, shown = 2) {
     const head = tags.slice(0, shown).map(t => `<button class="tag" data-tag="${esc(t)}">${esc(t)}</button>`).join("");
@@ -607,9 +609,9 @@
       : `<span class="stat">${icon("eye",14)}${esc(w.reads)}</span>`;
     const readMark = userState.visited.has(w.id) ? `<span class="read-badge">${icon("check",11)} Read</span>` : "";
     return `<article class="card" data-work="${w.id}">
-      <span class="card__cover">${cover(w.cover, w.title)}${rate(w.rating)}${flag}${readMark}</span>
+      <span class="card__cover">${cover(w.cover, w.title)}${flag}${readMark}</span>
       <span class="card__body">
-        <span class="tag-row"><button class="pill pill--link" data-browse-type="${w.type}">${w.type === "fan" ? "Fanwork" : "Original"}</button>${w.source ? `<button class="pill pill--link" data-tag="${esc(w.source)}">${esc(w.source)}</button>` : ""}</span>
+        <span class="tag-row">${ratePill(w.rating)}<button class="pill pill--link" data-browse-type="${w.type}">${w.type === "fan" ? "Fanwork" : "Original"}</button>${w.source ? `<button class="pill pill--link" data-tag="${esc(w.source)}">${esc(w.source)}</button>` : ""}</span>
         <a class="card__title" href="#/work/${w.id}">${esc(w.title)}</a>
         <span class="card__by">by ${esc(w.author)}</span>
         <span class="card__summary">${esc(w.summary)}</span>
@@ -630,7 +632,7 @@
   function cardList(w) {
     const flag = w.format === "comic" ? "Comic" : (w.warnings[0] ? w.warnings[0] : "");
     return `<article class="list-card" data-work="${w.id}">
-      <span class="list-card__cover">${cover(w.cover, w.title)}${rate(w.rating)}${userState.visited.has(w.id) ? `<span class="read-badge">${icon("check",11)} Read</span>` : ""}</span>
+      <span class="list-card__cover">${cover(w.cover, w.title)}${userState.visited.has(w.id) ? `<span class="read-badge">${icon("check",11)} Read</span>` : ""}</span>
       <span class="list-card__main">
         <span class="list-card__line">
           <a class="list-card__title" href="#/work/${w.id}">${esc(w.title)}</a>
@@ -2100,10 +2102,26 @@
       b.setAttribute("aria-pressed", String(on));
     });
   }
+  // The exact chapter text on screen right now, demo or live: each paragraph's
+  // own words, skipping the comment marker and its thread slot.
+  function readerText() {
+    const parts = [];
+    document.querySelectorAll("#screen-reading .para").forEach(par => {
+      let t = "";
+      par.childNodes.forEach(n => {
+        if (n.nodeType === 1 && (n.classList.contains("para__marker") || n.classList.contains("thread-slot"))) return;
+        t += n.textContent || "";
+      });
+      t = t.trim();
+      if (t) parts.push(t);
+    });
+    return parts.join(" ");
+  }
   function toggleListen(btn) {
     if (!("speechSynthesis" in window)) { toast("Read-aloud is not available in this browser."); return; }
     if (speaking) { window.speechSynthesis.cancel(); speaking = false; btn.classList.remove("is-on"); btn.innerHTML = icon("play",16); return; }
-    const text = W.CHAPTER.paragraphs.map(p => p.t.replace(/["“”]/g, "")).join(" ");
+    const text = readerText().replace(/["“”]/g, "").trim();
+    if (!text) { toast("Nothing to read on this page yet."); return; }
     const u = new SpeechSynthesisUtterance(text);
     u.rate = 0.98; u.pitch = 1;
     u.onend = () => { speaking = false; btn.classList.remove("is-on"); btn.innerHTML = icon("play",16); };
@@ -6715,7 +6733,7 @@
       }
       liveEditor = null; editorCover = null;
       navigate("write");
-    } catch (e) { toast((e && e.message) || "Could not save."); }
+    } catch (e) { console.error("[wisp] save failed:", e); toast((e && e.message) || "Could not save. Please try again."); }
   }
 
   // Ask for a release time, then schedule the chapter for it.

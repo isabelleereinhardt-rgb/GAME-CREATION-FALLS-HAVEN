@@ -621,9 +621,17 @@ img { max-width: 100%; display: block; }
   text-align: left; width: 100%;
 }
 .card:hover { border-color: var(--rose); box-shadow: 0 10px 30px var(--shadow); transform: translateY(-2px); }
-.card__cover { position: relative; height: 150px; overflow: hidden; }
-.card__cover .rate { position: absolute; top: 10px; left: 10px; }
+/* Book covers use Wattpad's portrait 2:3, so uploaded cover art shows in full
+   instead of being cropped to a short strip. The rating now lives in the card
+   body, so nothing sits on top of the cover. */
+.card__cover { position: relative; width: 100%; aspect-ratio: 2 / 3; overflow: hidden; }
 .card__cover .cover-flag { position: absolute; top: 10px; right: 10px; }
+/* The rating shown as a small solid pill in the body, colour-coded like before. */
+.pill.pill--rate { color: #fff; border-color: transparent; box-shadow: none; font-weight: 700; letter-spacing: .02em; min-width: 22px; text-align: center; }
+.pill--rate.rate--g { background: var(--sage); }
+.pill--rate.rate--t { background: #b6844a; }
+.pill--rate.rate--m { background: #b5683f; }
+.pill--rate.rate--e { background: #a2444f; }
 .card__body { padding: 13px 15px 15px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
 .card__title { display: block; font: 600 20px/1.15 var(--font-display); color: var(--ink); }
 a.card__title:hover { color: var(--rose-ink); }
@@ -1489,7 +1497,6 @@ mark.hl {
   .page { padding: 22px 18px 60px; }
   .home-tab { font-size: 22px; }
   .work-grid { grid-template-columns: 1fr 1fr; gap: 14px; }
-  .card__cover { height: 128px; }
   .reader__wrap { padding: 22px 34px 120px; font-size: 18px; }
   .para__marker { left: -28px; }
   .chapter-nav { flex-wrap: wrap; }
