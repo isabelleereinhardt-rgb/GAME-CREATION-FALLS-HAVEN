@@ -8346,8 +8346,8 @@
     gcWord("existance", "existence"), gcWord("occassion", "occasion"), gcWord("privilage", "privilege"),
     gcWord("rythm", "rhythm"), gcWord("suprise", "surprise"), gcWord("truely", "truly"), gcWord("accross", "across"),
     gcWord("alot", "a lot"), gcWord("aswell", "as well"), gcWord("infront", "in front"),
-    gcWord("noone", "no one"), gcWord("everytime", "every time"), gcWord("payed", "paid"), gcWord("thru", "through"),
-    gcWord("wanna", "want to"), gcWord("gonna", "going to"), gcWord("kinda", "kind of"), gcWord("dont", "don't"),
+    gcWord("noone", "no one"), gcWord("everytime", "every time"), gcWord("payed", "paid"), gcWord("dont", "don't"),
+    // (Deliberately no "gonna/wanna/kinda/thru" etc. — those are voice, not typos.)
     // Missing apostrophes in common contractions.
     gcWord("cant", "can't"), gcWord("wont", "won't"), gcWord("didnt", "didn't"), gcWord("doesnt", "doesn't"),
     gcWord("isnt", "isn't"), gcWord("wasnt", "wasn't"), gcWord("werent", "weren't"), gcWord("arent", "aren't"),
@@ -8355,10 +8355,12 @@
     gcWord("havent", "haven't"), gcWord("hasnt", "hasn't"), gcWord("hadnt", "hadn't"), gcWord("wouldve", "would've"),
     gcWord("couldve", "could've"), gcWord("shouldve", "should've"), gcWord("im", "I'm"), gcWord("ive", "I've"),
     gcWord("youre", "you're"), gcWord("youve", "you've"), gcWord("theyre", "they're"), gcWord("theyve", "they've"),
-    gcWord("thats", "that's"), gcWord("whats", "what's"), gcWord("lets", "let's"), gcWord("hes", "he's"),
+    gcWord("thats", "that's"), gcWord("whats", "what's"), gcWord("hes", "he's"),
     gcWord("shes", "she's"), gcWord("weve", "we've"),
-    // Standalone lowercase "i".
-    { re: /\bi\b/g, fix: "I", caps: false },
+    // ("lets", "wont", "cant" as bare words also read as valid English — kept out of
+    //  the word list, or handled only inside the phrase rules below, to avoid nagging.)
+    // Standalone lowercase "i" as a pronoun. Skip "i." so "i.e." and list markers pass.
+    { re: /\bi\b(?!\.)/g, fix: "I", caps: false },
     // Subject-verb agreement and swapped phrases (high-confidence).
     gcPhrase("i is", "I am"), gcPhrase("i are", "I am"), gcPhrase("i has", "I have"), gcPhrase("i were", "I was"),
     gcPhrase("he don't", "he doesn't"), gcPhrase("she don't", "she doesn't"), gcPhrase("it don't", "it doesn't"),
@@ -8368,8 +8370,12 @@
     gcPhrase("could of", "could have"), gcPhrase("would of", "would have"), gcPhrase("should of", "should have"),
     gcPhrase("must of", "must have"), gcPhrase("your welcome", "you're welcome"), gcPhrase("each and every", "every")
   ];
-  // A doubled word ("the the") collapses to one, whatever it was.
+  // A doubled word ("the the") collapses to one — but plenty of repeats are
+  // deliberate in prose and dialogue, so those are left alone.
   const GC_DOUBLE = /\b(\w+)\s+\1\b/gi;
+  const GC_DOUBLE_OK = new Set(["had", "that", "no", "ha", "so", "bye", "night", "yeah", "yes",
+    "um", "uh", "oh", "ho", "blah", "hear", "knock", "tick", "choo", "bang", "beep", "tap",
+    "run", "go", "chop", "very", "really", "hush", "now", "there", "who"]);
 
   function stripGrammarMarks(ed) {
     const scope = ed || document;
@@ -8398,25 +8404,35 @@
     let count = 0;
     texts.forEach(node => {
       const text = node.nodeValue;
-      const hits = [];
-      const claim = (s, e) => hits.every(h => e <= h.s || s >= h.e);
+      // Gather every candidate match, then keep non-overlapping ones with the
+      // LONGEST winning, so "i is" -> "I am" beats the bare "i" -> "I" and
+      // "he dont" -> "he doesn't" beats "dont" -> "don't".
+      const raw = [];
       GRAMMAR_RULES.forEach(rule => {
         rule.re.lastIndex = 0; let m;
         while ((m = rule.re.exec(text))) {
           const s = m.index, e = s + m[0].length;
-          if (claim(s, e)) { const fix = rule.caps ? gcApplyCase(m[0], rule.fix) : rule.fix; if (fix !== m[0]) hits.push({ s, e, orig: m[0], fix }); }
+          const fix = rule.caps ? gcApplyCase(m[0], rule.fix) : rule.fix;
+          if (fix !== m[0]) raw.push({ s, e, orig: m[0], fix });
           if (m.index === rule.re.lastIndex) rule.re.lastIndex++;
         }
       });
       GC_DOUBLE.lastIndex = 0; let d;
-      while ((d = GC_DOUBLE.exec(text))) { const s = d.index, e = s + d[0].length; if (claim(s, e)) hits.push({ s, e, orig: d[0], fix: d[1] }); if (d.index === GC_DOUBLE.lastIndex) GC_DOUBLE.lastIndex++; }
+      while ((d = GC_DOUBLE.exec(text))) {
+        const s = d.index, e = s + d[0].length;
+        if (!GC_DOUBLE_OK.has(d[1].toLowerCase())) raw.push({ s, e, orig: d[0], fix: d[1] });
+        if (d.index === GC_DOUBLE.lastIndex) GC_DOUBLE.lastIndex++;
+      }
+      raw.sort((a, b) => (b.e - b.s) - (a.e - a.s) || a.s - b.s);   // longest match first
+      const hits = [];
+      raw.forEach(h => { if (hits.every(x => h.e <= x.s || h.s >= x.e)) hits.push(h); });
       if (!hits.length) return;
       hits.sort((a, b) => a.s - b.s);
       const frag = document.createDocumentFragment(); let pos = 0;
       hits.forEach(h => {
         if (h.s > pos) frag.appendChild(document.createTextNode(text.slice(pos, h.s)));
         const span = document.createElement("span");
-        span.className = "gc-mark"; span.setAttribute("data-fix", h.fix); span.textContent = h.orig;
+        span.className = "gc-mark"; span.setAttribute("data-fix", h.fix); span.setAttribute("data-orig", h.orig); span.textContent = h.orig;
         frag.appendChild(span); pos = h.e; count++;
       });
       if (pos < text.length) frag.appendChild(document.createTextNode(text.slice(pos)));
@@ -8431,6 +8447,13 @@
   function closeGrammarPop() { if (gcPop) { gcPop.remove(); gcPop = null; } }
   function openGrammarPop(mark) {
     closeGrammarPop();
+    // If the writer has since edited this word, the stored fix is stale — quietly
+    // drop the mark instead of offering a wrong suggestion.
+    if ((mark.textContent || "") !== (mark.getAttribute("data-orig") || "")) {
+      mark.parentNode.replaceChild(document.createTextNode(mark.textContent), mark);
+      const ed = $("#we-body"); if (ed) ed.normalize();
+      return;
+    }
     const fix = mark.getAttribute("data-fix") || "";
     gcPop = document.createElement("div"); gcPop.className = "gc-pop";
     gcPop.innerHTML = `<span class="gc-pop__lead">Change to</span>` +
@@ -8440,6 +8463,7 @@
     const r = mark.getBoundingClientRect(); const pw = gcPop.offsetWidth, ph = gcPop.offsetHeight;
     const left = Math.max(8, Math.min(r.left, window.innerWidth - pw - 8));
     let top = r.top - ph - 8; if (top < 8) top = r.bottom + 8;
+    top = Math.max(8, Math.min(top, window.innerHeight - ph - 8));   // keep it fully on screen
     gcPop.style.left = left + "px"; gcPop.style.top = top + "px";
     gcPop.querySelector("[data-gc-apply]").addEventListener("click", () => {
       mark.parentNode.replaceChild(document.createTextNode(fix), mark);
