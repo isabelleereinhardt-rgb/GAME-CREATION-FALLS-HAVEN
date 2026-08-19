@@ -627,7 +627,12 @@ img { max-width: 100%; display: block; }
 .card__cover { position: relative; width: 100%; aspect-ratio: 2 / 3; overflow: hidden; }
 .card__cover .cover-flag { position: absolute; top: 10px; right: 10px; }
 /* The rating shown as a small solid pill in the body, colour-coded like before. */
-.pill.pill--rate { color: #fff; border-color: transparent; box-shadow: none; font-weight: 700; letter-spacing: .02em; min-width: 22px; text-align: center; }
+.pill.pill--rate { color: #fff; border-color: transparent; box-shadow: none; font-weight: 700; letter-spacing: .02em; min-width: 20px; text-align: center; font-size: 11px; padding: 1px 7px; align-self: center; }
+/* The rating sits right beside the work title. */
+.card__titlerow { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.card__titlerow .card__title { display: inline; }
+.list-card__line { flex-wrap: wrap; }
+.ms-title .pill--rate { vertical-align: middle; }
 .pill--rate.rate--g { background: var(--sage); }
 .pill--rate.rate--t { background: #b6844a; }
 .pill--rate.rate--m { background: #b5683f; }

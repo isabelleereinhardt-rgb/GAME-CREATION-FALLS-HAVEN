@@ -631,8 +631,8 @@
     return `<article class="card" data-work="${w.id}">
       <span class="card__cover">${cover(w.cover, w.title)}${flag}${readMark}</span>
       <span class="card__body">
-        <span class="tag-row">${ratePill(w.rating)}<button class="pill pill--link" data-browse-type="${w.type}">${w.type === "fan" ? "Fanwork" : "Original"}</button>${w.source ? `<button class="pill pill--link" data-tag="${esc(w.source)}">${esc(w.source)}</button>` : ""}</span>
-        <a class="card__title" href="#/work/${w.id}">${esc(w.title)}</a>
+        <span class="tag-row"><button class="pill pill--link" data-browse-type="${w.type}">${w.type === "fan" ? "Fanwork" : "Original"}</button>${w.source ? `<button class="pill pill--link" data-tag="${esc(w.source)}">${esc(w.source)}</button>` : ""}</span>
+        <span class="card__titlerow"><a class="card__title" href="#/work/${w.id}">${esc(w.title)}</a>${ratePill(w.rating)}</span>
         <span class="card__by">by ${esc(w.author)}</span>
         <span class="card__summary">${esc(w.summary)}</span>
         ${tagRow(w.tags)}
@@ -656,6 +656,7 @@
       <span class="list-card__main">
         <span class="list-card__line">
           <a class="list-card__title" href="#/work/${w.id}">${esc(w.title)}</a>
+          ${ratePill(w.rating)}
           <span class="list-card__by">by ${esc(w.author)}</span>
         </span>
         <span class="list-card__summary">${esc(w.summary)}</span>
@@ -3879,7 +3880,7 @@
           ${books.length
             ? `<div class="series-books">${books.map((w, idx) => `
                 <div class="series-book">
-                  <span class="series-book__n">${w.book || idx + 1}</span>
+                  <span class="series-book__n">${idx + 1}</span>
                   <div class="series-book__card">${cardList(w)}</div>
                 </div>`).join("")}</div>`
             : `<div class="editorial" style="text-align:center;padding:40px 20px">
@@ -5023,16 +5024,16 @@
       seriesId: r.series_id || null
     };
   }
-  function liveMsRow(b) {
+  function liveMsRow(b, n) {
     const st = WSTATUS[b.status] || WSTATUS.draft;
     const isPublic = b.status === "ongoing" || b.status === "complete";
     const stats = isPublic
       ? `<span class="ms-stats"><span class="stat stat--heart">${icon("heart",13)}${b.hearts}</span><span class="stat">${icon("comment",13)}${b.comments}</span><span class="stat">${icon("eye",13)}${b.reads}</span></span>`
       : `<span class="ms-stats muted">${b.status === "scheduled" ? "Scheduled, not visible to readers yet" : "Draft, only you can see it"}</span>`;
     return `<div class="ms-row" data-edit="${b.id}">
-      <span class="ms-cover">${cover(b.cover, b.title)}${rate(b.rating)}</span>
+      <span class="ms-cover">${cover(b.cover, b.title)}</span>
       <span class="ms-main">
-        <span class="ms-title">${esc(b.title)}${b.book ? `<span class="ms-book">Book ${b.book}</span>` : ""}</span>
+        <span class="ms-title">${esc(b.title)}${ratePill(b.rating)}${n ? `<span class="ms-book">Book ${n}</span>` : ""}</span>
         <span class="ms-meta">
           <span class="ms-status"><span class="pip pip--${st.pip}"></span>${st.t}</span>
           <span class="muted">${b.chapters} ${b.chapters === 1 ? "chapter" : "chapters"}</span>
@@ -5070,7 +5071,7 @@
           </div>
           ${s.description ? `<p class="muted" style="font-size:13px;margin:2px 0 12px">${esc(s.description)}</p>` : ""}
           <div class="ms-list">
-            ${inSeries.length ? inSeries.map(liveMsRow).join("") : `<p class="muted" style="font-size:13px;padding:8px 4px">No books in this series yet.</p>`}
+            ${inSeries.length ? inSeries.map((b, i) => liveMsRow(b, i + 1)).join("") : `<p class="muted" style="font-size:13px;padding:8px 4px">No books in this series yet.</p>`}
             <button class="ms-add" data-add-series-book="${esc(s.name)}">${icon("plus",15)} Add a book to this series</button>
           </div>
         </section>`;
@@ -5084,7 +5085,7 @@
           <span class="muted" style="font-size:12.5px">${standalone.length} ${standalone.length === 1 ? "work" : "works"}</span>
         </div>
         <div class="ms-list">
-          ${standalone.length ? standalone.map(liveMsRow).join("") : `<p class="muted" style="font-size:13px;padding:8px 4px">No standalone works yet.</p>`}
+          ${standalone.length ? standalone.map(b => liveMsRow(b)).join("") : `<p class="muted" style="font-size:13px;padding:8px 4px">No standalone works yet.</p>`}
           <button class="ms-add" data-edit="new">${icon("plus",15)} Start a standalone work</button>
         </div>
       </section>`;
