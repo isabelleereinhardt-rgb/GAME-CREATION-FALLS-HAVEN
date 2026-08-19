@@ -55,6 +55,7 @@ create table if not exists public.series (
   description text default '',
   type        text not null default 'original' check (type in ('fan','original')),
   source      text default '',
+  status      text not null default 'ongoing' check (status in ('ongoing','complete')),
   created_at  timestamptz not null default now()
 );
 alter table public.series enable row level security;

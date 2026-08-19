@@ -1049,9 +1049,18 @@ mark.hl { background: color-mix(in srgb, var(--amber) 34%, transparent); border-
 .editor {
   min-height: 420px; border: 1px solid var(--line); border-radius: var(--radius);
   background: var(--card); padding: 30px 34px; font: var(--read-size, 18px)/1.7 var(--font-read); color: var(--ink);
-  outline: none;
+  outline: none; position: relative;
 }
 .editor:focus { border-color: var(--rose); }
+/* Placeholder guidance: an overlay, never real text, so it can't be saved. */
+.editor.is-empty::before {
+  content: attr(data-placeholder);
+  position: absolute; left: 34px; right: 34px; top: 30px;
+  color: var(--ink3); pointer-events: none; font-style: italic;
+}
+/* An uploaded image shows inline in the editor, exactly like the reader sees it. */
+.editor figure.embed--img { margin: 1em 0; }
+.editor figure.embed--img img { display: block; max-width: 100%; height: auto; border-radius: 12px; }
 .editor h2, .editor h3, .editor h4 { font-family: var(--font-display); margin: .6em 0 .3em; line-height: 1.25; }
 .editor h2 { font-size: 1.4em; }
 .editor h3 { font-size: 1.2em; }
@@ -1362,6 +1371,8 @@ mark.hl { background: color-mix(in srgb, var(--amber) 34%, transparent); border-
 }
 .reorder-ctrls button:hover:not([disabled]) { border-color: var(--rose); color: var(--rose-ink); }
 .reorder-ctrls button[disabled] { opacity: .35; cursor: default; }
+.reorder-ctrls .reorder-del:hover:not([disabled]) { border-color: #a2444f; color: #a2444f; }
+.pill--sage { background: var(--sage-wash, rgba(120,160,120,.18)); border-color: var(--sage, #6f9a6f); color: var(--sage-ink, #3f6b3f); }
 
 .btn--danger { background: #a2444f; color: #fff; border-color: #a2444f; }
 .btn--danger:hover { background: #8a3742; border-color: #8a3742; color: #fff; }

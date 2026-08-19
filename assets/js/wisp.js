@@ -81,6 +81,7 @@
   // Seed suggestions for the tag autocomplete: broad book categories first, then
   // common story tags. In live mode the tags already in the database are merged in.
   const TAG_SUGGEST = [
+    // Core genres and the starter set.
     "Romance", "Mystery", "Fantasy", "Science Fiction", "Fanfiction", "Poetry", "Horror", "Thriller",
     "Historical", "Adventure", "Contemporary", "Literary Fiction", "Young Adult", "Drama", "Comedy",
     "Action", "Paranormal", "Dystopian", "Slice of Life", "LGBTQ+", "Nonfiction", "Short Story",
@@ -88,7 +89,139 @@
     "Hurt/Comfort", "Coming of Age", "Alternate Universe", "Time Travel", "Magic", "Vampires",
     "Werewolves", "Dragons", "Royalty", "Academia", "Small Town", "Second Chance", "Forbidden Love",
     "Redemption", "Revenge", "Heist", "Survival", "Mythology", "Fairy Tale Retelling", "Gothic",
-    "Noir", "Cyberpunk", "Steampunk", "Space Opera", "Soulmates", "Grumpy/Sunshine"
+    "Noir", "Cyberpunk", "Steampunk", "Space Opera", "Soulmates", "Grumpy/Sunshine",
+    // Genres and subgenres.
+    "Urban Fantasy", "High Fantasy", "Dark Fantasy", "Epic Fantasy", "Portal Fantasy", "Sword and Sorcery",
+    "Grimdark", "Magical Realism", "Hard Science Fiction", "Space Western", "Post-Apocalyptic", "Apocalyptic",
+    "Alien Invasion", "First Contact", "Military Science Fiction", "Time Loop", "Multiverse", "Parallel Worlds",
+    "Cozy Mystery", "Crime", "Detective", "Whodunit", "Legal Drama", "Medical Drama", "Political Drama",
+    "Espionage", "Spy Fiction", "Techno-Thriller", "Psychological Thriller", "Psychological Horror",
+    "Body Horror", "Cosmic Horror", "Survival Horror", "Supernatural", "Occult", "Witchcraft", "Demons",
+    "Angels", "Ghosts", "Zombies", "Fae", "Mermaids", "Shapeshifters", "Superhero", "Antihero",
+    "Chosen One", "Quest", "Road Trip", "Treasure Hunt", "War Story", "Western", "Pirates", "Vikings",
+    "Regency", "Victorian", "Medieval", "Renaissance", "Ancient World", "Wild West", "Roaring Twenties",
+    "Cold War", "Near Future", "Far Future", "Retelling", "Crossover", "Anthology", "Novella",
+    "Flash Fiction", "Drabble", "Serial Fiction", "Epistolary", "Diary Format", "Unreliable Narrator",
+    "Multiple POV", "Dark Academia", "Light Academia", "Utopia",
+    // Romance tropes.
+    "Fake Dating", "Fake Relationship", "Marriage of Convenience", "Arranged Marriage", "Accidental Marriage",
+    "Secret Relationship", "Office Romance", "Boss and Employee", "Bodyguard Romance", "Single Parent",
+    "Best Friends to Lovers", "Childhood Friends", "Reunited Lovers", "Rivals to Lovers", "Frenemies",
+    "Opposites Attract", "Forced Proximity", "Only One Bed", "Snowed In", "Roommates to Lovers",
+    "Neighbors to Lovers", "Pen Pals", "Long Distance", "Love Triangle", "Love at First Sight",
+    "Unrequited Love", "Pining", "Mutual Pining", "Idiots in Love", "Oblivious Crush", "Jealousy",
+    "Possessive Love", "Protective Partner", "First Love", "Age Gap", "Height Difference", "Meet Cute",
+    "Wedding", "Honeymoon", "Fake Marriage", "Marriage in Trouble", "Reconciliation", "Sports Romance",
+    "Rock Star Romance", "Celebrity Romance", "Billionaire Romance", "Cowboy Romance", "Mafia Romance",
+    "Motorcycle Club", "Holiday Romance", "Summer Romance", "Winter Romance", "Slow Dancing",
+    // Relationship and comfort dynamics.
+    "Touch-Starved", "Emotional Hurt/Comfort", "Whump", "Caretaking", "Domestic Fluff",
+    "Established Relationship", "Getting Together", "Breakup", "Make Up", "Grief", "Healing",
+    "Trauma Recovery", "Sibling Bond", "Parenthood", "Mentor and Protege", "Rivalry", "Competition",
+    "Tournament Arc", "Mental Health", "Anxiety Representation", "Neurodivergent Character",
+    "Disability Representation", "Chronic Illness",
+    // Tone and craft descriptors.
+    "Wholesome", "Feel-Good", "Heartwarming", "Bittersweet", "Tragedy", "Tearjerker", "Dark Themes",
+    "Humor", "Satire", "Parody", "Crack Treated Seriously", "Whimsical", "Cozy", "Atmospheric",
+    "Fast-Paced", "Character-Driven", "Plot-Driven", "World Building", "Ensemble Cast",
+    "Strong Female Lead", "Morally Grey", "Complex Characters", "Banter", "Witty Dialogue", "Snark",
+    "Angst with a Happy Ending", "Happy Ending", "Bittersweet Ending", "Open Ending", "Cliffhanger",
+    "Plot Twist", "Twist Ending",
+    // Settings and situations.
+    "Boarding School", "Magic School", "Summer Camp", "Coffee Shop", "Bookshop", "Bakery", "Hospital AU",
+    "Space Station", "Spaceship", "Island Setting", "Underwater", "Afterlife", "Dream World",
+    "Virtual Reality", "Castle", "Kingdom", "Empire", "Rebellion", "Resistance", "Court Intrigue",
+    "Assassins", "Bounty Hunter", "Mercenary", "Knights", "Wizards", "Elves", "Dwarves",
+    "Gods and Mortals", "Demigods", "Prophecy", "Curse", "Immortality", "Reincarnation", "Body Swap",
+    "Amnesia", "Secret Identity", "Double Life", "Undercover", "Betrayal", "Sacrifice", "Prison Break",
+    "Space Colony", "Wartime", "Post-War", "College AU", "High School AU", "Soulmate AU",
+    // Poetry and formats.
+    "Poetry Collection", "Free Verse", "Sonnet", "Spoken Word", "Screenplay", "Stage Play",
+    "Graphic Novel", "Webcomic", "Illustrated", "Interactive Fiction"
+  ];
+
+  // Pre-seeded fandoms, the same idea as the tag list: writers pick from a big
+  // starter set, and admins add more from the panel (categories, scope=fandom).
+  // Anything a writer types that is not here still saves and gets suggested to
+  // everyone else (see listFandoms). Covers books, TV, film, anime, games, more.
+  const FANDOMS = [
+    // Books and book series.
+    "Harry Potter", "Percy Jackson and the Olympians", "The Heroes of Olympus", "The Kane Chronicles",
+    "Magnus Chase and the Gods of Asgard", "The Lord of the Rings", "The Hobbit", "The Silmarillion",
+    "A Song of Ice and Fire", "The Chronicles of Narnia", "The Hunger Games", "Divergent", "The Maze Runner",
+    "Twilight", "The Mortal Instruments", "The Infernal Devices", "A Court of Thorns and Roses",
+    "Throne of Glass", "Crescent City", "Six of Crows", "Shadow and Bone", "Red Queen", "Caraval",
+    "The Cruel Prince", "The Folk of the Air", "Fourth Wing", "The Empyrean", "Warrior Cats", "Wings of Fire",
+    "Keeper of the Lost Cities", "The Inheritance Cycle", "Eragon", "His Dark Materials", "The Wheel of Time",
+    "The Stormlight Archive", "Mistborn", "The Cosmere", "The Kingkiller Chronicle", "The Witcher",
+    "Discworld", "The Dresden Files", "Outlander", "The Selection", "Shatter Me", "An Ember in the Ashes",
+    "The Raven Cycle", "The Lunar Chronicles", "Renegades", "Artemis Fowl", "Alex Rider",
+    "A Series of Unfortunate Events", "Redwall", "The Land of Stories", "The School for Good and Evil",
+    "Miss Peregrine's Home for Peculiar Children", "The Giver", "The Book Thief", "To Kill a Mockingbird",
+    "Pride and Prejudice", "Jane Eyre", "Wuthering Heights", "Little Women", "Anne of Green Gables",
+    "Sherlock Holmes", "Dracula", "Frankenstein", "The Great Gatsby", "Les Miserables",
+    "The Phantom of the Opera", "Dune", "The Foundation Series", "Ender's Game",
+    "The Hitchhiker's Guide to the Galaxy", "1984", "Brave New World", "Fahrenheit 451",
+    "The Handmaid's Tale", "Good Omens", "American Gods", "The Baby-Sitters Club", "Diary of a Wimpy Kid",
+    "Goosebumps", "Nancy Drew", "The Hardy Boys",
+    // Television.
+    "Supernatural", "Doctor Who", "Sherlock", "Stranger Things", "Game of Thrones", "House of the Dragon",
+    "Breaking Bad", "Better Call Saul", "The Office", "Friends", "Parks and Recreation",
+    "Brooklyn Nine-Nine", "Community", "How I Met Your Mother", "The Big Bang Theory", "Grey's Anatomy",
+    "The Vampire Diaries", "The Originals", "Teen Wolf", "Riverdale", "Gossip Girl", "Pretty Little Liars",
+    "Glee", "Buffy the Vampire Slayer", "Angel", "The X-Files", "Star Trek",
+    "Star Trek: The Next Generation", "The Mandalorian", "WandaVision", "Loki", "The Boys",
+    "The Umbrella Academy", "Wednesday", "Heartstopper", "Sex Education", "Euphoria", "Peaky Blinders",
+    "The Crown", "Bridgerton", "Outer Banks", "Cobra Kai", "The Last of Us", "House", "Lucifer",
+    "Once Upon a Time", "Merlin", "Downton Abbey", "Money Heist", "Squid Game", "Dark", "Ted Lasso",
+    "Succession", "The Walking Dead", "Arcane", "Castlevania", "Our Flag Means Death", "The Sandman",
+    "Andor", "Ahsoka",
+    // Film and film franchises.
+    "Star Wars", "Marvel Cinematic Universe", "The Avengers", "Spider-Man", "Iron Man",
+    "Guardians of the Galaxy", "Thor", "Black Panther", "Deadpool", "X-Men", "DC Extended Universe",
+    "Batman", "Superman", "Wonder Woman", "Justice League", "Aquaman", "The Dark Knight", "Joker",
+    "Fantastic Beasts", "Pirates of the Caribbean", "Jurassic Park", "Jurassic World", "Indiana Jones",
+    "The Matrix", "Back to the Future", "Ghostbusters", "Alien", "Predator", "The Terminator",
+    "Blade Runner", "Mad Max", "John Wick", "Fast & Furious", "Mission: Impossible", "James Bond",
+    "The Fault in Our Stars", "Frozen", "Encanto", "Moana", "Tangled", "The Lion King",
+    "Beauty and the Beast", "Aladdin", "The Little Mermaid", "Toy Story", "Finding Nemo", "Coco", "Up",
+    "Inside Out", "The Incredibles", "How to Train Your Dragon", "Shrek", "Kung Fu Panda",
+    "Despicable Me", "Spider-Man: Into the Spider-Verse", "Barbie", "Oppenheimer", "Avatar", "Interstellar",
+    "Inception", "La La Land", "The Greatest Showman",
+    // Anime and manga.
+    "Naruto", "Boruto", "Dragon Ball", "Dragon Ball Z", "One Piece", "Bleach", "Attack on Titan",
+    "Demon Slayer", "My Hero Academia", "Jujutsu Kaisen", "Death Note", "Fullmetal Alchemist",
+    "Fullmetal Alchemist: Brotherhood", "Hunter x Hunter", "Tokyo Ghoul", "Sailor Moon",
+    "Cardcaptor Sakura", "Fruits Basket", "Ouran High School Host Club", "Fairy Tail", "Black Clover",
+    "Chainsaw Man", "Spy x Family", "Haikyuu!!", "Kuroko's Basketball", "Yuri!!! on Ice", "Free!",
+    "Neon Genesis Evangelion", "Cowboy Bebop", "Code Geass", "Sword Art Online", "Re:Zero",
+    "That Time I Got Reincarnated as a Slime", "Mob Psycho 100", "One Punch Man",
+    "JoJo's Bizarre Adventure", "Inuyasha", "Pokemon", "Digimon", "Yu-Gi-Oh!", "Bungo Stray Dogs",
+    "Vinland Saga", "Dr. Stone", "The Promised Neverland", "Toilet-Bound Hanako-kun", "Given",
+    "Banana Fish", "Hetalia", "Studio Ghibli", "Spirited Away", "Howl's Moving Castle",
+    "My Neighbor Totoro", "Princess Mononoke",
+    // Video games.
+    "The Legend of Zelda", "Super Mario", "Kingdom Hearts", "Final Fantasy", "Final Fantasy VII",
+    "Undertale", "Deltarune", "Genshin Impact", "Honkai: Star Rail", "Overwatch", "League of Legends",
+    "Valorant", "Minecraft", "Fortnite", "The Elder Scrolls", "Skyrim", "Fallout", "Mass Effect",
+    "Dragon Age", "Red Dead Redemption", "Grand Theft Auto", "God of War", "Horizon Zero Dawn",
+    "Cyberpunk 2077", "The Witcher 3", "Dark Souls", "Elden Ring", "Bloodborne", "Hades",
+    "Stardew Valley", "Animal Crossing", "Splatoon", "Sonic the Hedgehog", "Kirby", "Metroid",
+    "Persona 5", "Danganronpa", "Ace Attorney", "Life is Strange", "Detroit: Become Human", "Portal",
+    "Half-Life", "BioShock", "Resident Evil", "Silent Hill", "Five Nights at Freddy's", "Hollow Knight",
+    "Celeste", "Among Us", "Apex Legends", "Destiny", "World of Warcraft", "Baldur's Gate 3",
+    "Team Fortress 2",
+    // Cartoons, comics, and animation.
+    "Avatar: The Last Airbender", "The Legend of Korra", "Steven Universe", "Adventure Time",
+    "Gravity Falls", "Rick and Morty", "BoJack Horseman", "The Owl House", "Amphibia",
+    "She-Ra and the Princesses of Power", "Voltron: Legendary Defender", "Danny Phantom", "Kim Possible",
+    "Phineas and Ferb", "Ben 10", "Winx Club", "My Little Pony: Friendship is Magic", "Hazbin Hotel",
+    "Helluva Boss", "Invincible", "The Amazing World of Gumball", "Total Drama", "Scooby-Doo",
+    "Teenage Mutant Ninja Turtles", "Teen Titans", "Miraculous Ladybug",
+    // Musicals, tabletop, and web media.
+    "Hamilton", "Dear Evan Hansen", "Wicked", "Heathers", "Beetlejuice", "Six", "Hadestown",
+    "Be More Chill", "Epic: The Musical", "Critical Role", "Dungeons & Dragons", "The Magnus Archives",
+    "Welcome to Night Vale", "Homestuck", "RWBY"
   ];
   // Build the attributes that make any element carry a hover/focus/tap tooltip.
   function tipAttrs(text) { const t = esc(text); return `data-tip="${t}" tabindex="0" aria-label="${t}"`; }
@@ -1085,6 +1218,10 @@
     let s = esc(String(text == null ? "" : text));
     const codes = [];
     s = s.replace(/`([^`]+)`/g, (_, c) => { codes.push(c); return MD_CA + (codes.length - 1) + MD_CB; });
+    // Inline image, before the link rule so the leading ! is not left behind.
+    // s is already escaped, so u/a are safe to drop into attributes as-is.
+    s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (m, a, u) =>
+      /^https?:\/\//i.test(u) ? `<img src="${u}" alt="${a}" loading="lazy" decoding="async" style="max-width:100%;height:auto">` : m);
     s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, t, u) =>
       /^(https?:|mailto:)/i.test(u) ? `<a href="${esc(u)}" target="_blank" rel="noopener nofollow">${t}</a>` : m);
     s = s.replace(/\*\*([^*]+?)\*\*/g, "<strong>$1</strong>")
@@ -1189,6 +1326,7 @@
       if (n.nodeType !== 1) return;
       const tag = n.nodeName.toLowerCase();
       if (tag === "br") { out += "\n"; return; }
+      if (tag === "img") { const src = n.getAttribute("src") || ""; const alt = n.getAttribute("alt") || ""; out += src ? `![${alt}](${src})` : ""; return; }
       const inner = inlineToMd(n);
       if (tag === "strong" || tag === "b") out += inner.trim() ? `**${inner}**` : inner;
       else if (tag === "em" || tag === "i") out += inner.trim() ? `*${inner}*` : inner;
@@ -1215,6 +1353,24 @@
     return inlineToMd(node).replace(/\n{2,}/g, "\n").replace(/^\n+|\n+$/g, "");
   }
 
+  // An inserted image or an embed lives in the editor as a <figure> (or a bare
+  // <img>). Serialize it back to its Markdown line so it round-trips exactly:
+  // the URL rides in an attribute, never as fragile editable text.
+  function figureOrImgToMd(node) {
+    const isImg = node.nodeName.toLowerCase() === "img";
+    const img = isImg ? node : (node.querySelector ? node.querySelector("img") : null);
+    if (img) { const src = img.getAttribute("src") || ""; const alt = img.getAttribute("alt") || ""; return src ? `![${alt}](${src})` : ""; }
+    const a = node.querySelector ? node.querySelector(".embed__source a[href], a[href]") : null;
+    if (a) {
+      const href = a.getAttribute("href") || "";
+      if (!/^https?:\/\//i.test(href)) return "";
+      let label = (a.textContent || "").replace(/↗/g, "").trim();
+      if (/^Open on /.test(label)) label = "";
+      return `@[${label}](${href})`;
+    }
+    return "";
+  }
+
   function editorHtmlToMd(el) {
     if (!el) return "";
     const BLOCK = new Set(["p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "ul", "ol", "hr", "pre"]);
@@ -1228,7 +1384,11 @@
     };
     Array.from(el.childNodes).forEach(node => {
       const tag = node.nodeType === 1 ? node.nodeName.toLowerCase() : "";
-      if (node.nodeType === 1 && BLOCK.has(tag)) {
+      if (node.nodeType === 1 && (tag === "figure" || tag === "img")) {
+        flushInline();
+        const b = figureOrImgToMd(node);
+        if (b && b.trim()) blocks.push(b);
+      } else if (node.nodeType === 1 && BLOCK.has(tag)) {
         flushInline();
         const b = serializeBlock(node, tag);
         if (b && b.trim()) blocks.push(b);
@@ -2204,7 +2364,7 @@
         <button type="button" title="Horizontal rule" data-fmt="hr"><span style="display:inline-block;width:16px;height:2px;background:currentColor;border-radius:2px"></span></button>
         <span style="margin-left:auto;font-size:12px;color:var(--ink3);padding:0 8px">Markdown shortcuts on</span>
       </div>
-      <div class="editor" id="we-body" contenteditable="true" spellcheck="true" aria-label="Chapter body">${bodyHTML}</div>`;
+      <div class="editor" id="we-body" contenteditable="true" spellcheck="true" aria-label="Chapter body" data-placeholder="Start typing, or paste from another editor. Format with the toolbar above, or use Markdown shortcuts.">${bodyHTML}</div>`;
   }
   function comicZoneHTML() {
     return `
@@ -2238,6 +2398,7 @@
     if (!z) return;
     z.innerHTML = bodyZoneHTML();
     wireBodyZone();
+    if (editorFormat !== "comic") { const ed = $("#we-body"); if (ed) { ["input", "keyup", "paste", "cut", "focus", "blur"].forEach(ev => ed.addEventListener(ev, () => setTimeout(updateEditorEmpty, 0))); updateEditorEmpty(); } }
   }
   function wireBodyZone() {
     if (editorFormat !== "comic") return;
@@ -2289,11 +2450,11 @@
 
     // The editor holds one chapter at a time. Live edits load the real text;
     // otherwise the editor opens on a fresh chapter.
+    // A fresh chapter opens EMPTY: the guidance lives in a placeholder overlay,
+    // never as real text, so nothing gets published unless the writer types it.
     const bodyHTML = editingLive && liveEditor && liveEditor.chapter
       ? bodyToEditorHTML(liveEditor.chapter.body)
-      : `<h2>Chapter ${chapters + 1}${isNew ? ": Untitled" : ""}</h2>
-         <p>${isNew ? "Start typing, or paste from another editor." : "Pick up where you left off. Your writing saves automatically."}</p>
-         <p>Format with the toolbar above, or use Markdown shortcuts.</p>`;
+      : "<p><br></p>";
     editorProseHTML = bodyHTML;
 
     const schedPre = parseSchedule(work && work.schedule);
@@ -2456,15 +2617,51 @@
     ["#we-sched-day", "#we-sched-time"].forEach(sel => { const el = $(sel); if (el) el.addEventListener("input", schedEcho); });
     schedEcho();
 
-    // Additional-tags autocomplete: house categories plus tags already in use.
+    // Hub names double as tags and fandoms: a hub gathers every work tagged
+    // with (or set in) its name, so surfacing hub names in the suggestions is
+    // how a writer knows to tag into "Winx Club" and land in that hub.
+    const hubNamesP = isLive()
+      ? WispDB.listHubs().then(hs => (hs || []).map(h => h.name).filter(Boolean)).catch(() => [])
+      : Promise.resolve([]);
+
+    // Additional-tags autocomplete: house categories, hub names, and tags in use.
+    // Each source merges in as it resolves, so a slow one never holds up the rest.
     const tagsInput = $("#we-tags");
     if (tagsInput) {
       const acTags = TAG_SUGGEST.slice();
       attachAutocomplete(tagsInput, () => acTags);
-      if (isLive()) WispDB.listTags(500).then(names => {
+      if (isLive()) {
         const have = new Set(acTags.map(s => s.toLowerCase()));
-        (names || []).forEach(n => { if (n && !have.has(n.toLowerCase())) { acTags.push(n); have.add(n.toLowerCase()); } });
-      }).catch(() => {});
+        const merge = (arr) => (arr || []).forEach(n => { const v = (n || "").trim(); if (v && !have.has(v.toLowerCase())) { acTags.push(v); have.add(v.toLowerCase()); } });
+        WispDB.listTags(500).then(merge).catch(() => {});
+        hubNamesP.then(merge).catch(() => {});
+      }
+    }
+
+    // Fandom autocomplete on the source field for fanworks: the big pre-seeded
+    // list, plus any fandoms the admin added, plus hub names, plus every fandom
+    // already used on the site, so one writer's fandom suggests it to the next.
+    const srcInput = $("#we-source");
+    if (srcInput && type === "fan") {
+      const acFandoms = FANDOMS.slice();
+      attachAutocomplete(srcInput, () => acFandoms);
+      if (isLive()) {
+        const have = new Set(acFandoms.map(s => s.toLowerCase()));
+        const merge = (arr) => (arr || []).forEach(n => { const v = (n || "").trim(); if (v && !have.has(v.toLowerCase())) { acFandoms.push(v); have.add(v.toLowerCase()); } });
+        WispDB.listCategories("fandom").then(cs => merge((cs || []).map(c => c.name))).catch(() => {});
+        WispDB.listFandoms(1000).then(merge).catch(() => {});
+        hubNamesP.then(merge).catch(() => {});
+      }
+    }
+
+    // Placeholder overlay: the guidance shows only while the editor is empty,
+    // so it can never be saved as real chapter text. Keep it in sync as the
+    // writer types, pastes, or clears everything back out.
+    const bodyEd = $("#we-body");
+    if (bodyEd) {
+      ["input", "keyup", "paste", "cut", "focus", "blur"].forEach(ev =>
+        bodyEd.addEventListener(ev, () => setTimeout(updateEditorEmpty, 0)));
+      updateEditorEmpty();
     }
 
     // Reorder chapters up or down (live works only).
@@ -3355,7 +3552,7 @@
         <button class="btn--link" data-nav="browse" style="margin-bottom:18px">&lsaquo; Browse</button>
         <div class="hub-hero">
           <div class="hub-hero__main">
-            <div class="eyebrow rose" style="margin-bottom:6px">Series${series.type === "fan" ? " &middot; Fanwork" : ""}${series.source ? " &middot; " + esc(series.source) : ""}</div>
+            <div class="eyebrow rose" style="margin-bottom:6px">Series${series.type === "fan" ? " &middot; Fanwork" : ""}${series.source ? " &middot; " + esc(series.source) : ""} &middot; ${series.status === "complete" ? "Complete" : "Ongoing"}</div>
             <h1 class="display" style="font-size:30px;margin:0 0 6px">${esc(series.name)}</h1>
             ${author ? `<div class="soft" style="font-size:15px;margin:0 0 8px">by ${authorLink ? `<a href="${authorLink}">${esc(author)}</a>` : esc(author)}</div>` : ""}
             ${series.description ? `<p class="section-lead" style="margin:0">${esc(series.description)}</p>` : ""}
@@ -4102,7 +4299,7 @@
           <h2>${esc(w.title)}</h2>
           <p>This work is rated <b>${RATE[w.rating]}</b>${w.warnings.length ? " and carries the following warnings:" : "."}</p>
           ${w.warnings.length ? `<div class="gate__warnings">${w.warnings.map(x => `<span class="pill">${esc(x)}</span>`).join("")}</div>` : ""}
-          <p style="font-size:13.5px;color:var(--ink3)">A soft, self-attested check. Nothing is collected, no ID, no account flag. We remember your choice so this stops appearing.</p>
+          <p style="font-size:13.5px;color:var(--ink3)">We remember your choice so this stops appearing.</p>
           <div class="gate__actions">
             <button class="btn btn--quiet" data-gate="back">Take me back</button>
             <button class="btn btn--primary" data-gate="ok">I am 18 or older, continue</button>
@@ -4301,6 +4498,7 @@
               <span class="pill">Series</span>
               <span class="pill">${s.type === "fan" ? "Fanwork" : "Original"}</span>
               ${s.source ? `<span class="pill">${esc(s.source)}</span>` : ""}
+              <span class="pill ${s.status === "complete" ? "pill--sage" : ""}">${s.status === "complete" ? "Complete" : "Ongoing"}</span>
             </div>
             <button class="btn--link" data-live-series="${s.id}">Manage series</button>
           </div>
@@ -4464,6 +4662,9 @@
     const s = (LIVE.series || []).find(x => x.id === id); if (!s) return;
     const books = (LIVE.desk || []).filter(b => b.seriesId === id).sort((a, b) => (a.book || 0) - (b.book || 0));
     const arrow = (deg) => `<span style="display:inline-flex;transform:rotate(${deg}deg)">${icon("chev", 13)}</span>`;
+    let seriesStatus = s.status === "complete" ? "complete" : "ongoing";
+    const statusBtns = () => [["ongoing", "In progress"], ["complete", "Completed"]]
+      .map(([v, t]) => `<button type="button" class="seg-btn ${seriesStatus === v ? "is-on" : ""}" data-ms-status="${v}" aria-pressed="${seriesStatus === v}">${t}</button>`).join("");
     openModal(`
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
         <h2 style="font-size:20px">Manage series</h2>
@@ -4471,6 +4672,10 @@
       </div>
       <div class="field"><label>Series name</label><input type="text" id="ms-name" value="${esc(s.name)}"></div>
       <div class="field"><label>Description</label><textarea id="ms-note" rows="2">${esc(s.description || "")}</textarea></div>
+      <div class="field"><label>Status</label>
+        <div class="seg" id="ms-status-seg">${statusBtns()}</div>
+        <p class="muted" style="font-size:12.5px;margin:6px 0 0">Readers see a Completed badge on the series when every book is finished.</p>
+      </div>
       ${books.length ? `<div class="field"><label>Order of books</label>
         <div class="reorder">
           ${books.map((b, i) => `
@@ -4479,9 +4684,11 @@
               <span class="reorder-ctrls">
                 <button data-lmove="up|${b.id}" ${i === 0 ? "disabled" : ""} aria-label="Move ${esc(b.title)} up">${arrow(-90)}</button>
                 <button data-lmove="down|${b.id}" ${i === books.length - 1 ? "disabled" : ""} aria-label="Move ${esc(b.title)} down">${arrow(90)}</button>
+                <button class="reorder-del" data-ldelete-book="${b.id}" aria-label="Delete ${esc(b.title)}">${icon("trash", 13)}</button>
               </span>
             </div>`).join("")}
         </div>
+        <p class="muted" style="font-size:12.5px;margin:6px 0 0">Deleting a book removes that work and its chapters for good. The rest of the series stays.</p>
       </div>` : ""}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px">
         <button class="btn--link" data-ldelete-series style="color:#a2444f">Delete series</button>
@@ -4490,14 +4697,34 @@
           <button class="btn btn--primary" data-lsave-series>Save</button>
         </div>
       </div>`, "Manage series");
+    $$("#modalCard [data-ms-status]").forEach(btn => btn.addEventListener("click", () => {
+      seriesStatus = btn.dataset.msStatus;
+      $$("#modalCard [data-ms-status]").forEach(b => { const on = b === btn; b.classList.toggle("is-on", on); b.setAttribute("aria-pressed", String(on)); });
+    }));
     $$("#modalCard [data-lmove]").forEach(btn => btn.addEventListener("click", () => {
       const [dir, bid] = btn.dataset.lmove.split("|");
       reorderLiveBook(id, bid, dir);
     }));
+    $$("#modalCard [data-ldelete-book]").forEach(btn => btn.addEventListener("click", () => {
+      const bid = btn.dataset.ldeleteBook;
+      const book = books.find(b => b.id === bid); if (!book) return;
+      confirmDialog({
+        title: "Delete this book?",
+        body: `${esc(book.title || "This work")} and all of its chapters will be removed for good. This can't be undone. The rest of the series stays.`,
+        confirmText: "Delete book", danger: true
+      }, async () => {
+        try {
+          await WispDB.deleteWork(bid);
+          toast("Book deleted.");
+          if (typeof loadWriteDashboard === "function") await loadWriteDashboard();
+          liveManageSeries(id);
+        } catch (e) { toast((e && e.message) || "Could not delete the book."); }
+      });
+    }));
     $("#modalCard [data-lsave-series]").addEventListener("click", async () => {
       const name = $("#ms-name").value.trim();
       try {
-        await WispDB.updateSeries(id, { name: name || s.name, description: $("#ms-note").value.trim() });
+        await WispDB.updateSeries(id, { name: name || s.name, description: $("#ms-note").value.trim(), status: seriesStatus });
         closeModal(); toast("Series saved."); loadWriteDashboard();
       } catch (e) { toast((e && e.message) || "Could not save the series."); }
     });
@@ -5269,20 +5496,21 @@
   }
   async function renderAdminPanel() {
     openModal(`<div class="admin-panel"><p class="muted admin-empty">Loading the control panel...</p></div>`, "Admin control panel");
-    let events = [], hubs = [], works = [], exchanges = [], exCounts = {}, eventCats = [], hubCats = [];
+    let events = [], hubs = [], works = [], exchanges = [], exCounts = {}, eventCats = [], hubCats = [], fandomCats = [];
     try {
-      [events, hubs, works, exchanges, exCounts, eventCats, hubCats] = await Promise.all([
+      [events, hubs, works, exchanges, exCounts, eventCats, hubCats, fandomCats] = await Promise.all([
         WispDB.listEvents().catch(() => []),
         WispDB.listHubs().catch(() => []),
         WispDB.listWorks({ limit: 200 }).catch(() => []),
         WispDB.listExchanges().catch(() => []),
         WispDB.signupCounts().catch(() => ({})),
         WispDB.listCategories("event").catch(() => []),
-        WispDB.listCategories("hub").catch(() => [])
+        WispDB.listCategories("hub").catch(() => []),
+        WispDB.listCategories("fandom").catch(() => [])
       ]);
     } catch (e) {}
     // Remember the kind lists so the edit dialogs can build their dropdowns.
-    LIVE.cats = { event: eventCats, hub: hubCats };
+    LIVE.cats = { event: eventCats, hub: hubCats, fandom: fandomCats };
     const catRows = (scope, list) => list.length
       ? list.map(c => `<span class="cat-chip">${esc(c.name)}<button class="cat-chip__x" data-admin-cat-del="${esc(c.id)}" data-label="${esc(c.name)}" aria-label="Delete ${esc(c.name)}">&times;</button></span>`).join("")
       : `<span class="muted" style="font-size:12.5px">No ${scope} kinds yet.</span>`;
@@ -5322,12 +5550,6 @@
           <button class="btn btn--danger btn--sm" data-admin-del-hub="${esc(h.id)}" data-label="${esc(h.name)}">Delete</button>
         </div>
       </div>`).join("") : `<p class="muted admin-empty">No hubs yet.</p>`;
-    const workRows = works.length ? works.map(w => `
-      <div class="admin-row">
-        <div class="admin-row__main"><b>${esc(w.title)}</b><span class="muted">by ${esc(w.author || "Unknown")}</span></div>
-        <button class="btn btn--danger btn--sm" data-admin-del-work="${esc(w.id)}" data-label="${esc(w.title)}">Delete</button>
-      </div>`).join("") : `<p class="muted admin-empty">No works to show.</p>`;
-
     openModal(`
       <div class="admin-panel">
         <div class="admin-panel__head">
@@ -5336,7 +5558,7 @@
         </div>
         <p class="muted admin-panel__note">Signed in as ${esc((WispDB.user && WispDB.user.email) || "admin")}. Changes here are live for everyone.</p>
         <div class="admin-stats">
-          <span><b>${works.length}</b> works</span>
+          <span><b>${works.length}${works.length >= 200 ? "+" : ""}</b> works</span>
           <span><b>${events.length}</b> events</span>
           <span><b>${hubs.length}</b> hubs</span>
         </div>
@@ -5408,12 +5630,22 @@
               <button class="btn btn--quiet btn--sm" data-admin-cat-add="hub">Add</button>
             </div>
           </div>
+          <div class="cat-group" style="margin-top:14px">
+            <span class="cat-group__label">Fandoms</span>
+            <p class="muted" style="font-size:12.5px;margin:0 0 8px">Writers already get a large built-in fandom list and can type any of their own. Add extras here to push them into the suggestions.</p>
+            <div class="cat-list">${catRows("fandom", fandomCats)}</div>
+            <div class="admin-add__row">
+              <input type="text" id="cat-fandom-new" placeholder="New fandom" class="admin-filter" style="margin:0;max-width:220px">
+              <button class="btn btn--quiet btn--sm" data-admin-cat-add="fandom">Add</button>
+            </div>
+          </div>
         </section>
 
         <section class="admin-sec">
           <h3>Works and books</h3>
-          <input type="text" id="admin-work-filter" placeholder="Filter by title or author" class="admin-filter">
-          <div class="admin-list" id="admin-work-list">${workRows}</div>
+          <p class="muted admin-panel__note" style="margin-top:0">With a large catalogue the full list stays hidden. Search by title or author to find a work.</p>
+          <input type="text" id="admin-work-filter" placeholder="Search by title or author" class="admin-filter">
+          <div class="admin-list" id="admin-work-list"><p class="muted admin-empty">Search by title or author to find a work.</p></div>
         </section>
 
         <section class="admin-sec">
@@ -5517,12 +5749,41 @@
       catch (e) { toast((e && e.message) || "Could not add the hub."); }
     });
 
-    const filter = card.querySelector("#admin-work-filter");
-    filter && filter.addEventListener("input", () => {
-      const q = filter.value.trim().toLowerCase();
-      card.querySelectorAll("#admin-work-list .admin-row").forEach(row => {
-        row.style.display = row.textContent.toLowerCase().includes(q) ? "" : "none";
-      });
+    // Works and books: the catalogue can be large, so nothing shows until the
+    // admin searches. Each keystroke (debounced) queries matches by title or
+    // author from the database, so it finds works far past any preloaded page.
+    const workList = card.querySelector("#admin-work-list");
+    const workFilter = card.querySelector("#admin-work-filter");
+    const workRowHTML = (w) => `<div class="admin-row">
+        <div class="admin-row__main"><b>${esc(w.title || "Untitled")}</b><span class="muted">by ${esc(w.author || "Unknown")}</span></div>
+        <button class="btn btn--danger btn--sm" data-admin-del-work="${esc(w.id)}" data-label="${esc(w.title || "Untitled")}">Delete</button>
+      </div>`;
+    const bindWorkDeletes = () => workList && workList.querySelectorAll("[data-admin-del-work]").forEach(b => b.addEventListener("click", () => {
+      const id = b.dataset.adminDelWork, label = b.dataset.label || "this work";
+      confirmDialog({ title: "Delete this work?", body: `&ldquo;${esc(label)}&rdquo; will be removed for everyone. Its chapters go too. This cannot be undone.`, confirmText: "Delete work", danger: true },
+        async () => { try { await WispDB.adminDeleteWork(id); toast("Work deleted."); } catch (e) { toast((e && e.message) || "Could not delete."); } renderAdminPanel(); });
+    }));
+    const showWorkResults = (rows, q) => {
+      if (!workList) return;
+      if (!q) { workList.innerHTML = `<p class="muted admin-empty">Search by title or author to find a work.</p>`; return; }
+      workList.innerHTML = rows.length
+        ? rows.map(workRowHTML).join("")
+        : `<p class="muted admin-empty">No works match &ldquo;${esc(q)}&rdquo;.</p>`;
+      bindWorkDeletes();
+    };
+    let workTimer = null, workSeq = 0;
+    if (workFilter) workFilter.addEventListener("input", () => {
+      const q = workFilter.value.trim();
+      if (workTimer) clearTimeout(workTimer);
+      if (!q) { showWorkResults([], ""); return; }
+      const seq = ++workSeq;
+      if (workList) workList.innerHTML = `<p class="muted admin-empty">Searching...</p>`;
+      workTimer = setTimeout(async () => {
+        try {
+          const rows = await WispDB.listWorks({ q, limit: 50, sort: "recent" });
+          if (seq === workSeq) showWorkResults(rows || [], q);
+        } catch (e) { if (seq === workSeq) showWorkResults([], q); }
+      }, 220);
     });
 
     // Categories: add and delete event/hub kinds.
@@ -5976,6 +6237,16 @@
     });
   }
 
+  // Show the placeholder only while the editor is truly empty. A lone <p><br></p>
+  // (what contenteditable leaves behind) still counts as empty; any typed text,
+  // image, or embed clears it.
+  function updateEditorEmpty() {
+    const ed = $("#we-body"); if (!ed) return;
+    const hasMedia = !!ed.querySelector("img, figure, iframe, hr, li");
+    const hasText = (ed.textContent || "").replace(/ /g, " ").trim().length > 0;
+    ed.classList.toggle("is-empty", !hasMedia && !hasText);
+  }
+
   // Toolbar: apply formatting to the current selection in the editor. Uses the
   // browser's built-in rich-text editing; the DOM it produces is serialized
   // back to Markdown on save (editorHtmlToMd).
@@ -6006,7 +6277,7 @@
       inp.addEventListener("change", async () => {
         const f = inp.files && inp.files[0]; if (!f) return;
         toast("Uploading image...");
-        try { const url = await WispDB.uploadCover(f); insertEmbedBlock("![](" + url + ")"); toast("Image added to the chapter."); }
+        try { const url = await WispDB.uploadCover(f); insertImage(url); toast("Image added to the chapter."); }
         catch (e) { toast((e && e.message) || "Could not upload the image."); }
       });
       inp.click();
@@ -6028,6 +6299,22 @@
     ed.focus();
     try { document.execCommand("insertHTML", false, "<p>" + esc(text) + "</p>"); }
     catch (e) { const p = document.createElement("p"); p.textContent = text; ed.appendChild(p); }
+    updateEditorEmpty();
+  }
+  // Drop an uploaded image straight into the chapter as a real picture the way
+  // Wattpad does: the writer sees the image, not a line of ![](...) text. It is
+  // an atomic, non-editable block; on save it serializes back to ![alt](url).
+  function insertImage(url, alt) {
+    const ed = $("#we-body"); if (!ed) return;
+    ed.focus();
+    const html = `<figure class="embed embed--img" contenteditable="false"><img src="${esc(url)}" alt="${esc(alt || "")}" loading="lazy" decoding="async"></figure><p><br></p>`;
+    try { document.execCommand("insertHTML", false, html); }
+    catch (e) {
+      const fig = document.createElement("figure"); fig.className = "embed embed--img"; fig.setAttribute("contenteditable", "false");
+      const im = document.createElement("img"); im.src = url; im.alt = alt || ""; fig.appendChild(im);
+      ed.appendChild(fig); ed.appendChild(document.createElement("p"));
+    }
+    updateEditorEmpty();
   }
 
   // formatBlock toggles a block between the given tag and a plain paragraph.
@@ -6074,6 +6361,7 @@
       body = editorPages.join("\n");
     } else {
       const bodyEl = $("#we-body"); body = bodyEl ? editorHtmlToMd(bodyEl) : "";
+      if (kind === "publish" && !body.trim()) { toast("Write something before you publish this chapter."); return; }
     }
     const typeBtn = $("#screen-write [data-wtype].is-on"); const type = typeBtn ? typeBtn.dataset.wtype : "original";
     const rateBtn = $("#screen-write [data-wrate].is-on"); const rating = rateBtn ? rateBtn.dataset.wrate : "G";

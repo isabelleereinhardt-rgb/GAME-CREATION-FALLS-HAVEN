@@ -327,6 +327,20 @@ window.WispDB = (function () {
     if (error) return [];
     return (data || []).map(t => t.name).filter(Boolean);
   }
+  // Fandoms writers have actually used, so a fandom one person types becomes a
+  // suggestion for everyone else, exactly the way new tags do.
+  async function listFandoms(limit) {
+    if (!client) return [];
+    const { data, error } = await client.from("works")
+      .select("source").eq("type", "fan").in("status", ["ongoing", "complete"]).limit(limit || 1000);
+    if (error) return [];
+    const seen = new Set(), out = [];
+    (data || []).forEach(r => {
+      const s = (r.source || "").trim(), k = s.toLowerCase();
+      if (s && !seen.has(k)) { seen.add(k); out.push(s); }
+    });
+    return out.sort((a, b) => a.localeCompare(b));
+  }
 
   // Upcoming (still-locked) scheduled chapters for a work: number + release time
   // only, never the body or title.
@@ -380,7 +394,7 @@ window.WispDB = (function () {
   async function updateSeries(id, fields) {
     if (!user) throw new Error("Sign in first.");
     const patch = {};
-    ["name","description","type","source"].forEach(k => { if (fields[k] !== undefined) patch[k] = fields[k]; });
+    ["name","description","type","source","status"].forEach(k => { if (fields[k] !== undefined) patch[k] = fields[k]; });
     const { error } = await client.from("series").update(patch).eq("id", id).eq("author_id", user.id);
     if (error) throw error;
   }
@@ -1230,7 +1244,7 @@ window.WispDB = (function () {
     onRecovery(fn) { recoveryListeners.add(fn); return () => recoveryListeners.delete(fn); },
     init, signUp, signIn, signOut, resetPassword, updatePassword,
     listWorks, getWork, getChapters, myWorks,
-    createWork, updateWork, deleteWork, setWorkStatus, firstChapter, saveChapter, deleteChapter, setChapterNumber, swapChapterNumbers, listTags, getUpcoming, setTags,
+    createWork, updateWork, deleteWork, setWorkStatus, firstChapter, saveChapter, deleteChapter, setChapterNumber, swapChapterNumbers, listTags, listFandoms, getUpcoming, setTags,
     mySeries, getSeries, worksInSeries, findOrCreateSeries, updateSeries, deleteSeries, countInSeries,
     toggle, myRelations, getComments, postComment, editComment, deleteComment, getReactions, toggleReaction, uploadCover,
     toggleFollow, amFollowing, followCounts, myFollowingIds, getNotifications,
