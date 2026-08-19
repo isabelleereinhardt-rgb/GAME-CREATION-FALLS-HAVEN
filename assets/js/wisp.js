@@ -1416,7 +1416,8 @@
     // Highlight (==text==) and underline (++text++), before single * / _ italics.
     s = s.replace(/==([^=]+?)==/g, '<mark class="hl">$1</mark>');
     s = s.replace(/\+\+([^+]+?)\+\+/g, "<u>$1</u>");
-    // Per-word font size: {+bigger+} and {-smaller-}.
+    // Per-word font size: {{18|exact point size}}, plus older {+bigger+}/{-smaller-}.
+    s = s.replace(/\{\{(\d{1,3}(?:\.\d)?)\|([^{}]+?)\}\}/g, (m, n, t) => `<span style="font-size:${Math.max(8, Math.min(96, Math.round(+n)))}px">${t}</span>`);
     s = s.replace(/\{\+([^{}]+?)\+\}/g, '<span class="fs-lg">$1</span>');
     s = s.replace(/\{-([^{}]+?)-\}/g, '<span class="fs-sm">$1</span>');
     s = s.replace(/(^|[^*\w])\*(?!\s)([^*]+?)\*(?!\*)/g, "$1<em>$2</em>")
@@ -1531,6 +1532,7 @@
       else if (tag === "em" || tag === "i") out += inner.trim() ? `*${inner}*` : inner;
       else if (tag === "u" || tag === "ins") out += inner.trim() ? `++${inner}++` : inner;
       else if (tag === "mark") out += inner.trim() ? `==${inner}==` : inner;
+      else if (tag === "span" && n.style && n.style.fontSize) { const px = Math.round(parseFloat(n.style.fontSize)); out += (inner.trim() && px) ? `{{${px}|${inner}}}` : inner; }
       else if (tag === "span" && n.classList && n.classList.contains("fs-lg")) out += inner.trim() ? `{+${inner}+}` : inner;
       else if (tag === "span" && n.classList && n.classList.contains("fs-sm")) out += inner.trim() ? `{-${inner}-}` : inner;
       else if (tag === "code") out += "`" + inner + "`";
@@ -2648,8 +2650,11 @@
         <button type="button" title="Italic" data-fmt="italic"><i>I</i></button>
         <button type="button" title="Underline" data-fmt="underline"><u>U</u></button>
         <button type="button" title="Highlight" data-fmt="highlight"><span style="background:color-mix(in srgb,var(--amber) 55%,transparent);border-radius:3px;padding:0 4px">H</span></button>
-        <button type="button" title="Bigger selected text" data-fmt="size-up" style="font-size:17px">A</button>
-        <button type="button" title="Smaller selected text" data-fmt="size-down" style="font-size:11px">A</button>
+        <span class="fs-ctrl" title="Font size of the selected text">
+          <button type="button" data-fmt="fs-dec" aria-label="Smaller">&minus;</button>
+          <input type="number" id="we-fontsize" min="8" max="96" step="1" value="18" aria-label="Font size">
+          <button type="button" data-fmt="fs-inc" aria-label="Bigger">+</button>
+        </span>
         <button type="button" title="Quote" data-fmt="quote">&ldquo;</button>
         <span class="sep"></span>
         <button type="button" title="Align left" data-fmt="align-left">${alignSVG("left")}</button>
@@ -3016,6 +3021,13 @@
       try { localStorage.setItem("wisp.editorLineSpace", editorLineSpace); } catch (e) {}
       if (bodyEd) bodyEd.style.lineHeight = lineSpaceValue(editorLineSpace);
     });
+    // Font-size box: apply on change, and mirror the selection's size (Docs-like).
+    const fsInp = $("#we-fontsize");
+    if (fsInp) {
+      fsInp.addEventListener("change", () => applyFontSize(fsInp.value));
+      fsInp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); applyFontSize(fsInp.value); } });
+    }
+    if (bodyEd) ["mouseup", "keyup"].forEach(ev => bodyEd.addEventListener(ev, () => setTimeout(syncFontSizeBox, 0)));
 
     // Reorder chapters up or down (live works only).
     $$("#screen-write [data-ch-move]").forEach(b => b.addEventListener("click", async () => {
@@ -6944,8 +6956,11 @@
     else if (kind === "italic") exec("italic");
     else if (kind === "underline") exec("underline");
     else if (kind === "highlight") applyHighlight();
-    else if (kind === "size-up") applyTextSize("fs-lg");
-    else if (kind === "size-down") applyTextSize("fs-sm");
+    else if (kind === "fs-inc" || kind === "fs-dec") {
+      const inp = $("#we-fontsize"); if (!inp) return;
+      let v = Math.round(+inp.value || 18) + (kind === "fs-inc" ? 1 : -1);
+      v = Math.max(8, Math.min(96, v)); inp.value = v; applyFontSize(v);
+    }
     else if (kind === "align-left") exec("justifyLeft");
     else if (kind === "align-center") exec("justifyCenter");
     else if (kind === "align-right") exec("justifyRight");
@@ -7025,17 +7040,36 @@
     updateEditorEmpty();
   }
   function applyHighlight() { wrapSelectionInline("mark", "hl", "Highlight one paragraph at a time."); }
-  function applyTextSize(which) {
+  // Google-Docs style: set an exact point size on the selected text.
+  function applyFontSize(px) {
     const ed = $("#we-body"); if (!ed) return;
-    // Clear the opposite size first so sizes swap cleanly instead of nesting.
-    const other = which === "fs-lg" ? "fs-sm" : "fs-lg";
+    px = Math.max(8, Math.min(96, Math.round(+px || 18)));
     const sel = window.getSelection();
-    if (sel && !sel.isCollapsed) {
-      let anc = sel.getRangeAt(0).commonAncestorContainer; if (anc && anc.nodeType === 3) anc = anc.parentNode;
-      const opp = anc && anc.closest ? anc.closest("span." + other) : null;
-      if (opp) { const p = opp.parentNode; while (opp.firstChild) p.insertBefore(opp.firstChild, opp); p.removeChild(opp); }
-    }
-    wrapSelectionInline("span", which, "Resize within one paragraph at a time.");
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) { toast("Select some text to resize."); return; }
+    const range = sel.getRangeAt(0);
+    if (editorBlockOf(range.startContainer, ed) !== editorBlockOf(range.endContainer, ed)) { toast("Resize within one paragraph at a time."); return; }
+    let anc = range.commonAncestorContainer; if (anc && anc.nodeType === 3) anc = anc.parentNode;
+    const existing = anc && anc.closest ? anc.closest("span[style*='font-size']") : null;
+    try {
+      if (existing && (existing.textContent || "") === sel.toString()) {
+        existing.style.fontSize = px + "px";
+      } else {
+        const span = document.createElement("span"); span.style.fontSize = px + "px";
+        span.appendChild(range.extractContents()); range.insertNode(span);
+      }
+    } catch (e) { toast("Try selecting within one paragraph."); }
+    ed.querySelectorAll("span[style*='font-size']").forEach(s => { if (!(s.textContent || "").trim()) { const p = s.parentNode; if (!p) return; while (s.firstChild) p.insertBefore(s.firstChild, s); p.removeChild(s); } });
+    if (ed.normalize) ed.normalize();
+    sel.removeAllRanges(); updateEditorEmpty();
+  }
+  // Reflect the size of whatever is selected back into the size box, like Docs.
+  function syncFontSizeBox() {
+    const inp = $("#we-fontsize"); const ed = $("#we-body"); if (!inp || !ed) return;
+    const sel = window.getSelection(); if (!sel || !sel.anchorNode) return;
+    let n = sel.anchorNode; if (n.nodeType === 3) n = n.parentNode;
+    if (!n || !ed.contains(n)) return;
+    const fs = parseFloat(getComputedStyle(n).fontSize);
+    if (fs && !inp.matches(":focus")) inp.value = Math.round(fs);
   }
   // Dictation: speak and it types. Uses the browser's speech recognition; the
   // mic button toggles it on and off.

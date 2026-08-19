@@ -1980,3 +1980,10 @@ button.pill--link:active, .tag:active { transform: scale(.95); }
   100% { transform: translate(-50%, -58%) scale(1) rotate(0deg); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .mw-bigheart { display: none; } }
+
+/* Numeric font-size stepper in the editor toolbar (Google-Docs style). */
+.toolbar .fs-ctrl { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; height: 30px; }
+.toolbar .fs-ctrl button { min-width: 26px; width: 26px; height: 28px; border: 0; border-radius: 0; background: var(--card); color: var(--ink2); cursor: pointer; font-size: 15px; padding: 0; }
+.toolbar .fs-ctrl button:hover { background: var(--paper2); color: var(--ink); }
+.toolbar .fs-ctrl input { width: 42px; height: 28px; border: 0; border-left: 1px solid var(--line); border-right: 1px solid var(--line); text-align: center; background: var(--card); color: var(--ink); font: 13px var(--font-text); -moz-appearance: textfield; }
+.toolbar .fs-ctrl input::-webkit-outer-spin-button, .toolbar .fs-ctrl input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
