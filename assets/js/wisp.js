@@ -3611,9 +3611,12 @@
       const src = cfg.source || "manual";
       const cur = src !== "manual" && stats && stats[src] != null ? stats[src] : Math.max(0, +cfg.current || 0);
       const tot = Math.max(0, +cfg.target || 0);
-      const pct = tot > 0 ? Math.min(100, Math.round((cur / tot) * 100)) : 0;
+      const rawPct = tot > 0 ? Math.min(100, (cur / tot) * 100) : 0;
+      const pct = Math.round(rawPct);
+      // Once there is any progress, show at least a sliver so 1 of 400 still reads.
+      const barPct = cur > 0 && tot > 0 ? Math.max(3, rawPct) : rawPct;
       const unit = src !== "manual" ? PROGRESS_SOURCES[src] : (cfg.unit || "");
-      body = `<div class="hubw__progress"><span class="hubw__progress-bar" style="width:${pct}%"></span></div>
+      body = `<div class="hubw__progress${pct >= 100 ? " is-full" : ""}"><span class="hubw__progress-bar" style="width:${barPct}%"></span></div>
         <p class="muted hubw__sub">${cur}${tot ? " / " + tot : ""}${unit ? " " + esc(unit) : ""} &middot; ${pct}%</p>`;
     } else if (w.kind === "button") {
       const url = safeUrl(cfg.url || "");
@@ -3638,12 +3641,17 @@
     const mine = (state.mine === 0 || state.mine) ? state.mine : null;
     const total = Object.keys(tally).reduce((s, k) => s + (tally[k] || 0), 0);
     const q = cfg.question ? `<p class="hubw__poll-q">${esc(cfg.question)}</p>` : "";
+    // The leading option(s), so the winner reads clearly like a YouTube poll.
+    const top = total ? Math.max(...options.map((_, i) => tally[i] || 0)) : 0;
     const rows = options.map((opt, i) => {
       const c = tally[i] || 0;
-      const pct = total ? Math.round((c / total) * 100) : 0;
+      const rawPct = total ? (c / total) * 100 : 0;
+      const pct = Math.round(rawPct);
+      const barPct = c > 0 ? Math.max(3, rawPct) : 0;   // a sliver once it has a vote
       const picked = mine === i;
-      return `<button class="hubw__poll-opt${picked ? " is-picked" : ""}" data-poll-vote="${esc(w.id)}:${i}" aria-pressed="${picked}">
-        <span class="hubw__poll-bar" style="width:${pct}%"></span>
+      const lead = total > 0 && c === top && c > 0;
+      return `<button class="hubw__poll-opt${picked ? " is-picked" : ""}${lead ? " is-lead" : ""}${pct >= 100 ? " is-full" : ""}" data-poll-vote="${esc(w.id)}:${i}" aria-pressed="${picked}">
+        <span class="hubw__poll-bar" style="width:${barPct}%"></span>
         <span class="hubw__poll-label">${esc(opt)}${picked ? " " + icon("check", 12) : ""}</span>
         <span class="hubw__poll-pct">${pct}%</span>
       </button>`;
@@ -6849,10 +6857,21 @@
     $("#navSheet").addEventListener("click", (e) => { if (e.target.id === "navSheet") closeSheet(); });
 
     // Search: type and press Enter to browse.
+    const runSearch = (val) => {
+      filterState.q = (val || "").trim();
+      closeSheet();
+      navigate("browse");
+      if (location.hash.includes("browse")) refreshBrowse();
+    };
     const si = $("#searchInput");
-    si.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { filterState.q = si.value.trim(); navigate("browse"); if (location.hash.includes("browse")) refreshBrowse(); }
-    });
+    si.addEventListener("keydown", (e) => { if (e.key === "Enter") runSearch(si.value); });
+    // Mobile menu search: wire the same way, plus the on-screen keyboard's search
+    // key ("search" event) so tapping Go actually runs the search.
+    const sim = $("#searchInputMobile");
+    if (sim) {
+      sim.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); runSearch(sim.value); } });
+      sim.addEventListener("search", () => runSearch(sim.value));
+    }
 
     // Esc closes overlays.
     document.addEventListener("keydown", (e) => {
