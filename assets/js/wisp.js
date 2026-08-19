@@ -2516,6 +2516,7 @@
     const flagship = (!reqId || reqId === "amber");
     const w = W.byId[reqId] || W.byId.amber;
     markVisited(flagship ? "amber" : w.id);
+    notifyReadActivity((flagship ? "amber" : w.id) + ":" + (chapterNum || 1));
 
     if (!flagship) {
       // Honest preview for non-flagship works: full reader chrome, a short opening,
@@ -3025,6 +3026,7 @@
   // comments; the seeded reaction demo stays on the sample chapter.
   function renderLiveReading(w, chapters, chapterNum) {
     markVisited(w.id);
+    notifyReadActivity(w.id + ":" + (chapterNum || 1));
     if (w.loggedInOnly && !WispDB.signedIn) {
       $("#screen-reading").innerHTML = `<div class="reader"><div class="reader__wrap" style="text-align:center;padding:60px 20px">
         <h1 class="reader__title">${esc(w.title)}</h1>
@@ -5676,6 +5678,36 @@
     togglePetals(installed.has("petals") && !!(MW.state.petals && MW.state.petals.on));
     document.body.classList.toggle("focus-mode", installed.has("focus") && !!(MW.state.focus && MW.state.focus.on));
   }
+
+  // A few tracking widgets fill themselves in from real reading, so the reader
+  // never has to tap +1. Called when a chapter opens in the reader; each chapter
+  // counts once per day, and the streak logs itself the first time you read today.
+  function notifyReadActivity(chapterKey) {
+    const installed = new Set(mwLoad());
+    if (!installed.has("chapters-today") && !installed.has("streak")) return;
+    const today = todayKey();
+    let changed = false;
+    if (installed.has("chapters-today")) {
+      const s = mwState("chapters-today");
+      const seen = (s.day === today && Array.isArray(s.seen)) ? s.seen.slice() : [];
+      const base = (s.day === today ? (s.n || 0) : 0);
+      if (chapterKey && seen.indexOf(chapterKey) < 0) {
+        seen.push(chapterKey);
+        mwSetState("chapters-today", { n: base + 1, day: today, seen }); changed = true;
+      } else if (s.day !== today) {
+        mwSetState("chapters-today", { n: 0, day: today, seen: [] }); changed = true;
+      }
+    }
+    if (installed.has("streak")) {
+      const s = mwState("streak");
+      if (s.last !== today) {
+        const y = new Date(Date.now() - 86400000); const yk = y.getFullYear() + "-" + (y.getMonth() + 1) + "-" + y.getDate();
+        const nc = (s.last === yk ? (s.count || 0) + 1 : 1);
+        mwSetState("streak", { count: nc, last: today }); changed = true;
+      }
+    }
+    if (changed) renderWidgets();
+  }
   const todayKey = () => { const d = new Date(); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); };
   const rand = (arr) => arr[Math.floor(Math.random() * arr.length)];
   const fmtDur = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
@@ -5882,17 +5914,48 @@
   }
 
   // ---- page-level effects for the fun widgets ----
+  // These fun effects are driven by the Web Animations API rather than CSS
+  // @keyframes on purpose: iOS Low Power Mode (and the OS Reduce Motion setting)
+  // set prefers-reduced-motion, and the global reduced-motion CSS rule collapses
+  // every animation to ~0ms. A reader who deliberately taps "Here, kitty" or turns
+  // petals on should still see them, so we animate in JS, which that rule can't reach.
   function catWalk() {
     const c = document.createElement("div"); c.className = "mw-catrun"; c.textContent = "🐈";
     document.body.appendChild(c);
-    c.addEventListener("animationend", () => c.remove());
-    setTimeout(() => { if (c.parentNode) c.remove(); }, 9000);
+    const done = () => { if (c.parentNode) c.remove(); };
+    try {
+      const a = c.animate([
+        { left: "-60px", transform: "translateY(0)" },
+        { transform: "translateY(-6px)", offset: 0.49 },
+        { transform: "translateY(0)", offset: 0.5 },
+        { left: "106%", transform: "translateY(0)" }
+      ], { duration: 8000, easing: "linear", fill: "forwards" });
+      a.addEventListener("finish", done);
+    } catch (e) { c.style.left = "50%"; }   // no WAA: at least show the cat briefly
+    setTimeout(done, 9000);
   }
+  // A celebratory burst from the center of the screen: pieces shoot outward in all
+  // directions, then fall away. (Center, not raining from the top edge.)
   function confettiBurst() {
     const box = document.createElement("div"); box.className = "mw-confetti";
     const colors = ["#ab5a67", "#7d5a86", "#4f8079", "#b1673f", "#5f6bb0", "#d9a7a0"];
-    for (let i = 0; i < 26; i++) { const p = document.createElement("i"); p.style.left = (10 + Math.random() * 80) + "%"; p.style.background = colors[i % colors.length]; p.style.animationDelay = (Math.random() * 0.25) + "s"; p.style.transform = "rotate(" + Math.floor(Math.random() * 360) + "deg)"; box.appendChild(p); }
+    const N = 34;
+    for (let i = 0; i < N; i++) { const p = document.createElement("i"); p.style.left = "50%"; p.style.top = "50%"; p.style.background = colors[i % colors.length]; box.appendChild(p); }
     document.body.appendChild(box);
+    const reach = Math.min(window.innerWidth, window.innerHeight) * 0.42;
+    box.querySelectorAll("i").forEach((p, i) => {
+      const ang = (i / N) * Math.PI * 2 + Math.random() * 0.5;
+      const dist = reach * (0.55 + Math.random() * 0.6);
+      const dx = Math.cos(ang) * dist, dy = Math.sin(ang) * dist;
+      const spin = (Math.random() < 0.5 ? -1 : 1) * (360 + Math.floor(Math.random() * 360));
+      try {
+        p.animate([
+          { transform: "translate(-50%, -50%) rotate(0)", opacity: 1, offset: 0 },
+          { transform: `translate(calc(-50% + ${dx * 0.7}px), calc(-50% + ${dy * 0.7}px)) rotate(${spin * 0.6}deg)`, opacity: 1, offset: 0.55 },
+          { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy + 90}px)) rotate(${spin}deg)`, opacity: 0, offset: 1 }
+        ], { duration: 1300 + Math.random() * 600, easing: "cubic-bezier(.2,.7,.3,1)", fill: "forwards" });
+      } catch (e) {}
+    });
     setTimeout(() => box.remove(), 2200);
   }
   // A brief, gentle chime built with the Web Audio API (no sound files). Muted
@@ -5964,8 +6027,17 @@
     if (petalTimer) return;
     petalTimer = setInterval(() => {
       if (!document.getElementById("mwPetals")) { clearInterval(petalTimer); petalTimer = null; return; }
-      const p = document.createElement("i"); p.textContent = "🌸"; p.style.left = Math.random() * 100 + "%"; p.style.animationDuration = (6 + Math.random() * 5) + "s"; p.style.fontSize = (10 + Math.random() * 10) + "px";
-      layer.appendChild(p); setTimeout(() => p.remove(), 11000);
+      const p = document.createElement("i"); p.textContent = "🌸"; p.style.left = Math.random() * 100 + "%"; p.style.fontSize = (10 + Math.random() * 10) + "px";
+      layer.appendChild(p);
+      const dur = 6000 + Math.random() * 5000;
+      try {
+        p.animate([
+          { transform: "translateY(-26px) translateX(0) rotate(0)", opacity: 0 },
+          { opacity: 0.9, offset: 0.12 },
+          { transform: "translateY(102vh) translateX(40px) rotate(220deg)", opacity: 0.5 }
+        ], { duration: dur, easing: "linear", fill: "forwards" });
+      } catch (e) {}
+      setTimeout(() => p.remove(), dur + 500);
     }, 900);
   }
   // Restore ambient effects the reader left on, once per load.
