@@ -4464,7 +4464,7 @@
         const disp = el.querySelector("[data-mw-sp]"); if (mwState("word-sprint").endsAt) miniInterval(setInterval(() => { const s = mwState("word-sprint"); const left = s.endsAt - Date.now(); const d = el.querySelector("[data-mw-sp]"); if (left <= 0) { mwSetState("word-sprint", { endsAt: 0 }); toast("Sprint done. Great work."); renderWidgets(); return; } if (d) d.textContent = fmtDur(left); }, 500)); } },
     { id: "streak", name: "Reading streak", icon: "check", blurb: "Days in a row you showed up.",
       render() { const s = mwState("streak"); return `<div class="mw-big">${s.count || 0} 🔥</div><p class="mw-sub">${s.last === todayKey() ? "Logged for today" : "Not logged today"}</p><button class="btn btn--ghost btn--full btn--sm" data-mw-streak ${s.last === todayKey() ? "disabled" : ""}>I read today</button>`; },
-      wire(el) { const b = el.querySelector("[data-mw-streak]"); b && b.addEventListener("click", () => { const s = mwState("streak"); const y = new Date(Date.now() - 86400000); const yk = y.getFullYear() + "-" + (y.getMonth() + 1) + "-" + y.getDate(); const cont = s.last === yk; mwSetState("streak", { count: cont ? (s.count || 0) + 1 : 1, last: todayKey() }); renderWidgets(); }); } },
+      wire(el) { const b = el.querySelector("[data-mw-streak]"); b && b.addEventListener("click", () => { const s = mwState("streak"); const y = new Date(Date.now() - 86400000); const yk = y.getFullYear() + "-" + (y.getMonth() + 1) + "-" + y.getDate(); const cont = s.last === yk; const nc = cont ? (s.count || 0) + 1 : 1; mwSetState("streak", { count: nc, last: todayKey() }); if (nc >= 3 && nc % 5 === 0) celebrate(nc + " day streak!", "Keep it going.", "🔥"); else if (!reducedMotion()) confettiBurst(); renderWidgets(); }); } },
     { id: "countdown", name: "Countdown", icon: "clock", blurb: "Days until a date you set.",
       render() { const s = mwState("countdown"); if (!s.target) return `<p class="mw-sub">No date set yet.</p><button class="btn btn--ghost btn--full btn--sm" data-mw-cd-set>Set a date</button>`; const days = Math.ceil((new Date(s.target).getTime() - Date.now()) / 86400000); return `<div class="mw-big">${days >= 0 ? days : 0}</div><p class="mw-sub">${days > 0 ? "days to " : days === 0 ? "today: " : "since "}${esc(s.label || "your date")}</p><button class="btn btn--quiet btn--full btn--sm" data-mw-cd-set>Change</button>`; },
       wire(el) { const b = el.querySelector("[data-mw-cd-set]"); b && b.addEventListener("click", () => { const t = (window.prompt("Date (YYYY-MM-DD)", mwState("countdown").target || "") || "").trim(); if (!t) return; const label = (window.prompt("What is it? (optional)", mwState("countdown").label || "") || "").trim(); mwSetState("countdown", { target: t, label }); renderWidgets(); }); } },
@@ -4702,7 +4702,11 @@
     if (!s.total) {
       return `<div style="font:15px/1.5 var(--font-read);color:var(--ink2)">Open a work and your reading life starts filling in here.</div>`;
     }
-    const line = (n, label) => `<div class="rstat"><span class="rstat__n">${n}</span><span class="rstat__l">${label}</span></div>`;
+    const max = Math.max(s.thisWeek, s.inProgress, s.total, 1);
+    const line = (n, label) => `<div class="rstat">
+      <div class="rstat__row"><span class="rstat__n">${n}</span><span class="rstat__l">${label}</span></div>
+      <span class="rstat__bar"><i style="width:${Math.max(4, Math.round(100 * n / max))}%"></i></span>
+    </div>`;
     return `<div class="rstats">
       ${line(s.thisWeek, s.thisWeek === 1 ? "work this week" : "works this week")}
       ${line(s.inProgress, s.inProgress === 1 ? "work in progress" : "works in progress")}

@@ -580,9 +580,11 @@ img { max-width: 100%; display: block; }
 }
 .home-tab:hover { color: var(--ink2); }
 .home-tab.is-active { color: var(--ink); }
-.home-tab.is-active::after {
+.home-tab::after {
   content: ""; position: absolute; left: 0; right: 0; bottom: -15px; height: 2px; background: var(--rose);
+  transform: scaleX(0); transform-origin: center; transition: transform .22s ease;
 }
+.home-tab.is-active::after { transform: scaleX(1); }
 .home-tabs__meta { margin-left: auto; font-size: 13px; color: var(--ink3); display: flex; align-items: center; gap: 12px; }
 .view-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .view-toggle button {
@@ -799,9 +801,13 @@ a.list-card__title:hover { color: var(--rose-ink); }
 
 /* Reading-stats widget ("Your week"). */
 .rstats { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
-.rstat { display: flex; align-items: baseline; gap: 8px; }
+.rstats { display: flex; flex-direction: column; gap: 12px; }
+.rstat { display: flex; flex-direction: column; gap: 5px; }
+.rstat__row { display: flex; align-items: baseline; gap: 8px; }
 .rstat__n { font: 600 22px var(--font-display); color: var(--ink); min-width: 30px; }
 .rstat__l { font-size: 13px; color: var(--ink2); }
+.rstat__bar { display: block; height: 6px; border-radius: 999px; background: var(--surface2, var(--paper2)); overflow: hidden; }
+.rstat__bar > i { display: block; height: 100%; border-radius: 999px; background: var(--rose); transition: width .5s ease; }
 
 /* Policy pages. */
 .legal-body { max-height: 60vh; overflow-y: auto; padding-right: 6px; }
@@ -1392,12 +1398,21 @@ mark.hl {
 
 /* Profile. */
 .profile-hero {
+  position: relative; overflow: hidden;
   border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
   padding: 26px; margin-bottom: 26px; display: flex; gap: 22px; align-items: center; flex-wrap: wrap;
 }
+/* A soft accent banner strip across the top of the profile card. */
+.profile-hero::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 64px;
+  background: linear-gradient(120deg, color-mix(in srgb, var(--rose) 30%, transparent), color-mix(in srgb, var(--rose) 8%, transparent));
+  pointer-events: none;
+}
+.profile-hero > * { position: relative; }
 .profile-hero__av {
-  flex: none; width: 82px; height: 82px; border-radius: 50%; background: var(--rose); color: #fbf3e8;
-  display: flex; align-items: center; justify-content: center; font: 600 34px var(--font-display);
+  flex: none; width: 92px; height: 92px; border-radius: 50%; background: var(--rose); color: #fbf3e8;
+  display: flex; align-items: center; justify-content: center; font: 600 38px var(--font-display);
+  box-shadow: 0 0 0 4px var(--surface), 0 6px 18px var(--shadow);
 }
 .profile-stats { display: flex; gap: 26px; margin-top: 12px; }
 .profile-stats b { font: 600 20px var(--font-display); color: var(--ink); display: block; }
