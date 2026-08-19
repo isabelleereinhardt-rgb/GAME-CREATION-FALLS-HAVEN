@@ -779,7 +779,7 @@
           <span class="resume__body">
             <span class="eyebrow rose" style="display:block;margin-bottom:5px">Continue reading</span>
             <span class="resume__title">${esc(LIVE.resume.work.title)}</span>
-            <span class="progress"><span class="progress__track"><span class="progress__fill" style="width:${Math.max(6, LIVE.resume.progress.percent || 6)}%"></span></span><span class="progress__label">Chapter ${LIVE.resume.progress.chapter_number || 1}</span></span>
+            <span class="progress"><span class="progress__track"><span class="progress__fill" style="width:${Math.max(6, LIVE.resume.progress.percent || 6)}%"></span></span><span class="progress__label">Chapter ${LIVE.resume.progress.chapter_number || 1}${LIVE.resume.progress.percent ? " &middot; " + Math.round(LIVE.resume.progress.percent) + "%" : ""}</span></span>
           </span>
           <span style="color:var(--rose);display:flex;align-items:center">${icon("chev",20)}</span>
         </button>` : ""}
@@ -1336,7 +1336,7 @@
 
     $("#screen-reading").innerHTML = `
       <div class="reader">
-        <div class="reader__progress" id="readProgress"><i></i></div>
+        <div class="reader__progress" id="readProgress"><i></i><span class="reader__pct" aria-hidden="true">0%</span></div>
         <div class="reader__wrap" id="readerWrap">
           <div class="reader__crumbs"><a href="#/work/${w.id}">${esc(c.title)}</a> ${icon("chev",12)} <span>Chapter ${c.chapterNo} of ${c.chapterCount}</span></div>
           <h1 class="reader__title">${esc(c.title)}</h1>
@@ -1847,7 +1847,7 @@
 
     $("#screen-reading").innerHTML = `
       <div class="reader${isComic ? " reader--comic" : ""}">
-        <div class="reader__progress" id="readProgress"><i></i></div>
+        <div class="reader__progress" id="readProgress"><i></i><span class="reader__pct" aria-hidden="true">0%</span></div>
         <div class="reader__wrap" id="readerWrap">
           <div class="reader__crumbs"><a href="#/work/${w.id}">${esc(w.title)}</a> ${icon("chev",12)} <span>Chapter ${ch ? ch.number : 1}${readable.length > 1 ? " of " + readable.length : ""}</span></div>
           <h1 class="reader__title">${esc(w.title)}</h1>
@@ -2237,9 +2237,11 @@
   let readingGlobalsWired = false;
   function updateReadProgress() {
     const bar = $("#readProgress > i"); if (!bar) return;
-    const main = $("#main");
-    const max = main.scrollHeight - main.clientHeight;
-    bar.style.width = max > 0 ? (100 * main.scrollTop / max) + "%" : "0%";
+    const el = readerScroller();
+    const max = el.scrollHeight - el.clientHeight;
+    const pct = max > 0 ? Math.min(100, Math.round(100 * el.scrollTop / max)) : 0;
+    bar.style.width = pct + "%";
+    const chip = $("#readProgress .reader__pct"); if (chip) chip.textContent = pct + "%";
   }
   function wireReadingGlobalsOnce() {
     if (readingGlobalsWired) return;
@@ -3101,16 +3103,17 @@
   }
   function renderLibraryLive() {
     const gridOf = (works) => `<div class="work-grid">${works.map(cardGallery).join("")}</div>`;
-    const empty = (msg) => `<p class="muted" style="padding:24px 4px">${msg}</p>`;
+    const empty = (msg, act) => `<div class="empty-note"><p>${msg}</p>${act || ""}</div>`;
+    const goBrowse = `<a class="btn btn--primary btn--sm" href="#/browse">Browse works</a>`;
     let pane = "";
     if (libTab === "bookmarks") {
       const bm = LIVE.lib.bookmarks || [];
       pane = `<div class="shelf"><div class="shelf__head"><span class="shelf__title">Bookmarks</span><span class="muted" style="font-size:13px">${bm.length} ${bm.length === 1 ? "work" : "works"}</span></div>
-        ${bm.length ? gridOf(bm) : empty("No bookmarks yet. Bookmark a work and it saves here.")}</div>`;
+        ${bm.length ? gridOf(bm) : empty("No bookmarks yet. Go find some works to save.", goBrowse)}</div>`;
     } else if (libTab === "history") {
       const h = LIVE.lib.history || [];
       pane = `<div class="shelf"><div class="shelf__head"><span class="shelf__title">Recently read</span>${h.length ? `<button class="btn--link" data-clear-history>Clear history</button>` : ""}</div>
-        ${h.length ? gridOf(h) : empty("Nothing read yet.")}</div>`;
+        ${h.length ? gridOf(h) : empty("Nothing read yet. Go find some works to read.", goBrowse)}</div>`;
     } else if (libTab === "lists") {
       const lists = LIVE.lib.lists || [];
       pane = `<div class="shelf">
@@ -3119,7 +3122,7 @@
           <button class="list-tile" data-open-list="${l.id}" style="text-align:left;background:none;border:0;cursor:pointer;width:100%">
             <div style="font:600 17px var(--font-display);color:var(--ink)">${esc(l.name)}</div>
             <div class="muted" style="font-size:12.5px;margin-top:4px">${l._count || 0} ${(l._count || 0) === 1 ? "work" : "works"} &middot; ${l.is_public ? "Public" : "Private"}</div>
-          </button>`).join("")}</div>` : empty("No lists yet. Make one to group works together.")}
+          </button>`).join("")}</div>` : empty("No lists yet. Make one to group your works.")}
       </div>`;
     } else if (libTab === "things") {
       const things = LIVE.lib.things || [];
@@ -3129,7 +3132,7 @@
             <div style="font:500 15px var(--font-read);color:var(--ink)">${esc(t.text)}</div>
             ${t.note ? `<div class="soft" style="font-size:13.5px;margin-top:6px">${esc(t.note)}</div>` : ""}
             <div class="thing__src">${t.work ? `from <a href="#/work/${t.work.id}">${esc(t.work.title)}</a> &middot; ` : ""}<button class="btn--link" data-del-highlight="${t.id}" style="color:#a2444f">Delete</button></div>
-          </div>`).join("") : empty("No highlights yet. Select text while reading and choose Highlight.")}
+          </div>`).join("") : empty("No highlights yet. Highlight a line while you read.")}
       </div>`;
     }
     libShell(pane);
@@ -3826,6 +3829,7 @@
           ${works.length
             ? `<div class="work-grid">${works.map(cardGallery).join("")}</div>`
             : `<div class="editorial" style="text-align:center;padding:40px 20px">
+                 <div class="empty-ic" style="color:var(--ink3);margin-bottom:8px">${icon("book", 30)}</div>
                  <p class="soft" style="font-size:15px;margin:0 0 6px">No works here yet.</p>
                  <p class="muted" style="font-size:13px;margin:0">Tag a work &ldquo;${esc(hub.name)}&rdquo;${/format/i.test(hub.kind || "") ? " or post it as a comic" : (hub.kind === "Fandom" ? " or set it as the fandom" : "")} and it shows up here.</p>
                </div>`}
@@ -4174,7 +4178,7 @@
         return `<div class="act-list"><p class="muted" style="font-size:13px;padding:10px 4px;line-height:1.6">Gathering your activity...</p></div>`;
       }
       if (!items.length) {
-        return `<div class="act-list"><p class="muted" style="font-size:13px;padding:10px 4px;line-height:1.6">No activity yet. New chapters from works and hubs you follow, comments on your work, and new followers show up here.</p></div>`;
+        return `<div class="act-list"><p class="muted" style="font-size:13px;padding:14px 4px;line-height:1.6">You're all caught up. New chapters, comments, and new followers show up here.</p></div>`;
       }
       const order = ["Today", "This week", "Earlier"];
       const groups = {};
@@ -4605,6 +4609,22 @@
     for (let i = 0; i < 26; i++) { const p = document.createElement("i"); p.style.left = (10 + Math.random() * 80) + "%"; p.style.background = colors[i % colors.length]; p.style.animationDelay = (Math.random() * 0.25) + "s"; p.style.transform = "rotate(" + Math.floor(Math.random() * 360) + "deg)"; box.appendChild(p); }
     document.body.appendChild(box);
     setTimeout(() => box.remove(), 2200);
+  }
+  // A small shower of hearts floating up from a button, for hearting a work.
+  function heartBurst(el) {
+    if (!el || !el.getBoundingClientRect) return;
+    const r = el.getBoundingClientRect();
+    const box = document.createElement("div"); box.className = "mw-hearts";
+    for (let i = 0; i < 8; i++) {
+      const h = document.createElement("i"); h.textContent = "❤";
+      h.style.left = (r.left + r.width / 2) + "px"; h.style.top = (r.top + r.height / 2) + "px";
+      h.style.setProperty("--dx", (Math.random() * 70 - 35).toFixed(0) + "px");
+      h.style.setProperty("--dy", (-40 - Math.random() * 50).toFixed(0) + "px");
+      h.style.animationDelay = (Math.random() * 0.1).toFixed(2) + "s";
+      box.appendChild(h);
+    }
+    document.body.appendChild(box);
+    setTimeout(() => box.remove(), 1100);
   }
   let petalTimer = null;
   function togglePetals(on) {
@@ -5642,6 +5662,7 @@
         tog.classList.toggle("btn--primary", on);
         tog.classList.toggle("btn--ghost", !on);
         if (label) label.textContent = on ? "Hearted" : "Heart";
+        if (on) { tog.classList.remove("heart-pop"); void tog.offsetWidth; tog.classList.add("heart-pop"); heartBurst(tog); }
         toast(on ? "This work has been hearted." : "Heart removed.");
       } else if (kind === "subscribe") {
         tog.classList.toggle("is-on-quiet", on);
