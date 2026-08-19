@@ -1091,6 +1091,23 @@ mark.hl {
 }
 .applied .chip-x.exclude { color: var(--ink2); background: rgba(44,38,32,.08); text-decoration: line-through; }
 
+/* Tag include/exclude: search box, live matches you tap, chips for the chosen. */
+.tagfilter { display: flex; flex-direction: column; gap: 8px; }
+.tagfilter__chosen { display: flex; flex-wrap: wrap; gap: 6px; }
+.tagsel { display: inline-flex; align-items: center; gap: 5px; border: 0; cursor: pointer; border-radius: 999px;
+  padding: 5px 10px; font: 12.5px var(--font-text); color: var(--rose-ink); background: var(--rose-wash); }
+.tagsel:hover { filter: brightness(.97); }
+.tagsel--exc { color: var(--ink2); background: rgba(44,38,32,.09); text-decoration: line-through; }
+.tagfilter__search { width: 100%; border: 1px solid var(--line); border-radius: 9px; padding: 8px 11px;
+  font: 14px var(--font-text); background: var(--card); color: var(--ink); outline: none; }
+.tagfilter__search:focus { border-color: var(--rose); }
+.tagfilter__results { display: flex; flex-wrap: wrap; gap: 6px; max-height: 210px; overflow-y: auto; }
+.tag-pick { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); background: var(--card);
+  color: var(--ink2); border-radius: 999px; padding: 5px 10px; font: 13px var(--font-text); cursor: pointer; transition: all .13s; }
+.tag-pick:hover { border-color: var(--rose); background: var(--rose-wash); color: var(--rose-ink); }
+.tag-pick svg { color: var(--ink3); }
+.tag-pick:hover svg { color: var(--rose); }
+
 /* ---------------------------------------------------------------------------
    13. Writing station
    ------------------------------------------------------------------------- */
@@ -1466,7 +1483,10 @@ mark.hl {
    ------------------------------------------------------------------------- */
 .scrim {
   position: fixed; inset: 0; background: color-mix(in srgb, var(--ink) 34%, transparent);
-  z-index: 40; display: flex; justify-content: flex-end;
+  /* Above the mobile sheets (z-index 50) so a dialog opened from inside a sheet
+     — e.g. the Add-widgets picker from the widget sheet — lands on top of it,
+     not hidden behind it. Still below the auth gate (60+). */
+  z-index: 55; display: flex; justify-content: flex-end;
   opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .2s ease, visibility .2s ease;
 }
 .scrim.is-open { opacity: 1; visibility: visible; pointer-events: auto; }
@@ -1953,6 +1973,15 @@ button.pill--link:hover { border-color: var(--rose); color: var(--rose-ink); bac
 .mw-moods { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
 .mw-mood { border: 1px solid var(--line); background: var(--card); border-radius: 9px; width: 34px; height: 34px; font-size: 17px; cursor: pointer; line-height: 1; }
 .mw-mood.is-on { border-color: var(--rose); background: var(--rose-wash); }
+.mw-eyebrow-sm { font: 600 10px/1 var(--font-text); letter-spacing: .18em; text-transform: uppercase; color: var(--ink3); margin: 12px 0 7px; text-align: center; }
+.mw-mood-week { display: flex; justify-content: space-between; gap: 3px; }
+.mw-mood-day { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1; }
+.mw-mood-emoji { display: flex; align-items: center; justify-content: center; width: 100%; aspect-ratio: 1 / 1; max-width: 30px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--card); font-size: 15px; line-height: 1; }
+.mw-mood-emoji.is-empty { color: var(--ink3); background: color-mix(in srgb, var(--line) 30%, transparent); }
+.mw-mood-day.is-today .mw-mood-emoji { border-color: var(--rose); box-shadow: 0 0 0 1px var(--rose); }
+.mw-mood-wd { font: 10px var(--font-text); color: var(--ink3); }
+.mw-mood-day.is-today .mw-mood-wd { color: var(--rose-ink); font-weight: 600; }
 .mw-list { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .mw-list li { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink2); }
 .mw-li-del { border: 0; background: none; color: var(--ink3); cursor: pointer; font-size: 15px; line-height: 1; }

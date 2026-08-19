@@ -2118,6 +2118,65 @@
   /*  SCREEN: BROWSE  ·  progressive filters, mixed fan + original            */
   /* ======================================================================= */
   const filterState = { q:"", type:"all", status:"all", ratings:new Set(), tagsInc:new Set(), tagsExc:new Set(), sort:"hearts" };
+  // The tag include/exclude sections are search-and-add: a search box, live
+  // matches you click to add, and removable chips for what you picked. The query
+  // and which box to refocus persist across the browse re-render so typing then
+  // clicking a match feels continuous.
+  const browseTagQ = { inc: "", exc: "" };
+  let browseTagFocus = null;
+  // Every tag a reader can pick from: the ones actually on works (most common
+  // first), then the full catalog the editor autocompletes against. Deduped.
+  function tagCatalog() {
+    const seen = new Set(), out = [];
+    const push = (t) => { const v = (t || "").trim(); if (v && !seen.has(v.toLowerCase())) { seen.add(v.toLowerCase()); out.push(v); } };
+    allTags().forEach(([t]) => push(t));
+    (TAG_SUGGEST || []).forEach(push);
+    (browseTagsFromDB || []).forEach(push);
+    return out;
+  }
+  let browseTagsFromDB = [];
+  function tagFilterSection(kind) {
+    const chosen = kind === "inc" ? filterState.tagsInc : filterState.tagsExc;
+    const chips = Array.from(chosen).map(t =>
+      `<button class="tagsel${kind === "exc" ? " tagsel--exc" : ""}" data-clear="${kind}:${esc(t)}">${esc(t)} &times;</button>`).join("");
+    const ph = kind === "inc" ? "Search tags to include" : "Search tags to exclude";
+    return `<div class="tagfilter">
+        ${chips ? `<div class="tagfilter__chosen">${chips}</div>` : ""}
+        <input class="tagfilter__search" type="search" autocomplete="off" placeholder="${ph}" data-tagsearch="${kind}" aria-label="${ph}">
+        <div class="tagfilter__results" data-tagresults="${kind}"></div>
+      </div>`;
+  }
+  // Fill a section's live results from the current query, excluding what's already
+  // chosen on either side. Touches only the results box, so the search keeps focus.
+  function renderTagResults(kind) {
+    const box = document.querySelector(`[data-tagresults="${kind}"]`); if (!box) return;
+    const q = (browseTagQ[kind] || "").trim().toLowerCase();
+    const chosenInc = filterState.tagsInc, chosenExc = filterState.tagsExc;
+    let matches = tagCatalog().filter(t => {
+      const lc = t.toLowerCase();
+      if (chosenInc.has(t) || chosenExc.has(t)) return false;
+      return !q || lc.indexOf(q) >= 0;
+    });
+    // With no query, show a handful of popular starters; with one, show more.
+    matches = matches.slice(0, q ? 40 : 18);
+    box.innerHTML = matches.length
+      ? matches.map(t => `<button class="tag-pick" data-tagadd="${kind}:${esc(t)}">${icon("plus", 12)} ${esc(t)}</button>`).join("")
+      : `<p class="muted" style="font-size:12px;margin:6px 2px 0">${q ? "No tags match &ldquo;" + esc(browseTagQ[kind]) + "&rdquo;." : "Start typing to find a tag."}</p>`;
+  }
+  // After the browse screen re-renders, put the queries back and refocus the box
+  // the reader was using, so add-then-keep-searching flows without interruption.
+  function restoreTagFilters() {
+    ["inc", "exc"].forEach(kind => {
+      const input = document.querySelector(`[data-tagsearch="${kind}"]`);
+      if (input) input.value = browseTagQ[kind] || "";
+      renderTagResults(kind);
+    });
+    if (browseTagFocus) {
+      const input = document.querySelector(`[data-tagsearch="${browseTagFocus}"]`);
+      if (input) { input.focus(); const v = input.value; input.value = ""; input.value = v; }
+      browseTagFocus = null;
+    }
+  }
   function statusFilter(list) {
     if (filterState.status === "ongoing") return list.filter(w => !w.complete);
     if (filterState.status === "complete") return list.filter(w => w.complete);
@@ -2213,7 +2272,6 @@
   }
 
   function renderBrowse() {
-    const tags = allTags();
     const excCount = filterState.tagsExc.size;
     const results = browseResults();
     const saved = savedSearches();
@@ -2265,22 +2323,19 @@
               </div>
             </details>
 
-            <details class="filter-group">
-              <summary>Tags ${icon("chev",16).replace("<svg","<svg class='chev'")}</summary>
+            <details class="filter-group" open>
+              <summary>Tags ${filterState.tagsInc.size ? `<span class="filter-group__count">${filterState.tagsInc.size}</span>` : ""} ${icon("chev",16).replace("<svg","<svg class='chev'")}</summary>
               <div class="filter-body">
-                ${tags.length
-                  ? tags.map(([t, n]) => `<label class="check"><input type="checkbox" data-inc="${esc(t)}" ${filterState.tagsInc.has(t) ? "checked" : ""}> ${esc(t)} <span class="n">${n}</span></label>`).join("")
-                  : `<p class="muted" style="font-size:12.5px;margin:0;line-height:1.55">No tags yet. As works are posted and tagged, the tags show up here to filter by.</p>`}
+                <p class="muted" style="font-size:12px;margin:0 0 8px">Search and tap the tags you want to see.</p>
+                ${tagFilterSection("inc")}
               </div>
             </details>
 
             <details class="filter-group">
               <summary>Exclude ${excCount ? `<span class="filter-group__count">${excCount}</span>` : ""} ${icon("chev",16).replace("<svg","<svg class='chev'")}</summary>
               <div class="filter-body">
-                <p class="muted" style="font-size:12px;margin:0 0 4px">Works the same as include. Tags you have muted are always excluded.</p>
-                ${tags.length
-                  ? tags.map(([t, n]) => `<label class="check"><input type="checkbox" data-exc="${esc(t)}" ${filterState.tagsExc.has(t) ? "checked" : ""}> ${esc(t)} <span class="n">${n}</span></label>`).join("")
-                  : `<p class="muted" style="font-size:12.5px;margin:0;line-height:1.55">No tags yet.</p>`}
+                <p class="muted" style="font-size:12px;margin:0 0 8px">Search and tap tags to hide. Tags you have muted are always excluded.</p>
+                ${tagFilterSection("exc")}
               </div>
             </details>
 
@@ -2316,6 +2371,14 @@
           </div>
         </div>
       </div>`;
+    // Repopulate the tag search boxes and restore focus so add-then-search flows.
+    restoreTagFilters();
+    // Pull the live tag list once so the catalog is richer than the demo works.
+    if (isLive() && !browseTagsFromDB.length && window.WispDB && WispDB.listTags) {
+      WispDB.listTags(600).then(list => {
+        if (Array.isArray(list) && list.length) { browseTagsFromDB = list; renderTagResults("inc"); renderTagResults("exc"); }
+      }).catch(() => {});
+    }
   }
 
   /* ======================================================================= */
@@ -4302,7 +4365,10 @@
       fsInp.addEventListener("change", () => applyFontSize(fsInp.value));
       fsInp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); applyFontSize(fsInp.value); } });
     }
-    if (bodyEd) ["mouseup", "keyup"].forEach(ev => bodyEd.addEventListener(ev, () => setTimeout(syncFontSizeBox, 0)));
+    if (bodyEd) ["mouseup", "keyup", "touchend"].forEach(ev => bodyEd.addEventListener(ev, () => setTimeout(syncFontSizeBox, 0)));
+    // Backstop: remember the editor's selection whenever it changes, so a size
+    // nudge can act on it even after a toolbar tap blurs the field (mobile).
+    document.addEventListener("selectionchange", rememberEditorSelection);
 
     // Reorder chapters up or down (live works only).
     $$("#screen-write [data-ch-move]").forEach(b => b.addEventListener("click", async () => {
@@ -5663,7 +5729,16 @@
       </div>`;
   }
   function widgetHTML() { return baseWidgetHTML() + installedWidgetsHTML(); }
-  function renderWidgets() { const m = $("#widgetMount"); if (m) { m.innerHTML = widgetHTML(); wireMiniWidgets(m); } }
+  function renderWidgets() {
+    const m = $("#widgetMount"); if (m) { m.innerHTML = widgetHTML(); wireMiniWidgets(m); }
+    // Keep the open mobile widget sheet in lockstep, so a tap updates what the
+    // reader is actually looking at on a phone — not just the hidden desktop rail.
+    const sheetBody = $("#railSheetBody");
+    if (sheetBody && $("#railSheet") && $("#railSheet").classList.contains("is-open") && /Widgets/.test(sheetBody.textContent || "")) {
+      sheetBody.innerHTML = `<h2 class="rail__title" style="margin-bottom:16px">Widgets</h2>${widgetHTML()}`;
+      wireMiniWidgets(sheetBody);
+    }
+  }
 
   /* ---- Installable mini-widgets: quality-of-life, synced to your account ---- */
   // A shelf of small widgets a reader can add to their widget station: timers,
@@ -5978,9 +6053,38 @@
     { id: "coin", name: "Coin flip", icon: "shuffle", blurb: "Heads or tails.",
       render() { return `<div class="mw-big" data-mw-out>?</div><button class="btn btn--ghost btn--full btn--sm" data-mw-roll>Flip</button>`; },
       wire(el) { const out = el.querySelector("[data-mw-out]"); el.querySelector("[data-mw-roll]").addEventListener("click", () => { out.textContent = Math.random() < 0.5 ? "Heads" : "Tails"; out.classList.remove("mw-pop"); void out.offsetWidth; out.classList.add("mw-pop"); }); } },
-    { id: "mood", name: "Mood check", icon: "heart", blurb: "Today's mood.",
-      render() { const s = mwState("mood"); const set = ["😀", "🙂", "😐", "😔", "😠", "😴", "🥰", "🤔"]; return `<div class="mw-moods">${set.map(m => `<button class="mw-mood ${s.day === todayKey() && s.emoji === m ? "is-on" : ""}" data-mw-mood="${m}">${m}</button>`).join("")}</div><p class="mw-sub">${s.day === todayKey() ? "Saved for today" : "Pick one"}</p>`; },
-      wire(el) { el.querySelectorAll("[data-mw-mood]").forEach(b => b.addEventListener("click", () => { mwSetState("mood", { emoji: b.dataset.mwMood, day: todayKey() }); renderWidgets(); })); } },
+    { id: "mood", name: "Mood check", icon: "heart", blurb: "Your mood, kept for the week.",
+      render() {
+        const s = mwState("mood");
+        const set = ["😀", "🙂", "😐", "😔", "😠", "😴", "🥰", "🤔"];
+        const today = todayKey();
+        const hist = (s.history && typeof s.history === "object") ? s.history : {};
+        const todayEmoji = hist[today] || (s.day === today ? s.emoji : "");
+        // The last seven days ending today, so a reader can see the week at a glance.
+        const wdInit = ["S", "M", "T", "W", "T", "F", "S"];
+        let week = "";
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date(Date.now() - i * 86400000);
+          const key = d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+          const em = hist[key] || (key === today ? todayEmoji : "");
+          week += `<span class="mw-mood-day${key === today ? " is-today" : ""}"><span class="mw-mood-emoji${em ? "" : " is-empty"}">${em || "·"}</span><span class="mw-mood-wd">${wdInit[d.getDay()]}</span></span>`;
+        }
+        return `<div class="mw-moods">${set.map(m => `<button class="mw-mood ${todayEmoji === m ? "is-on" : ""}" data-mw-mood="${m}" aria-label="Set today's mood to ${m}">${m}</button>`).join("")}</div>` +
+          `<p class="mw-eyebrow-sm">This week</p><div class="mw-mood-week">${week}</div>`;
+      },
+      wire(el) {
+        el.querySelectorAll("[data-mw-mood]").forEach(b => b.addEventListener("click", () => {
+          const s = mwState("mood");
+          const today = todayKey();
+          const hist = Object.assign({}, (s.history && typeof s.history === "object") ? s.history : {});
+          hist[today] = b.dataset.mwMood;
+          // Keep about six weeks of history; drop anything older so it never grows.
+          const cutoff = Date.now() - 42 * 86400000;
+          Object.keys(hist).forEach(k => { const p = k.split("-"); const t = new Date(+p[0], (+p[1]) - 1, +p[2]).getTime(); if (isFinite(t) && t < cutoff) delete hist[k]; });
+          mwSetState("mood", { emoji: b.dataset.mwMood, day: today, history: hist });
+          renderWidgets();
+        }));
+      } },
     { id: "sticky", name: "Sticky notes", icon: "edit", blurb: "Notes that stick around.",
       render() { const notes = normalizeStickies(mwState("sticky")); return `<div class="mw-stickies">${notes.map((nt, i) => `<div class="mw-sticky-card"><textarea class="mw-sticky" data-mw-sticky="${i}" placeholder="Jot something...">${esc(nt.text)}</textarea><button class="mw-sticky-del" data-mw-sticky-del="${i}" aria-label="Remove note">&times;</button></div>`).join("")}</div><button class="btn btn--ghost btn--full btn--sm" data-mw-sticky-add>${icon("plus", 13)} New note</button>`; },
       wire(el) {
@@ -6137,14 +6241,9 @@
     scope.querySelectorAll("[data-mw-open]").forEach(b => b.addEventListener("click", openWidgetPicker));
   }
   // Both the desktop rail and the open mobile sheet reflect an install change.
-  function renderWidgetsEverywhere() {
-    renderWidgets();
-    const sheetBody = $("#railSheetBody");
-    if (sheetBody && $("#railSheet") && $("#railSheet").classList.contains("is-open") && /Widgets/.test(sheetBody.textContent || "")) {
-      sheetBody.innerHTML = `<h2 class="rail__title" style="margin-bottom:16px">Widgets</h2>${widgetHTML()}`;
-      wireMiniWidgets(sheetBody);
-    }
-  }
+  // renderWidgets now refreshes both surfaces, so this is a thin alias kept for
+  // the install/remove call sites.
+  function renderWidgetsEverywhere() { renderWidgets(); }
   function openWidgetPicker() {
     const installed = new Set(mwLoad());
     const rows = MINI_WIDGETS.map(def => `<button class="mw-pick-row ${installed.has(def.id) ? "is-in" : ""}" data-mw-pick="${esc(def.id)}">
@@ -7391,12 +7490,13 @@
   document.addEventListener("change", (e) => {
     const r = e.target.closest("[data-rating]");
     if (r) { r.checked ? filterState.ratings.add(r.dataset.rating) : filterState.ratings.delete(r.dataset.rating); refreshBrowse(); return; }
-    const inc = e.target.closest("[data-inc]");
-    if (inc) { inc.checked ? filterState.tagsInc.add(inc.dataset.inc) : filterState.tagsInc.delete(inc.dataset.inc); if (inc.checked) filterState.tagsExc.delete(inc.dataset.inc); renderBrowse(); return; }
-    const exc = e.target.closest("[data-exc]");
-    if (exc) { exc.checked ? filterState.tagsExc.add(exc.dataset.exc) : filterState.tagsExc.delete(exc.dataset.exc); if (exc.checked) filterState.tagsInc.delete(exc.dataset.exc); renderBrowse(); return; }
     const sel = e.target.closest("#sortSel");
     if (sel) { filterState.sort = sel.value; refreshBrowse(); return; }
+  });
+  // Live-filter the tag include/exclude search boxes as the reader types.
+  document.addEventListener("input", (e) => {
+    const ts = e.target.closest("[data-tagsearch]");
+    if (ts) { browseTagQ[ts.dataset.tagsearch] = ts.value; renderTagResults(ts.dataset.tagsearch); }
   });
 
   document.addEventListener("click", (e) => {
@@ -7404,6 +7504,14 @@
     if (type) { filterState.type = type.dataset.type; refreshBrowse(); return; }
     const statusBtn = e.target.closest("[data-status]");
     if (statusBtn) { filterState.status = statusBtn.dataset.status; refreshBrowse(); return; }
+    const tadd = e.target.closest("[data-tagadd]");
+    if (tadd) {
+      const parts = tadd.dataset.tagadd.split(":"); const kind = parts.shift(); const t = parts.join(":");
+      if (kind === "inc") { filterState.tagsInc.add(t); filterState.tagsExc.delete(t); }
+      else { filterState.tagsExc.add(t); filterState.tagsInc.delete(t); }
+      browseTagFocus = kind;                 // keep the reader in this search box
+      refreshBrowse(); return;
+    }
     const clr = e.target.closest("[data-clear]");
     if (clr) {
       const [k, v] = clr.dataset.clear.split(":");
@@ -8730,9 +8838,7 @@
     else if (kind === "underline") exec("underline");
     else if (kind === "highlight") applyHighlight();
     else if (kind === "fs-inc" || kind === "fs-dec") {
-      const inp = $("#we-fontsize"); if (!inp) return;
-      let v = Math.round(+inp.value || 18) + (kind === "fs-inc" ? 1 : -1);
-      v = Math.max(8, Math.min(96, v)); inp.value = v; applyFontSize(v);
+      nudgeFontSize(kind === "fs-inc" ? 1 : -1);
     }
     else if (kind === "align-left") exec("justifyLeft");
     else if (kind === "align-center") exec("justifyCenter");
@@ -8814,31 +8920,103 @@
     updateEditorEmpty();
   }
   function applyHighlight() { wrapSelectionInline("mark", "hl", "Highlight one paragraph at a time."); }
-  // Google-Docs style: set an exact point size on the selected text.
+
+  // The editor's live selection is easy to lose the moment a toolbar button
+  // takes focus (especially on a phone, where tapping a button blurs the field).
+  // Remember the last real selection inside the editor so size nudges can act on
+  // it even after the caret has technically left.
+  let lastEditorRange = null;
+  function rememberEditorSelection() {
+    const ed = $("#we-body"); if (!ed) return;
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount && sel.anchorNode && ed.contains(sel.anchorNode)) {
+      try { lastEditorRange = sel.getRangeAt(0).cloneRange(); } catch (e) {}
+    }
+  }
+  function restoreEditorSelection() {
+    const ed = $("#we-body"); if (!ed) return false;
+    const sel = window.getSelection();
+    if (sel && sel.anchorNode && ed.contains(sel.anchorNode)) return true;   // still live
+    if (lastEditorRange && ed.contains(lastEditorRange.startContainer)) {
+      try { sel.removeAllRanges(); sel.addRange(lastEditorRange); return true; } catch (e) {}
+    }
+    return false;
+  }
+  // A bare caret should resize the whole word it sits in, the way clicking into a
+  // word and nudging the size does in a word processor — no manual selecting.
+  function expandSelectionToWord(sel, ed) {
+    if (!sel.rangeCount) return;
+    const r = sel.getRangeAt(0);
+    let node = r.startContainer, off = r.startOffset;
+    if (node.nodeType !== 3) {
+      const t = node.childNodes[off] || node.childNodes[off - 1];
+      if (t && t.nodeType === 3) { node = t; off = node.nodeValue.length; } else return;
+    }
+    const text = node.nodeValue || "";
+    let start = Math.min(off, text.length), end = start;
+    const isWord = (ch) => !!ch && !/\s/.test(ch);
+    while (start > 0 && isWord(text[start - 1])) start--;
+    while (end < text.length && isWord(text[end])) end++;
+    if (end > start) {
+      const nr = document.createRange(); nr.setStart(node, start); nr.setEnd(node, end);
+      sel.removeAllRanges(); sel.addRange(nr);
+    }
+  }
+  // The size the next nudge should start from: the selected text's real size (or
+  // the word under the caret), falling back to the size box.
+  function currentEditorFontSize() {
+    const ed = $("#we-body"), inp = $("#we-fontsize");
+    const fallback = inp ? (Math.round(+inp.value) || 18) : 18;
+    restoreEditorSelection();
+    const sel = window.getSelection();
+    if (!ed || !sel || !sel.anchorNode || !ed.contains(sel.anchorNode)) return fallback;
+    let n = sel.anchorNode; if (n.nodeType === 3) n = n.parentNode;
+    if (!n || !ed.contains(n)) return fallback;
+    const fs = parseFloat(getComputedStyle(n).fontSize);
+    return fs ? Math.round(fs) : fallback;
+  }
+  // Google-Docs style: set an exact point size on the selected text (or the word
+  // under the caret), and keep that text selected so the writer can keep nudging
+  // −/+ without reselecting each time.
   function applyFontSize(px) {
     const ed = $("#we-body"); if (!ed) return;
     px = Math.max(8, Math.min(96, Math.round(+px || 18)));
+    restoreEditorSelection();
     const sel = window.getSelection();
-    if (!sel || sel.isCollapsed || !sel.toString().trim()) { toast("Select some text to resize."); return; }
+    if (!sel || !sel.rangeCount) { toast("Place your cursor in a word, or select text, to resize."); return; }
+    if (sel.isCollapsed) expandSelectionToWord(sel, ed);
+    if (sel.isCollapsed || !sel.toString().trim()) { toast("Place your cursor in a word, or select text, to resize."); return; }
     const range = sel.getRangeAt(0);
     if (editorBlockOf(range.startContainer, ed) !== editorBlockOf(range.endContainer, ed)) { toast("Resize within one paragraph at a time."); return; }
     let anc = range.commonAncestorContainer; if (anc && anc.nodeType === 3) anc = anc.parentNode;
     const existing = anc && anc.closest ? anc.closest("span[style*='font-size']") : null;
+    let target = null;
     try {
       if (existing && (existing.textContent || "") === sel.toString()) {
-        existing.style.fontSize = px + "px";
+        existing.style.fontSize = px + "px"; target = existing;
       } else {
         const span = document.createElement("span"); span.style.fontSize = px + "px";
-        span.appendChild(range.extractContents()); range.insertNode(span);
+        span.appendChild(range.extractContents()); range.insertNode(span); target = span;
       }
-    } catch (e) { toast("Try selecting within one paragraph."); }
+    } catch (e) { toast("Try selecting within one paragraph."); return; }
     ed.querySelectorAll("span[style*='font-size']").forEach(s => { if (!(s.textContent || "").trim()) { const p = s.parentNode; if (!p) return; while (s.firstChild) p.insertBefore(s.firstChild, s); p.removeChild(s); } });
     if (ed.normalize) ed.normalize();
-    sel.removeAllRanges(); updateEditorEmpty();
+    // Reselect the resized text so the next nudge lands on the same words.
+    if (target && target.parentNode) {
+      try { const r2 = document.createRange(); r2.selectNodeContents(target); sel.removeAllRanges(); sel.addRange(r2); rememberEditorSelection(); } catch (e) {}
+    }
+    const inp = $("#we-fontsize"); if (inp) inp.value = px;
+    updateEditorEmpty();
+  }
+  // Nudge the current selection (or word) up/down a point, keeping it selected.
+  function nudgeFontSize(delta) {
+    const v = Math.max(8, Math.min(96, currentEditorFontSize() + (delta > 0 ? 1 : -1)));
+    applyFontSize(v);
   }
   // Reflect the size of whatever is selected back into the size box, like Docs.
   function syncFontSizeBox() {
     const inp = $("#we-fontsize"); const ed = $("#we-body"); if (!inp || !ed) return;
+    rememberEditorSelection();
     const sel = window.getSelection(); if (!sel || !sel.anchorNode) return;
     let n = sel.anchorNode; if (n.nodeType === 3) n = n.parentNode;
     if (!n || !ed.contains(n)) return;
@@ -8847,10 +9025,34 @@
   }
   // Dictation: speak and it types. Uses the browser's speech recognition; the
   // mic button toggles it on and off.
+  function isIOS() {
+    return /iP(hone|ad|od)/i.test(navigator.userAgent) ||
+      (/Mac/.test(navigator.platform || "") && (navigator.maxTouchPoints || 0) > 1);
+  }
+  // Drop the caret at the end of the editor so bringing the keyboard up starts
+  // typing where the writer left off.
+  function placeCaretAtEditorEnd(ed) {
+    try {
+      ed.focus();
+      const sel = window.getSelection(); if (!sel) return;
+      if (sel.anchorNode && ed.contains(sel.anchorNode)) return;   // already inside
+      const r = document.createRange(); r.selectNodeContents(ed); r.collapse(false);
+      sel.removeAllRanges(); sel.addRange(r);
+    } catch (e) {}
+  }
   function toggleDictation() {
     const ed = $("#we-body"); if (!ed) return;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { toast("Dictation needs a browser that supports speech (Chrome or Safari)."); return; }
+    if (!SR) {
+      // iOS (all its browsers are WebKit) has no Web Speech API — but the on-screen
+      // keyboard has a mic key that dictates into any field. Bring the keyboard up
+      // and point the writer at it, rather than a dead "unsupported" message.
+      placeCaretAtEditorEnd(ed);
+      toast(isIOS()
+        ? "Tap the microphone key on your keyboard to dictate straight into your chapter."
+        : "This browser has no built-in dictation. Try Chrome on a computer, or your keyboard's mic key.");
+      return;
+    }
     const btn = $("#we-dictate");
     if (dictation) { try { dictation.stop(); } catch (e) {} return; }
     const rec = new SR();

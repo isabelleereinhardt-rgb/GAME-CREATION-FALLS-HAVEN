@@ -385,9 +385,13 @@
   function stroll() {
     var wasWalking = state.walks;
     injectCSS(); mount();
-    if (!wasWalking) { state.walks = true; render(); }
+    state.walks = true;
+    // Always rebuild him so he visibly restarts a pass from the right edge right
+    // now — on desktop he is already walking, so without this the button looked
+    // like it did nothing. render() re-creates #luckyWalk, restarting the walk.
+    render();
     updateVisibility();
-    // If he was off, send him across once, then turn back off at the next wrap.
+    // If he was resting, send him across once and then rest again.
     if (!wasWalking) {
       var walk = stageEl && stageEl.querySelector("#luckyWalk");
       if (walk) walk.addEventListener("animationiteration", function once(e) {
