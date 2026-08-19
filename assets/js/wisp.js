@@ -1860,6 +1860,18 @@
     return `<div class="tag-row">${head}${more}</div>`;
   }
 
+  // A work's fandom/source can hold several fandoms, comma-separated. Show each as
+  // its own bubble (Wattpad-style), each linking to that fandom's collection, so a
+  // multi-fandom crossover never reads as one long run-on pill.
+  function splitSource(source) {
+    return String(source || "").split(",").map(s => s.trim()).filter(Boolean);
+  }
+  function sourcePills(source, cls) {
+    const extra = cls ? " " + cls : "";
+    return splitSource(source).map(s =>
+      `<button class="pill pill--link${extra}" data-tag="${esc(s)}">${esc(s)}</button>`).join("");
+  }
+
   function statEnd(w) {
     if (w.complete) return `<span class="stat--end"><span class="pip pip--sage"></span>Complete</span>`;
     return `<span class="stat--end"><span class="pip pip--amber"></span>${esc(w.statusText)}</span>`;
@@ -1875,7 +1887,7 @@
     return `<article class="card" data-work="${w.id}">
       <span class="card__cover">${cover(w.cover, w.title)}${flag}${readMark}</span>
       <span class="card__body">
-        <span class="tag-row"><button class="pill pill--link" data-browse-type="${w.type}">${w.type === "fan" ? "Fanwork" : "Original"}</button>${w.source ? `<button class="pill pill--link" data-tag="${esc(w.source)}">${esc(w.source)}</button>` : ""}</span>
+        <span class="tag-row"><button class="pill pill--link" data-browse-type="${w.type}">${w.type === "fan" ? "Fanwork" : "Original"}</button>${sourcePills(w.source)}</span>
         <span class="card__titlerow"><a class="card__title" href="#/work/${w.id}">${esc(w.title)}</a>${ratePill(w.rating)}</span>
         <span class="card__by">by ${esc(w.author)}</span>
         <span class="card__summary">${esc(w.summary)}</span>
@@ -1906,7 +1918,7 @@
         <span class="list-card__summary">${esc(w.summary)}</span>
         <span class="list-card__meta">
           <button class="pill pill--sm pill--link" data-browse-type="${w.type}">${w.type === "fan" ? "Fanwork" : "Original"}</button>
-          ${w.source ? `<button class="pill pill--sm pill--link" data-tag="${esc(w.source)}">${esc(w.source)}</button>` : ""}
+          ${sourcePills(w.source, "pill--sm")}
           ${flag ? `<span class="pill pill--sm">${esc(flag)}</span>` : ""}
           <span class="list-card__stats">
             <span class="stat stat--heart">${icon("heart",13)}${esc(w.hearts)}</span>
@@ -2331,7 +2343,7 @@
         <div class="work-hero">
           <span class="work-hero__cover">${cover(w.cover, w.title)}</span>
           <div class="work-hero__main">
-            <span class="tag-row"><button class="pill pill--link" data-browse-type="${w.type}">${w.type === "fan" ? "Fanwork" : "Original"}</button>${w.source ? `<button class="pill pill--link" data-tag="${esc(w.source)}">${esc(w.source)}</button>` : ""}${w.format === "comic" ? '<span class="pill">Comic</span>' : ""}</span>
+            <span class="tag-row"><button class="pill pill--link" data-browse-type="${w.type}">${w.type === "fan" ? "Fanwork" : "Original"}</button>${sourcePills(w.source)}${w.format === "comic" ? '<span class="pill">Comic</span>' : ""}</span>
             <h1 class="work-hero__title">${esc(w.title)}</h1>
             ${w._db && w.seriesId && w.seriesName ? `<div style="font-size:14px;margin:2px 0 4px"><a href="#/series/${w.seriesId}" class="series-crumb">${icon("book",13)} ${esc(w.seriesName)}${w.book ? `, book ${w.book}` : ""}</a></div>` : ""}
             <div class="soft" style="font-size:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
