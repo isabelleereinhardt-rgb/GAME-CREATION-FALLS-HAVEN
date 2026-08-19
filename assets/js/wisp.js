@@ -507,6 +507,8 @@
   let editorFormat = "prose";   // "prose" or "comic" for the work being edited
   let editorPages = [];         // comic page image URLs, in order
   let editorProseHTML = "";     // stashed prose editor HTML, so a format toggle doesn't lose it
+  let editorLineSpace = (() => { try { return localStorage.getItem("wisp.editorLineSpace") || "normal"; } catch (e) { return "normal"; } })();
+  let dictation = null;         // active SpeechRecognition session, when dictating
   let comicIndex = 0;           // current page in the comic reader's single-page mode
   let comicKeyHandler = null;   // keydown handler for comic paging, removed between renders
   let pendingSeries = null; // series name to prefill when starting a new book in a series
@@ -1344,6 +1346,9 @@
       /^(https?:|mailto:)/i.test(u) ? `<a href="${esc(u)}" target="_blank" rel="noopener nofollow">${t}</a>` : m);
     s = s.replace(/\*\*([^*]+?)\*\*/g, "<strong>$1</strong>")
          .replace(/__([^_]+?)__/g, "<strong>$1</strong>");
+    // Highlight (==text==) and underline (++text++), before single * / _ italics.
+    s = s.replace(/==([^=]+?)==/g, '<mark class="hl">$1</mark>');
+    s = s.replace(/\+\+([^+]+?)\+\+/g, "<u>$1</u>");
     s = s.replace(/(^|[^*\w])\*(?!\s)([^*]+?)\*(?!\*)/g, "$1<em>$2</em>")
          .replace(/(^|[^_\w])_(?!\s)([^_]+?)_(?!_)/g, "$1<em>$2</em>");
     s = s.replace(new RegExp(MD_CA + "(\\d+)" + MD_CB, "g"), (_, i) => `<code>${codes[+i]}</code>`);
@@ -1414,7 +1419,12 @@
   }
 
   function renderBlock(block) {
-    const lines = String(block).split(/\n/);
+    // A leading [[center]] / [[right]] token sets the block's alignment.
+    let raw = String(block), align = "";
+    const am = raw.match(/^\[\[(center|right)\]\]\s?/);
+    if (am) { align = am[1]; raw = raw.slice(am[0].length); }
+    const sa = align ? ` style="text-align:${align}"` : "";
+    const lines = raw.split(/\n/);
     const first = lines[0].trim();
     const img = lines.length === 1 && first.match(/^!\[([^\]]*)\]\((https?:\/\/[^)\s]+?)(?:\s+"(small|medium|full)")?\)$/);
     if (img) return imageEmbedHTML(img[2], img[1], img[3]);
@@ -1422,14 +1432,14 @@
     if (emb) return richEmbedHTML(emb[2], emb[1]);
     if (lines.length === 1 && /^(-{3,}|\*{3,}|_{3,})$/.test(first)) return "<hr>";
     const h = lines.length === 1 && first.match(/^(#{1,3})\s+(.*)$/);
-    if (h) { const tag = ["h2", "h3", "h4"][h[1].length - 1]; return `<${tag}>${mdInline(h[2])}</${tag}>`; }
+    if (h) { const tag = ["h2", "h3", "h4"][h[1].length - 1]; return `<${tag}${sa}>${mdInline(h[2])}</${tag}>`; }
     if (lines.every(l => /^>\s?/.test(l)))
-      return `<blockquote>${lines.map(l => mdInline(l.replace(/^>\s?/, ""))).join("<br>")}</blockquote>`;
+      return `<blockquote${sa}>${lines.map(l => mdInline(l.replace(/^>\s?/, ""))).join("<br>")}</blockquote>`;
     if (lines.every(l => /^[-*]\s+/.test(l.trim())))
-      return "<ul>" + lines.map(l => `<li>${mdInline(l.trim().replace(/^[-*]\s+/, ""))}</li>`).join("") + "</ul>";
+      return `<ul${sa}>` + lines.map(l => `<li>${mdInline(l.trim().replace(/^[-*]\s+/, ""))}</li>`).join("") + "</ul>";
     if (lines.every(l => /^\d+\.\s+/.test(l.trim())))
-      return "<ol>" + lines.map(l => `<li>${mdInline(l.trim().replace(/^\d+\.\s+/, ""))}</li>`).join("") + "</ol>";
-    return `<p>${lines.map(l => mdInline(l)).join("<br>")}</p>`;
+      return `<ol${sa}>` + lines.map(l => `<li>${mdInline(l.trim().replace(/^\d+\.\s+/, ""))}</li>`).join("") + "</ol>";
+    return `<p${sa}>${lines.map(l => mdInline(l)).join("<br>")}</p>`;
   }
 
   function mdToHtmlBlocks(body) { return splitBlocks(body).map(renderBlock); }
@@ -1449,6 +1459,8 @@
       const inner = inlineToMd(n);
       if (tag === "strong" || tag === "b") out += inner.trim() ? `**${inner}**` : inner;
       else if (tag === "em" || tag === "i") out += inner.trim() ? `*${inner}*` : inner;
+      else if (tag === "u" || tag === "ins") out += inner.trim() ? `++${inner}++` : inner;
+      else if (tag === "mark") out += inner.trim() ? `==${inner}==` : inner;
       else if (tag === "code") out += "`" + inner + "`";
       else if (tag === "a") { const href = n.getAttribute("href") || ""; out += /^(https?:|mailto:)/i.test(href) ? `[${inner}](${href})` : inner; }
       else out += inner;
@@ -1456,6 +1468,14 @@
     return out;
   }
 
+  // A centered or right-aligned block keeps its alignment through Markdown with
+  // a small leading token the renderer understands. Left is the default (none).
+  function alignPrefix(node) {
+    let a = "";
+    try { a = (node.style && node.style.textAlign) || node.getAttribute("align") || ""; } catch (e) {}
+    a = String(a).toLowerCase();
+    return a === "center" ? "[[center]] " : (a === "right" ? "[[right]] " : "");
+  }
   function serializeBlock(node, tag) {
     if (tag === "hr") return "---";
     if (tag === "ul")
@@ -1466,10 +1486,10 @@
         .map((li, i) => (i + 1) + ". " + inlineToMd(li).replace(/\s+/g, " ").trim()).filter(s => !/^\d+\.$/.test(s)).join("\n");
     if (tag === "blockquote")
       return inlineToMd(node).replace(/^\n+|\n+$/g, "").split("\n").map(l => "> " + l).join("\n");
-    if (tag === "h1" || tag === "h2") return "# " + inlineToMd(node).replace(/\s+/g, " ").trim();
-    if (tag === "h3") return "## " + inlineToMd(node).replace(/\s+/g, " ").trim();
-    if (/^h[4-6]$/.test(tag)) return "### " + inlineToMd(node).replace(/\s+/g, " ").trim();
-    return inlineToMd(node).replace(/\n{2,}/g, "\n").replace(/^\n+|\n+$/g, "");
+    if (tag === "h1" || tag === "h2") return alignPrefix(node) + "# " + inlineToMd(node).replace(/\s+/g, " ").trim();
+    if (tag === "h3") return alignPrefix(node) + "## " + inlineToMd(node).replace(/\s+/g, " ").trim();
+    if (/^h[4-6]$/.test(tag)) return alignPrefix(node) + "### " + inlineToMd(node).replace(/\s+/g, " ").trim();
+    return alignPrefix(node) + inlineToMd(node).replace(/\n{2,}/g, "\n").replace(/^\n+|\n+$/g, "");
   }
 
   // An inserted image or an embed lives in the editor as a <figure> (or a bare
@@ -2492,12 +2512,25 @@
 
   // The editor's main writing area swaps between prose and a comic page manager.
   function proseZoneHTML(bodyHTML) {
+    const alignSVG = (a) => {
+      const rows = a === "center" ? ["4 20", "7 17", "5 19"] : a === "right" ? ["4 20", "10 20", "6 20"] : ["4 20", "4 14", "4 18"];
+      const lines = rows.map((r, i) => { const [x1, x2] = r.split(" "); return `<line x1="${x1}" y1="${6 + i * 6}" x2="${x2}" y2="${6 + i * 6}"/>`; }).join("");
+      return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">${lines}</svg>`;
+    };
+    const micSVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="9" y1="21" x2="15" y2="21"/></svg>`;
+    const sp = editorLineSpace || "normal";
     return `
       <div class="toolbar" role="toolbar" aria-label="Formatting">
         <button type="button" title="Heading" data-fmt="h2">H</button>
         <button type="button" title="Bold" data-fmt="bold"><b>B</b></button>
         <button type="button" title="Italic" data-fmt="italic"><i>I</i></button>
+        <button type="button" title="Underline" data-fmt="underline"><u>U</u></button>
+        <button type="button" title="Highlight" data-fmt="highlight"><span style="background:color-mix(in srgb,var(--amber) 55%,transparent);border-radius:3px;padding:0 4px">H</span></button>
         <button type="button" title="Quote" data-fmt="quote">&ldquo;</button>
+        <span class="sep"></span>
+        <button type="button" title="Align left" data-fmt="align-left">${alignSVG("left")}</button>
+        <button type="button" title="Align center" data-fmt="align-center">${alignSVG("center")}</button>
+        <button type="button" title="Align right" data-fmt="align-right">${alignSVG("right")}</button>
         <span class="sep"></span>
         <button type="button" title="Bulleted list" data-fmt="ul">&bull;</button>
         <button type="button" title="Numbered list" data-fmt="ol">1.</button>
@@ -2505,12 +2538,21 @@
         <span class="sep"></span>
         <button type="button" title="Upload an image from your device" data-fmt="image">${icon("upload",13)} Image</button>
         <button type="button" title="Embed a video, map, or audio by link" data-fmt="embed">${icon("external",13)} Embed</button>
+        <button type="button" title="Dictate: speak and it types for you" data-fmt="dictate" id="we-dictate">${micSVG}</button>
         <span class="sep"></span>
         <button type="button" title="Horizontal rule" data-fmt="hr"><span style="display:inline-block;width:16px;height:2px;background:currentColor;border-radius:2px"></span></button>
-        <span style="margin-left:auto;font-size:12px;color:var(--ink3);padding:0 8px">Markdown shortcuts on</span>
+        <label class="tb-space" title="Line spacing while you write">Spacing
+          <select id="we-linespace" aria-label="Line spacing">
+            <option value="compact"${sp === "compact" ? " selected" : ""}>Compact</option>
+            <option value="normal"${sp === "normal" ? " selected" : ""}>Normal</option>
+            <option value="relaxed"${sp === "relaxed" ? " selected" : ""}>Relaxed</option>
+          </select>
+        </label>
       </div>
-      <div class="editor" id="we-body" contenteditable="true" spellcheck="true" aria-label="Chapter body" data-placeholder="Start typing, or paste from another editor. Format with the toolbar above, or use Markdown shortcuts.">${bodyHTML}</div>`;
+      <div class="editor" id="we-body" contenteditable="true" spellcheck="true" aria-label="Chapter body" style="line-height:${lineSpaceValue(sp)}" data-placeholder="Start typing, or paste from another editor. Format with the toolbar above, or use Markdown shortcuts.">${bodyHTML}</div>`;
   }
+  const LINE_SPACE = { compact: "1.45", normal: "1.7", relaxed: "2.05" };
+  function lineSpaceValue(k) { return LINE_SPACE[k] || LINE_SPACE.normal; }
   function comicZoneHTML() {
     return `
       <div class="comic-editor">
@@ -2826,6 +2868,13 @@
       });
       updateEditorEmpty();
     }
+    // Line spacing while writing (a comfort setting; readers keep their own).
+    const lineSel = $("#we-linespace");
+    if (lineSel) lineSel.addEventListener("change", () => {
+      editorLineSpace = lineSel.value;
+      try { localStorage.setItem("wisp.editorLineSpace", editorLineSpace); } catch (e) {}
+      if (bodyEd) bodyEd.style.lineHeight = lineSpaceValue(editorLineSpace);
+    });
 
     // Reorder chapters up or down (live works only).
     $$("#screen-write [data-ch-move]").forEach(b => b.addEventListener("click", async () => {
@@ -6422,6 +6471,12 @@
     const exec = (cmd, val) => { try { document.execCommand(cmd, false, val); } catch (e) {} };
     if (kind === "bold") exec("bold");
     else if (kind === "italic") exec("italic");
+    else if (kind === "underline") exec("underline");
+    else if (kind === "highlight") applyHighlight();
+    else if (kind === "align-left") exec("justifyLeft");
+    else if (kind === "align-center") exec("justifyCenter");
+    else if (kind === "align-right") exec("justifyRight");
+    else if (kind === "dictate") toggleDictation();
     else if (kind === "h2") toggleBlock("h2");
     else if (kind === "quote") toggleBlock("blockquote");
     else if (kind === "ul") exec("insertUnorderedList");
@@ -6456,6 +6511,56 @@
       insertEmbedBlock("@[" + label + "](" + url + ")");
       if (embedInfo(url)) toast("Embed added. It shows as a player in Preview and for readers.");
     }
+  }
+  // Wrap the current selection in a highlight (or clear it if already highlighted).
+  function applyHighlight() {
+    const ed = $("#we-body"); if (!ed) return;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) { toast("Select some text to highlight."); return; }
+    const range = sel.getRangeAt(0);
+    let anc = range.commonAncestorContainer;
+    if (anc && anc.nodeType === 3) anc = anc.parentNode;
+    const inMark = anc && anc.closest ? anc.closest("mark.hl") : null;
+    try {
+      if (inMark) {
+        const parent = inMark.parentNode;
+        while (inMark.firstChild) parent.insertBefore(inMark.firstChild, inMark);
+        parent.removeChild(inMark);
+      } else {
+        const mark = document.createElement("mark"); mark.className = "hl";
+        mark.appendChild(range.extractContents()); range.insertNode(mark);
+      }
+    } catch (e) { toast("Highlight within one paragraph."); }
+    sel.removeAllRanges();
+    updateEditorEmpty();
+  }
+  // Dictation: speak and it types. Uses the browser's speech recognition; the
+  // mic button toggles it on and off.
+  function toggleDictation() {
+    const ed = $("#we-body"); if (!ed) return;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { toast("Dictation needs a browser that supports speech (Chrome or Safari)."); return; }
+    const btn = $("#we-dictate");
+    if (dictation) { try { dictation.stop(); } catch (e) {} return; }
+    const rec = new SR();
+    rec.lang = navigator.language || "en-US";
+    rec.interimResults = false; rec.continuous = true;
+    dictation = rec;
+    if (btn) btn.classList.add("is-on");
+    toast("Listening. Speak and it types. Tap the mic again to stop.");
+    rec.onresult = (e) => {
+      let text = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) text += e.results[i][0].transcript;
+      if (text) {
+        ed.focus();
+        const lead = ed.textContent && ed.textContent.trim() ? " " : "";
+        try { document.execCommand("insertText", false, lead + text.trim()); } catch (er) {}
+        updateEditorEmpty();
+      }
+    };
+    rec.onerror = (e) => { toast(e && e.error === "not-allowed" ? "Microphone access was blocked." : "Dictation stopped."); };
+    rec.onend = () => { dictation = null; if (btn) btn.classList.remove("is-on"); };
+    try { rec.start(); } catch (e) { dictation = null; if (btn) btn.classList.remove("is-on"); toast("Could not start dictation."); }
   }
   // Insert a Markdown embed line as its own paragraph, so it round-trips to a
   // standalone block and renders as an embed in the preview and the reader.
