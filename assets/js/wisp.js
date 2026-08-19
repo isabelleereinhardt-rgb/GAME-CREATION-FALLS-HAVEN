@@ -2592,6 +2592,12 @@
     const liveWork = LIVE.byId[reqId];
     if (liveWork && liveWork._db) { renderLiveReading(liveWork, LIVE.chapters[reqId] || [], chapterNum); return; }
     const c = W.CHAPTER;
+    // Restore any demo comments kept on this device, so they survive a reload.
+    (loadLocalComments("demo") || []).forEach(r => {
+      const p = c.paragraphs[r.paragraph_index]; if (!p) return;
+      p.thread = p.thread || { reactions: {}, comments: [] };
+      if (!p.thread.comments.some(x => x.id === r.id)) p.thread.comments.push({ id: r.id, who: r.display_name || "You", init: ((r.display_name || "Y")[0] || "Y").toUpperCase(), when: "saved", text: r.body });
+    });
     const flagship = (!reqId || reqId === "amber");
     const w = W.byId[reqId] || W.byId.amber;
     markVisited(flagship ? "amber" : w.id);
@@ -3347,17 +3353,23 @@
       if (!WispDB.signedIn) { openAuth("in"); return; }
       const body = (ta.value || "").trim(); if (!body) return;
       post.disabled = true;
+      const myName = (WispDB.profile && WispDB.profile.display_name) || "You";
+      const myId = WispDB.user && WispDB.user.id;
+      const pushLocal = (id, created) => {
+        const list = (LIVE.comments[ch.id] = LIVE.comments[ch.id] || {});
+        (list[i] = list[i] || []).push({ id, user_id: myId, body, created_at: created, paragraph_index: i, chapter_id: ch.id, profiles: { display_name: myName } });
+        saveLocalComment(w.id, { id, user_id: myId, chapter_id: ch.id, paragraph_index: i, body, created_at: created, display_name: myName });
+        openLiveThread(w, ch, i, slot); refreshLiveCount(ch, i);
+      };
       try {
         const saved = await WispDB.postComment(w.id, body, ch.id, i);
-        const list = (LIVE.comments[ch.id] = LIVE.comments[ch.id] || {});
-        (list[i] = list[i] || []).push({
-          id: saved && saved.id, user_id: (saved && saved.user_id) || (WispDB.user && WispDB.user.id),
-          body, created_at: (saved && saved.created_at) || new Date().toISOString(),
-          profiles: { display_name: (WispDB.profile && WispDB.profile.display_name) || "You" }
-        });
-        openLiveThread(w, ch, i, slot);       // re-render with the new comment
-        refreshLiveCount(ch, i);
-      } catch (e) { toast((e && e.message) || "Could not post."); post.disabled = false; }
+        pushLocal((saved && saved.id) || ("local-" + Date.now()), (saved && saved.created_at) || new Date().toISOString());
+      } catch (e) {
+        // Server write failed (table not migrated, sample work, offline). Keep it
+        // on the device so the reader does not lose it on reload.
+        pushLocal("local-" + Date.now(), new Date().toISOString());
+        toast("Saved on this device — couldn't reach the server.");
+      }
     });
 
     // Owner controls: edit or delete a comment you wrote.
@@ -3375,9 +3387,12 @@
       if (!nb) return;
       b.disabled = true;
       try {
-        const saved = await WispDB.editComment(id, nb);
+        let saved = null;
+        if (!/^local-/.test(id)) saved = await WispDB.editComment(id, nb);
         const c = findComment(id);
         if (c) { c.body = nb; c.edited_at = (saved && saved.edited_at) || new Date().toISOString(); }
+        // keep the device mirror in step
+        saveLocalComment(w.id, { id, user_id: (c && c.user_id) || (WispDB.user && WispDB.user.id), chapter_id: ch.id, paragraph_index: i, body: nb, created_at: (c && c.created_at) || new Date().toISOString(), display_name: (c && c.profiles && c.profiles.display_name) || "You" });
         editingComment = null; openLiveThread(w, ch, i, slot);
         toast("Comment updated.");
       } catch (e) { b.disabled = false; toast((e && e.message) || "Could not update."); }
@@ -3386,7 +3401,8 @@
       const id = b.dataset.cdel;
       confirmDialog({ title: "Delete this comment?", body: "It will be removed for everyone.", confirmText: "Delete", danger: true }, async () => {
         try {
-          await WispDB.deleteComment(id);
+          if (!/^local-/.test(id)) await WispDB.deleteComment(id);   // device-only comments skip the server
+          removeLocalComment(w.id, id);
           const arr = (LIVE.comments[ch.id] && LIVE.comments[ch.id][i]) || [];
           const idx = arr.findIndex(c => c.id === id);
           if (idx >= 0) arr.splice(idx, 1);
@@ -3452,6 +3468,34 @@
     edit(id) { editingComment = id; },
     inject(chId, i, arr) { (LIVE.comments[chId] = LIVE.comments[chId] || {})[i] = arr; }
   };
+
+  // Resilient local mirror for line comments. A comment a reader posts is kept on
+  // the device too, so it survives a reload even when the server write silently
+  // fails (the comments table not migrated yet, a bundled sample work, offline).
+  // On load these are merged with the server's, deduped by id, so nothing a reader
+  // typed disappears. Same philosophy as the draft autosave.
+  function lcKey(workId) { return "wisp.comments." + (workId || "demo"); }
+  function loadLocalComments(workId) {
+    try { const v = JSON.parse(localStorage.getItem(lcKey(workId)) || "[]"); return Array.isArray(v) ? v : []; } catch (e) { return []; }
+  }
+  function saveLocalComment(workId, row) {
+    try { const a = loadLocalComments(workId).filter(r => r.id !== row.id); a.push(row); localStorage.setItem(lcKey(workId), JSON.stringify(a.slice(-500))); } catch (e) {}
+  }
+  function removeLocalComment(workId, id) {
+    try { localStorage.setItem(lcKey(workId), JSON.stringify(loadLocalComments(workId).filter(r => r.id !== id))); } catch (e) {}
+  }
+  // Merge device-kept comments into LIVE.comments for a work, skipping any the
+  // server already returned (matched by id).
+  function mergeLocalComments(workId) {
+    const rows = loadLocalComments(workId); if (!rows.length) return;
+    rows.forEach(r => {
+      const cid = r.chapter_id || "_", k = r.paragraph_index == null ? -1 : r.paragraph_index;
+      const byCh = (LIVE.comments[cid] = LIVE.comments[cid] || {});
+      const arr = (byCh[k] = byCh[k] || []);
+      if (arr.some(c => c.id === r.id)) return;                  // server already has it
+      arr.push({ id: r.id, user_id: r.user_id, body: r.body, created_at: r.created_at, paragraph_index: r.paragraph_index, chapter_id: r.chapter_id, profiles: { display_name: r.display_name || "You" }, _local: true });
+    });
+  }
 
   function readerToolsHTML() {
     return `<div class="reader-tools" role="toolbar" aria-label="Reading controls">
@@ -3574,6 +3618,11 @@
     // this saves readers from scrolling back up to the line marker every time.
     document.addEventListener("click", (e) => {
       if (!openThreads.size) return;
+      // A Post / Edit / Delete inside a thread re-renders the slot, which detaches
+      // the element that was clicked. By the time this bubbles here that element is
+      // no longer in the document — treat that as an inside click, never as a
+      // tap-away, or we would wipe the comment the reader just posted.
+      if (e.target && e.target.isConnected === false) return;
       if (e.target.closest(".thread-slot") || e.target.closest("[data-lslot]") ||
           e.target.closest(".para__marker") || e.target.closest("[data-lmark]") ||
           e.target.closest(".hl-pop")) return;
@@ -3672,7 +3721,9 @@
     post && post.addEventListener("click", () => {
       const text = ta.value.trim(); if (!text) { ta.focus(); return; }
       p.thread = p.thread || { reactions:{}, comments:[] };
-      p.thread.comments.push({ who:"Rowan", init:"R", when:"now", text });
+      const cid = "local-" + Date.now();
+      p.thread.comments.push({ id: cid, who:"Rowan", init:"R", when:"now", text });
+      saveLocalComment("demo", { id: cid, paragraph_index: i, body: text, display_name: "Rowan", created_at: new Date().toISOString() });
       // re-render thread and re-open
       slot.innerHTML = threadHTML(p, i); wireThread(i, slot);
       $(`.para[data-para="${i}"]`).classList.add("has-thread");
@@ -6938,6 +6989,7 @@
         const byCh = (LIVE.comments[cid] = LIVE.comments[cid] || {});
         (byCh[k] = byCh[k] || []).push(r);
       });
+      mergeLocalComments(id);   // restore any device-kept comments the server didn't return
       const readable = releasedChapters(chs);
       const target = (chapterNum && readable.find(c => c.number === +chapterNum)) || readable[0];
       if (target) LIVE.reactions[target.id] = await WispDB.getReactions(target.id).catch(() => ({}));
