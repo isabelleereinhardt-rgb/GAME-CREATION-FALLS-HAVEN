@@ -900,7 +900,17 @@ body.hide-margins .para__marker { display: none; }
 }
 .hl-pop button { background: none; border: 0; color: #fff; cursor: pointer; padding: 6px 10px; border-radius: 6px; font: 13px var(--font-text); }
 .hl-pop button:hover { background: rgba(255,255,255,.16); }
-mark.hl { background: color-mix(in srgb, var(--amber) 34%, transparent); border-radius: 2px; padding: 0 1px; }
+/* A marker-style highlight that hugs the text and keeps it readable in either
+   theme: the text colour is inherited (never the browser's default black) and
+   the background clones across line wraps so multi-line highlights look clean. */
+mark.hl {
+  background: color-mix(in srgb, var(--amber) 42%, transparent);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0.05em 0.14em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
 
 /* Floating reading toolbar. */
 .reader-tools {
@@ -1059,8 +1069,31 @@ mark.hl { background: color-mix(in srgb, var(--amber) 34%, transparent); border-
   color: var(--ink3); pointer-events: none; font-style: italic;
 }
 /* An uploaded image shows inline in the editor, exactly like the reader sees it. */
-.editor figure.embed--img { margin: 1em 0; }
+.editor figure.embed--img { margin: 1em 0; position: relative; }
 .editor figure.embed--img img { display: block; max-width: 100%; height: auto; border-radius: 12px; }
+/* Scale, shared by the editor and the reader so what you set is what they see. */
+.embed--img.is-small { max-width: 44%; margin-left: auto; margin-right: auto; }
+.embed--img.is-medium { max-width: 68%; margin-left: auto; margin-right: auto; }
+/* Per-image controls that appear on hover or tap in the editor. */
+.editor .img-tools {
+  position: absolute; top: 8px; right: 8px; display: none; gap: 4px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 9px;
+  padding: 4px; box-shadow: 0 2px 10px rgba(0,0,0,.14); z-index: 2;
+}
+.editor figure.embed--img:hover .img-tools,
+.editor figure.embed--img.is-active .img-tools { display: flex; }
+.editor .img-tool {
+  min-width: 26px; height: 26px; padding: 0 6px; border: 1px solid var(--line);
+  background: var(--card); color: var(--ink2); border-radius: 6px; font-size: 12px;
+  cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+}
+.editor .img-tool:hover { border-color: var(--rose); color: var(--rose-ink); }
+.editor .img-tool--del:hover { border-color: #a2444f; color: #a2444f; }
+.editor figure.embed--img[data-size="small"] .img-tool[data-img-size="small"],
+.editor figure.embed--img[data-size="medium"] .img-tool[data-img-size="medium"],
+.editor figure.embed--img[data-size="full"] .img-tool[data-img-size="full"] {
+  background: var(--rose-wash); border-color: var(--rose); color: var(--rose-ink);
+}
 .editor h2, .editor h3, .editor h4 { font-family: var(--font-display); margin: .6em 0 .3em; line-height: 1.25; }
 .editor h2 { font-size: 1.4em; }
 .editor h3 { font-size: 1.2em; }

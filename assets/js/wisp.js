@@ -137,7 +137,56 @@
     "Space Colony", "Wartime", "Post-War", "College AU", "High School AU", "Soulmate AU",
     // Poetry and formats.
     "Poetry Collection", "Free Verse", "Sonnet", "Spoken Word", "Screenplay", "Stage Play",
-    "Graphic Novel", "Webcomic", "Illustrated", "Interactive Fiction"
+    "Graphic Novel", "Webcomic", "Illustrated", "Interactive Fiction",
+    // LGBTQ+ identities and relationships.
+    "Lesbian", "Gay", "Bisexual", "Pansexual", "Asexual", "Aromantic", "Demisexual", "Demiromantic",
+    "Biromantic", "Panromantic", "Homoromantic", "Aroace", "Transgender", "Trans Man", "Trans Woman",
+    "Nonbinary", "Genderfluid", "Genderqueer", "Agender", "Bigender", "Intersex", "Two-Spirit", "Queer",
+    "Questioning", "WLW", "MLM", "Sapphic", "Achillean", "Yuri", "Yaoi", "Boys' Love", "Girls' Love",
+    "Butch", "Femme", "T4T", "Polyamory", "Polyamorous", "Coming Out", "Gender Euphoria",
+    "Gender Dysphoria", "Pride", "Trans Joy", "Chosen Family", "Omnisexual", "Graysexual", "Abrosexual",
+    "Trans Character", "Nonbinary Character", "Sapphic Romance", "Achillean Romance", "Queerplatonic",
+    // Manga, manhwa, and webnovel tropes.
+    "Isekai", "Reverse Isekai", "Transmigration", "Regression", "Regressor", "Returnee", "Villainess",
+    "Otome Isekai", "System", "Cultivation", "Xianxia", "Wuxia", "Murim", "Danmei", "BL", "GL",
+    "Shounen", "Shoujo", "Seinen", "Josei", "Shounen-ai", "Shoujo-ai", "Omegaverse",
+    "Alpha/Beta/Omega", "Fated Mates", "Mating Bond", "Pack Dynamics", "Heat Cycle", "Rebirth",
+    "Necromancer", "Summoner", "Dungeon Crawl", "Hunter", "Gate", "Leveling System", "Tower Climbing",
+    "Constellation", "Academy", "Sect", "Overpowered Protagonist", "Weak to Strong", "Face Slapping",
+    "Reincarnated Villain", "Second Chance at Life", "Reverse Harem", "Harem", "Demonic Cultivation",
+    "Novel Transmigration", "Game Transmigration", "Extra's POV", "Immortal", "Sword Cultivation",
+    // Fandom and AO3-style story tags.
+    "Canon Divergence", "Canon Compliant", "Post-Canon", "Pre-Canon", "Missing Scene", "Fix-It Fic",
+    "Everyone Lives", "No Powers AU", "Modern AU", "Historical AU", "Royalty AU", "Coffee Shop AU",
+    "Bakery AU", "Hanahaki Disease", "Case Fic", "Kid Fic", "De-Aged", "Family Feels", "Domestic Bliss",
+    "Single Dad", "Single Mom", "Adoption", "Meet the Family", "Miscommunication", "One-Sided Love",
+    "Requited Love", "Redemption Arc", "Villain Redemption", "Villain POV", "Antagonist POV",
+    "Villain Origin Story", "Character Study", "Introspection", "Songfic", "One Shot", "Two Shot",
+    "Fluff and Angst", "Angst and Feels", "Hurt No Comfort", "Nightmares", "Panic Attacks", "Recovery",
+    "Self-Discovery", "First Kiss", "First Time", "Love Confession", "Reunion", "Forgiveness",
+    "Sharing a Bed", "Huddling for Warmth", "Friends with Benefits", "Enemies to Friends to Lovers",
+    "Idiots to Lovers", "Getting Back Together", "Christmas", "Halloween", "Valentine's Day", "Birthday",
+    "Beach Episode", "Festival", "Camping", "Sleepover", "Slow Build", "Angst with a Hopeful Ending",
+    "Feelings Realization", "What If", "Divergent Timeline", "Not Beta Read", "Dead Dove: Do Not Eat",
+    // More dynamics, moods, and aesthetics.
+    "Rivals", "Childhood Enemies", "Ex to Lovers", "Coworkers to Lovers", "Love/Hate Relationship",
+    "Yearning", "Devotion", "Protectiveness", "Codependency", "Vulnerability", "Repressed Feelings",
+    "Emotional Constipation", "Denial", "Acceptance", "Matchmaking", "Blind Date", "Marriage Pact",
+    "Wingman", "Slow Realization", "Cottagecore", "Fairycore", "Goblincore", "Cozy Fantasy",
+    "Liminal Spaces", "Nostalgia", "Melancholy", "Ethereal", "Whimsy", "Surreal", "Absurdist",
+    "Dreamlike", "Tension", "Devotional",
+    // Speculative flavours.
+    "Superpowers", "Mutants", "Androids", "Artificial Intelligence", "Cyborg", "Mecha", "Kaiju",
+    "Cloning", "Space Exploration", "Generation Ship", "Wormholes", "Simulation Theory", "Alchemy",
+    "Rune Magic", "Blood Magic", "Elemental Magic", "Divination", "Tarot", "Ghost Hunting", "Cryptids",
+    "Urban Legends", "Folklore", "Sea Monsters", "Eldritch", "Lovecraftian", "Haunted House",
+    "Possession", "Exorcism", "Astral Projection", "Shapeshifting", "Familiars", "Enchanted Forest",
+    // Alternate-universe flavours.
+    "Firefighter AU", "Police AU", "Detective AU", "Doctor AU", "Lawyer AU", "Teacher AU", "Chef AU",
+    "Barista AU", "Musician AU", "Artist AU", "Writer AU", "Athlete AU", "Florist AU", "Tattoo Artist AU",
+    "Mechanic AU", "Pilot AU", "Soldier AU", "Spy AU", "Assassin AU", "Superhero AU", "Mermaid AU",
+    "Vampire AU", "Werewolf AU", "Ghost AU", "Angel AU", "Demon AU", "Fae AU", "Pirate AU", "Space AU",
+    "Apocalypse AU", "Zombie AU", "Band AU", "Sports AU", "Fantasy AU", "Sci-Fi AU"
   ];
 
   // Pre-seeded fandoms, the same idea as the tag list: writers pick from a big
@@ -221,7 +270,76 @@
     // Musicals, tabletop, and web media.
     "Hamilton", "Dear Evan Hansen", "Wicked", "Heathers", "Beetlejuice", "Six", "Hadestown",
     "Be More Chill", "Epic: The Musical", "Critical Role", "Dungeons & Dragons", "The Magnus Archives",
-    "Welcome to Night Vale", "Homestuck", "RWBY"
+    "Welcome to Night Vale", "Homestuck", "RWBY",
+    // Netflix and other streaming series.
+    "You", "Ozark", "Elite", "Never Have I Ever", "Ginny & Georgia", "XO, Kitty", "Julie and the Phantoms",
+    "Fate: The Winx Saga", "Warrior Nun", "Locke & Key", "The Haunting of Hill House", "Midnight Mass",
+    "First Kill", "Heartbreak High", "The Queen's Gambit", "Enola Holmes", "The Kissing Booth",
+    "To All the Boys I've Loved Before", "Beef", "Maid", "The Get Down",
+    "Only Murders in the Building", "The Great", "Normal People", "The Summer I Turned Pretty",
+    "The Marvelous Mrs. Maisel", "The Lord of the Rings: The Rings of Power", "Fleabag", "Reacher",
+    "Gen V", "The Expanse",
+    // CW and network TV.
+    "Arrow", "The Flash", "Supergirl", "DC's Legends of Tomorrow", "Batwoman", "Black Lightning",
+    "Legacies", "Roswell, New Mexico", "Charmed", "Dynasty", "All American", "Jane the Virgin",
+    "Crazy Ex-Girlfriend", "iZombie", "The 100", "Reign", "Smallville", "One Tree Hill", "Veronica Mars",
+    "Gilmore Girls", "Chilling Adventures of Sabrina", "Sabrina the Teenage Witch",
+    // ABC Family / Freeform.
+    "The Fosters", "Switched at Birth", "Shadowhunters", "Good Trouble", "grown-ish", "The Bold Type",
+    "Motherland: Fort Salem", "Cruel Summer", "Baby Daddy", "Young & Hungry", "Ravenswood", "Stitchers",
+    // Nickelodeon.
+    "iCarly", "Victorious", "Sam & Cat", "Drake & Josh", "Zoey 101", "The Fairly OddParents",
+    "SpongeBob SquarePants", "Invader Zim", "Rugrats", "Hey Arnold!", "Big Time Rush", "Henry Danger",
+    "The Loud House", "Kenan & Kel", "All That", "Ned's Declassified School Survival Guide",
+    // Disney and Disney Channel.
+    "Hannah Montana", "Wizards of Waverly Place", "That's So Raven", "Lizzie McGuire",
+    "The Suite Life of Zack and Cody", "Descendants", "High School Musical",
+    "High School Musical: The Musical: The Series", "Andi Mack", "Girl Meets World", "Boy Meets World",
+    "Shake It Up", "Austin & Ally", "Jessie", "Good Luck Charlie", "K.C. Undercover",
+    "Sonny with a Chance", "DuckTales", "Star vs. the Forces of Evil", "Recess",
+    // Cartoon Network.
+    "Teen Titans Go!", "Codename: Kids Next Door", "Ed, Edd n Eddy", "Courage the Cowardly Dog",
+    "The Powerpuff Girls", "Dexter's Laboratory", "Samurai Jack", "Craig of the Creek", "We Bare Bears",
+    "Foster's Home for Imaginary Friends", "Chowder", "Infinity Train", "Generator Rex",
+    // HBO / Max and premium cable.
+    "True Blood", "Westworld", "The Sopranos", "Barry", "Titans", "Doom Patrol", "Young Justice",
+    "Harley Quinn", "Pretty Little Liars: Original Sin",
+    // More anime and manga.
+    "Solo Leveling", "Blue Lock", "Oshi no Ko", "Frieren", "Bocchi the Rock!", "Komi Can't Communicate",
+    "Kaguya-sama: Love Is War", "Horimiya", "Toradora!", "Clannad", "Your Lie in April",
+    "A Silent Voice", "Your Name", "Weathering with You", "Violet Evergarden", "Made in Abyss",
+    "Fire Force", "Assassination Classroom", "Soul Eater", "Blue Exorcist", "Seraph of the End",
+    "No Game No Life", "KonoSuba", "Overlord", "The Rising of the Shield Hero", "Mushoku Tensei",
+    "Classroom of the Elite", "Kakegurui", "Erased", "Steins;Gate", "Angel Beats!", "Gintama",
+    "Hellsing", "Berserk", "Devilman Crybaby", "Parasyte", "Yu Yu Hakusho", "Rurouni Kenshin", "Trigun",
+    "Beastars", "Sasaki and Miyano", "The Apothecary Diaries", "Delicious in Dungeon", "SK8 the Infinity",
+    "Wonder Egg Priority", "Ranma 1/2", "Yona of the Dawn", "Nana", "Skip Beat!", "Ouran",
+    // Manhwa, manhua, and webtoons.
+    "Tower of God", "The God of High School", "Noblesse", "Lookism", "Omniscient Reader's Viewpoint",
+    "True Beauty", "Lore Olympus", "unOrdinary", "I Love Yoo", "Let's Play", "SubZero",
+    "The Remarried Empress", "Who Made Me a Princess", "Heaven Official's Blessing",
+    "The Untamed", "Grandmaster of Demonic Cultivation", "Mo Dao Zu Shi",
+    "Tian Guan Ci Fu", "The Beginning After the End", "Villains Are Destined to Die",
+    // Video games (more).
+    "Fire Emblem", "Fire Emblem: Three Houses", "Xenoblade Chronicles", "Nier: Automata", "Bayonetta",
+    "Mystic Messenger", "Obey Me!", "Twisted Wonderland", "Fate/Grand Order", "Fate/stay night",
+    "Project Sekai", "Ensemble Stars", "Cookie Run", "Identity V", "Arknights", "Honkai Impact 3rd",
+    "Wuthering Waves", "Zenless Zone Zero", "Love and Deepspace", "Marvel Rivals", "Helldivers 2",
+    "Palworld", "Lethal Company", "Balatro", "Vampire Survivors", "Slay the Spire", "It Takes Two",
+    "Cuphead", "Ori and the Blind Forest", "Outer Wilds", "Disco Elysium", "Subnautica", "Terraria",
+    "Roblox", "Sky: Children of the Light", "Tears of the Kingdom", "Splatoon 3",
+    // Music and bands (real-person fandoms).
+    "BTS", "BLACKPINK", "Stray Kids", "TWICE", "EXO", "SEVENTEEN", "NCT", "ATEEZ",
+    "TOMORROW X TOGETHER", "ENHYPEN", "Red Velvet", "ITZY", "aespa", "IVE", "NewJeans", "LE SSERAFIM",
+    "GOT7", "MONSTA X", "BIGBANG", "Girls' Generation", "One Direction", "5 Seconds of Summer",
+    "The Beatles", "Taylor Swift", "Harry Styles", "Ariana Grande", "Billie Eilish", "Olivia Rodrigo",
+    "Lady Gaga", "Beyonce", "Justin Bieber", "Selena Gomez", "Doja Cat", "Sabrina Carpenter",
+    "Ed Sheeran", "Shawn Mendes", "Panic! at the Disco", "My Chemical Romance", "Fall Out Boy",
+    "Twenty One Pilots", "Paramore", "Imagine Dragons", "Coldplay", "Queen", "Nirvana", "Maneskin",
+    "Lana Del Rey", "SZA", "The Weeknd", "Dua Lipa", "Melanie Martinez", "Mitski", "Hozier", "Conan Gray",
+    // Creators and online fandoms.
+    "Dream SMP", "Minecraft YouTubers", "Hermitcraft", "Game Grumps", "Dan and Phil",
+    "Genshin Impact Creators"
   ];
   // Build the attributes that make any element carry a hover/focus/tap tooltip.
   function tipAttrs(text) { const t = esc(text); return `data-tip="${t}" tabindex="0" aria-label="${t}"`; }
@@ -1272,9 +1390,10 @@
     if (host === "open.spotify.com" && /^\/(track|album|playlist|episode|show)\//.test(path)) return { kind: "audio", src: "https://open.spotify.com/embed" + path };
     return null;
   }
-  function imageEmbedHTML(url, alt) {
+  function imageEmbedHTML(url, alt, size) {
     if (!/^https:\/\//i.test(url)) return `<p>${mdInline("![" + alt + "](" + url + ")")}</p>`;
-    return `<figure class="embed embed--img"><img src="${esc(url)}" alt="${esc(alt || "")}" loading="lazy" decoding="async">${alt ? `<figcaption>${esc(alt)}</figcaption>` : ""}</figure>`;
+    const sz = (size === "small" || size === "medium") ? size : "full";
+    return `<figure class="embed embed--img is-${sz}" data-size="${sz}"><img src="${esc(url)}" alt="${esc(alt || "")}" loading="lazy" decoding="async">${alt ? `<figcaption>${esc(alt)}</figcaption>` : ""}</figure>`;
   }
   function linkCardHTML(url, label) {
     let host = ""; try { host = new URL(url).hostname.replace(/^www\./, ""); } catch (e) {}
@@ -1297,8 +1416,8 @@
   function renderBlock(block) {
     const lines = String(block).split(/\n/);
     const first = lines[0].trim();
-    const img = lines.length === 1 && first.match(/^!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)$/);
-    if (img) return imageEmbedHTML(img[2], img[1]);
+    const img = lines.length === 1 && first.match(/^!\[([^\]]*)\]\((https?:\/\/[^)\s]+?)(?:\s+"(small|medium|full)")?\)$/);
+    if (img) return imageEmbedHTML(img[2], img[1], img[3]);
     const emb = lines.length === 1 && first.match(/^@\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)$/);
     if (emb) return richEmbedHTML(emb[2], emb[1]);
     if (lines.length === 1 && /^(-{3,}|\*{3,}|_{3,})$/.test(first)) return "<hr>";
@@ -1359,7 +1478,15 @@
   function figureOrImgToMd(node) {
     const isImg = node.nodeName.toLowerCase() === "img";
     const img = isImg ? node : (node.querySelector ? node.querySelector("img") : null);
-    if (img) { const src = img.getAttribute("src") || ""; const alt = img.getAttribute("alt") || ""; return src ? `![${alt}](${src})` : ""; }
+    if (img) {
+      const src = img.getAttribute("src") || "", alt = img.getAttribute("alt") || "";
+      if (!src) return "";
+      // The chosen scale rides in the Markdown "title" slot: ![alt](url "small").
+      let size = "";
+      if (node.getAttribute) size = node.getAttribute("data-size") || "";
+      if (!size && node.classList) size = node.classList.contains("is-small") ? "small" : node.classList.contains("is-medium") ? "medium" : "";
+      return (size === "small" || size === "medium") ? `![${alt}](${src} "${size}")` : `![${alt}](${src})`;
+    }
     const a = node.querySelector ? node.querySelector(".embed__source a[href], a[href]") : null;
     if (a) {
       const href = a.getAttribute("href") || "";
@@ -1984,6 +2111,24 @@
         if (pop && !pop.contains(e.target)) pop.style.display = "none";
       });
     });
+    // Tap anywhere outside an open inline-comment thread to close it. On a phone
+    // this saves readers from scrolling back up to the line marker every time.
+    document.addEventListener("click", (e) => {
+      if (!openThreads.size) return;
+      if (e.target.closest(".thread-slot") || e.target.closest("[data-lslot]") ||
+          e.target.closest(".para__marker") || e.target.closest("[data-lmark]") ||
+          e.target.closest(".hl-pop")) return;
+      closeAllInlineThreads();
+    });
+  }
+  // Close every open per-line comment thread (both the demo and live readers).
+  function closeAllInlineThreads() {
+    if (!openThreads.size) return;
+    openThreads.forEach(i => {
+      const slot = $(`#screen-reading .thread-slot[data-slot="${i}"]`) || $(`#screen-reading [data-lslot="${i}"]`);
+      if (slot) { slot.innerHTML = ""; const para = slot.closest(".para"); if (para) para.classList.remove("is-open"); }
+    });
+    openThreads.clear();
   }
 
   function wireReading() {
@@ -2437,6 +2582,7 @@
       : (isNew && pendingSeries ? pendingSeries : (work && work.series ? work.series.name : ""));
     pendingSeries = null;
     const st = work ? WSTATUS[work._dbStatus || work.status] : null;
+    const isComplete = !!(work && (work._dbStatus === "complete" || work.complete));
     const tagsValue = editingLive ? (work.tags || []).join(", ") : "";
     const workWarnings = work ? (work.warnings || []) : [];
     const coverIsImage = editingLive && work.cover && /^https?:/.test(work.cover);
@@ -2529,6 +2675,13 @@
                   <button data-wformat="prose" class="${editorFormat === "prose" ? "is-on" : ""}" aria-pressed="${editorFormat === "prose"}">Book</button>
                   <button data-wformat="comic" class="${editorFormat === "comic" ? "is-on" : ""}" aria-pressed="${editorFormat === "comic"}">Comic</button>
                 </div>
+              </div>
+              <div class="field"><label>Status</label>
+                <div class="seg" role="group" aria-label="Work status">
+                  <button data-wstatus="ongoing" class="${isComplete ? "" : "is-on"}" aria-pressed="${!isComplete}">In progress</button>
+                  <button data-wstatus="complete" class="${isComplete ? "is-on" : ""}" aria-pressed="${isComplete}">Completed</button>
+                </div>
+                <p class="muted" style="font-size:11.5px;margin-top:4px">Marks the whole work finished. Readers see a Complete badge and can filter by it.</p>
               </div>
               ${typeFields}
               <div class="field"><label>Additional tags</label><input type="text" id="we-tags" placeholder="Slow burn, found family, ..."></div>
@@ -2661,6 +2814,16 @@
     if (bodyEd) {
       ["input", "keyup", "paste", "cut", "focus", "blur"].forEach(ev =>
         bodyEd.addEventListener(ev, () => setTimeout(updateEditorEmpty, 0)));
+      // Images carry their own controls: scale (small/medium/full) and remove.
+      decorateEditorImages();
+      bodyEd.addEventListener("click", (e) => {
+        const sz = e.target.closest("[data-img-size]");
+        if (sz) { const fig = sz.closest("figure.embed--img"); if (fig) { const v = sz.dataset.imgSize; fig.setAttribute("data-size", v); fig.classList.remove("is-small", "is-medium", "is-full"); fig.classList.add("is-" + v); } e.preventDefault(); return; }
+        const del = e.target.closest("[data-img-del]");
+        if (del) { const fig = del.closest("figure.embed--img"); if (fig) fig.remove(); updateEditorEmpty(); e.preventDefault(); return; }
+        const fig = e.target.closest("figure.embed--img");
+        if (fig) { fig.classList.toggle("is-active"); }
+      });
       updateEditorEmpty();
     }
 
@@ -4845,6 +5008,8 @@
 
     const wt = e.target.closest("#screen-write [data-wtype]");
     if (wt) { $$("#screen-write [data-wtype]").forEach(b => { const on = b === wt; b.classList.toggle("is-on", on); b.setAttribute("aria-pressed", String(on)); }); return; }
+    const ws = e.target.closest("#screen-write [data-wstatus]");
+    if (ws) { $$("#screen-write [data-wstatus]").forEach(b => { const on = b === ws; b.classList.toggle("is-on", on); b.setAttribute("aria-pressed", String(on)); }); return; }
     const wf = e.target.closest("#screen-write [data-wformat]");
     if (wf) {
       const next = wf.dataset.wformat;
@@ -6307,14 +6472,36 @@
   function insertImage(url, alt) {
     const ed = $("#we-body"); if (!ed) return;
     ed.focus();
-    const html = `<figure class="embed embed--img" contenteditable="false"><img src="${esc(url)}" alt="${esc(alt || "")}" loading="lazy" decoding="async"></figure><p><br></p>`;
+    const html = `<figure class="embed embed--img is-full" data-size="full" contenteditable="false"><img src="${esc(url)}" alt="${esc(alt || "")}" loading="lazy" decoding="async"></figure><p><br></p>`;
     try { document.execCommand("insertHTML", false, html); }
     catch (e) {
-      const fig = document.createElement("figure"); fig.className = "embed embed--img"; fig.setAttribute("contenteditable", "false");
+      const fig = document.createElement("figure"); fig.className = "embed embed--img is-full"; fig.setAttribute("data-size", "full"); fig.setAttribute("contenteditable", "false");
       const im = document.createElement("img"); im.src = url; im.alt = alt || ""; fig.appendChild(im);
       ed.appendChild(fig); ed.appendChild(document.createElement("p"));
     }
+    decorateEditorImages();
     updateEditorEmpty();
+  }
+  // Give every image in the editor its hover controls (scale small/medium/full,
+  // and remove). Runs after insert and after a saved chapter loads, so images
+  // that came back from Markdown get the same controls a freshly added one has.
+  function decorateEditorImages() {
+    const ed = $("#we-body"); if (!ed) return;
+    ed.querySelectorAll("figure.embed--img").forEach(fig => {
+      fig.setAttribute("contenteditable", "false");
+      if (!fig.getAttribute("data-size")) fig.setAttribute("data-size", fig.classList.contains("is-small") ? "small" : fig.classList.contains("is-medium") ? "medium" : "full");
+      if (!/\bis-(small|medium|full)\b/.test(fig.className)) fig.classList.add("is-" + (fig.getAttribute("data-size") || "full"));
+      if (!fig.querySelector(".img-tools")) {
+        const tools = document.createElement("div");
+        tools.className = "img-tools"; tools.setAttribute("contenteditable", "false");
+        tools.innerHTML =
+          `<button type="button" class="img-tool" data-img-size="small" title="Small">S</button>` +
+          `<button type="button" class="img-tool" data-img-size="medium" title="Medium">M</button>` +
+          `<button type="button" class="img-tool" data-img-size="full" title="Full width">L</button>` +
+          `<button type="button" class="img-tool img-tool--del" data-img-del title="Remove image">${icon("trash", 13)}</button>`;
+        fig.appendChild(tools);
+      }
+    });
   }
 
   // formatBlock toggles a block between the given tag and a plain paragraph.
@@ -6378,9 +6565,14 @@
     // back to draft; only new works and existing drafts actually become drafts.
     const wasPublished = liveEditor && liveEditor.work &&
       (liveEditor.work._dbStatus === "ongoing" || liveEditor.work._dbStatus === "complete");
-    const status = kind === "schedule" ? "scheduled"
+    let status = kind === "schedule" ? "scheduled"
       : kind === "draft" ? (wasPublished ? liveEditor.work._dbStatus : "draft")
       : "ongoing";
+    // The writer's In progress / Completed choice applies whenever the work ends
+    // up published (now or already), so a finished work reads as Complete.
+    const wStatusBtn = $("#screen-write [data-wstatus].is-on");
+    const wStatusSel = wStatusBtn ? wStatusBtn.dataset.wstatus : "ongoing";
+    if (status === "ongoing" || status === "complete") status = wStatusSel === "complete" ? "complete" : "ongoing";
     try {
       // Resolve the series field to an id (find-or-create), or standalone.
       let series_id = null;

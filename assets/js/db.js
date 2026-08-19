@@ -395,7 +395,14 @@ window.WispDB = (function () {
     if (!user) throw new Error("Sign in first.");
     const patch = {};
     ["name","description","type","source","status"].forEach(k => { if (fields[k] !== undefined) patch[k] = fields[k]; });
-    const { error } = await client.from("series").update(patch).eq("id", id).eq("author_id", user.id);
+    let { error } = await client.from("series").update(patch).eq("id", id).eq("author_id", user.id);
+    // If the series.status column has not been added yet (migration 020), don't
+    // block the whole save: drop status and write the rest, so the site keeps
+    // working until the migration is run.
+    if (error && patch.status !== undefined && (error.code === "42703" || /column .*status|status.* column|does not exist/i.test(error.message || ""))) {
+      delete patch.status;
+      ({ error } = await client.from("series").update(patch).eq("id", id).eq("author_id", user.id));
+    }
     if (error) throw error;
   }
   // Deleting a series detaches its works automatically (works.series_id is
