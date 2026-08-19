@@ -1149,7 +1149,9 @@
     const allow = info.kind === "video" ? 'allow="fullscreen; picture-in-picture; encrypted-media"'
       : info.kind === "audio" ? 'allow="encrypted-media; clipboard-write"' : "";
     let host = ""; try { host = new URL(url).hostname.replace(/^www\./, ""); } catch (e) {}
-    const frame = `<div class="embed--${info.kind}"><iframe src="${esc(info.src)}" loading="lazy" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation" ${allow} allowfullscreen title="${esc(label || "Embedded content")}"></iframe></div>`;
+    // Send just the origin (not the full URL): providers like YouTube need to
+    // see the embedding domain or they refuse with a "player configuration error".
+    const frame = `<div class="embed--${info.kind}"><iframe src="${esc(info.src)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation" ${allow} allowfullscreen title="${esc(label || "Embedded content")}"></iframe></div>`;
     // A caption link so readers can jump straight to the source (like the sample).
     const src = `<figcaption class="embed__source"><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc((label && label.trim()) || ("Open on " + host))} <span aria-hidden="true">&#8599;</span></a></figcaption>`;
     return `<figure class="embed embed--rich">${frame}${src}</figure>`;
