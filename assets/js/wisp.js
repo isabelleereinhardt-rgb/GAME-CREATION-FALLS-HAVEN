@@ -4242,7 +4242,7 @@
   }
 
   let luckyIdx = 0;
-  function widgetHTML() {
+  function baseWidgetHTML() {
     if (isLive()) {
       return `
         <div class="widget">
@@ -4287,7 +4287,258 @@
         <div style="font:17px/1.35 var(--font-display);color:var(--ink)">You read ${wd.week.works} works,<br>${wd.week.words} words.</div>
       </div>`;
   }
-  function renderWidgets() { $("#widgetMount").innerHTML = widgetHTML(); }
+  function widgetHTML() { return baseWidgetHTML() + installedWidgetsHTML(); }
+  function renderWidgets() { const m = $("#widgetMount"); if (m) { m.innerHTML = widgetHTML(); wireMiniWidgets(m); } }
+
+  /* ---- Installable mini-widgets: personal, on-device quality-of-life ------- */
+  // A shelf of small widgets a reader can add to their widget station: timers,
+  // spinners, ambient fun. Everything lives in localStorage on this device;
+  // nothing touches the backend, so they work in demo and connected alike.
+  function mwLoad() { try { return JSON.parse(localStorage.getItem("wisp.widgets.installed") || "[]"); } catch (e) { return []; } }
+  function mwSave(ids) { try { localStorage.setItem("wisp.widgets.installed", JSON.stringify(ids)); } catch (e) {} }
+  function mwState(id) { try { return (JSON.parse(localStorage.getItem("wisp.widgets.state") || "{}"))[id] || {}; } catch (e) { return {}; } }
+  function mwSetState(id, patch) {
+    let all = {}; try { all = JSON.parse(localStorage.getItem("wisp.widgets.state") || "{}"); } catch (e) {}
+    all[id] = Object.assign({}, all[id], patch);
+    try { localStorage.setItem("wisp.widgets.state", JSON.stringify(all)); } catch (e) {}
+    return all[id];
+  }
+  const todayKey = () => { const d = new Date(); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); };
+  const rand = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const fmtDur = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
+
+  const MW_QUOTES = [
+    "Write drunk on the story; edit sober on the page.", "A word after a word after a word is power.",
+    "You can always edit a bad page. You can't edit a blank one.", "Start where you are. Use what you have.",
+    "The first draft is you telling yourself the story.", "Fill your paper with the breathings of your heart.",
+    "There is no greater agony than an untold story inside you.", "Write the book you want to read.",
+    "Almost all good writing begins with terrible first efforts.", "Read a thousand books, and your words will flow."
+  ];
+  const MW_PROMPTS = [
+    "Two strangers share the last seat on the last train.", "A letter arrives twenty years late.",
+    "The lighthouse keeper writes to no one, every night.", "Your character finds a door that wasn't there yesterday.",
+    "A rivalry softens over a shared umbrella.", "The town forgets one person a little more each day.",
+    "A god retires and takes a job at a coffee shop.", "The map is accurate, except for one island.",
+    "They swap lives for a week and neither wants to swap back.", "The heirloom clock runs backward when someone lies."
+  ];
+  const MW_FORTUNES = [
+    "A plot twist is coming; lean into it.", "The chapter you fear is the one worth writing.",
+    "Someone will reread your words tonight.", "A comment will make your whole week.",
+    "Rest is part of the craft. Take the afternoon.", "Your next idea is closer than you think.",
+    "Kindness returns to you in kudos.", "The muse favours the writer who shows up."
+  ];
+  const MW_EIGHTBALL = [
+    "It is certain.", "Without a doubt.", "Yes, definitely.", "Signs point to yes.", "Ask again later.",
+    "Better not tell you now.", "Cannot predict now.", "Don't count on it.", "My reply is no.", "Very doubtful."
+  ];
+  const MW_AFFIRM = [
+    "Your voice is worth hearing.", "You are allowed to write badly today.", "Small progress is still progress.",
+    "Your story matters to someone.", "You are a writer because you write.", "Finished beats perfect.",
+    "One paragraph is a victory.", "You are exactly the right person to tell this."
+  ];
+  const MW_FACTS = [
+    "The longest novel ever published runs over 1.2 million words.", "The word 'fangirl' entered dictionaries in 2016.",
+    "Fanfiction predates the internet by centuries.", "Reading fiction measurably boosts empathy.",
+    "The average adult reads about 240 words a minute.", "'Serendipity' was coined by a novelist in 1754.",
+    "Shakespeare invented over 1,700 words we still use.", "A 'wisp' is a small twist of something, like a story."
+  ];
+
+  // A compact spinner widget: a display line and a button that picks a new item.
+  function pickerWidget(id, name, icon, blurb, items, btn) {
+    return { id, name, icon, blurb, render() {
+        return `<p class="mw-out" data-mw-out>${esc(rand(items))}</p>
+          <button class="btn btn--ghost btn--full btn--sm" data-mw-roll>${esc(btn)}</button>`;
+      }, wire(el) {
+        const out = el.querySelector("[data-mw-out]"), b = el.querySelector("[data-mw-roll]");
+        b && b.addEventListener("click", () => { out.textContent = rand(items); out.classList.remove("mw-pop"); void out.offsetWidth; out.classList.add("mw-pop"); });
+      } };
+  }
+
+  const MINI_WIDGETS = [
+    { id: "clock", name: "Live clock", icon: "clock", blurb: "The current time, ticking.", render() { return `<div class="mw-big" data-mw-clock>--:--</div>`; },
+      wire(el) { const t = el.querySelector("[data-mw-clock]"); const upd = () => { const d = new Date(); let h = d.getHours(); const ap = h >= 12 ? "PM" : "AM"; h = h % 12 || 12; t.textContent = h + ":" + String(d.getMinutes()).padStart(2, "0") + " " + ap; }; upd(); miniInterval(setInterval(upd, 1000)); } },
+    { id: "reading-timer", name: "Reading timer", icon: "clock", blurb: "A stopwatch for your reading session.",
+      render() { const s = mwState("reading-timer"); const el = (s.running ? (Date.now() - s.start + (s.acc || 0)) : (s.acc || 0)); return `<div class="mw-big" data-mw-time>${fmtDur(el)}</div><div class="mw-row"><button class="btn btn--ghost btn--sm" data-mw-toggle>${s.running ? "Pause" : "Start"}</button><button class="btn btn--quiet btn--sm" data-mw-reset>Reset</button></div>`; },
+      wire(el) { const disp = el.querySelector("[data-mw-time]"); const draw = () => { const s = mwState("reading-timer"); disp.textContent = fmtDur(s.running ? (Date.now() - s.start + (s.acc || 0)) : (s.acc || 0)); };
+        el.querySelector("[data-mw-toggle]").addEventListener("click", () => { const s = mwState("reading-timer"); if (s.running) mwSetState("reading-timer", { running: false, acc: (s.acc || 0) + (Date.now() - s.start) }); else mwSetState("reading-timer", { running: true, start: Date.now() }); renderWidgets(); });
+        el.querySelector("[data-mw-reset]").addEventListener("click", () => { mwSetState("reading-timer", { running: false, acc: 0, start: 0 }); renderWidgets(); });
+        if (mwState("reading-timer").running) miniInterval(setInterval(draw, 500)); } },
+    { id: "pomodoro", name: "Pomodoro", icon: "clock", blurb: "25 minutes of focus, then a break.",
+      render() { const s = mwState("pomodoro"); const left = s.endsAt ? s.endsAt - Date.now() : 25 * 60000; return `<div class="mw-big" data-mw-pom>${fmtDur(left > 0 ? left : 0)}</div><p class="mw-sub" data-mw-pom-ph>${s.phase === "break" ? "Break" : "Focus"}</p><div class="mw-row"><button class="btn btn--ghost btn--sm" data-mw-pom-go>${s.endsAt ? "Stop" : "Start"}</button></div>`; },
+      wire(el) { const disp = el.querySelector("[data-mw-pom]"); const ph = el.querySelector("[data-mw-pom-ph]");
+        const tick = () => { const s = mwState("pomodoro"); if (!s.endsAt) return; let left = s.endsAt - Date.now(); if (left <= 0) { const nextBreak = s.phase !== "break"; mwSetState("pomodoro", { phase: nextBreak ? "break" : "focus", endsAt: Date.now() + (nextBreak ? 5 : 25) * 60000 }); toast(nextBreak ? "Focus done. Take a 5 minute break." : "Break over. Back to it."); left = mwState("pomodoro").endsAt - Date.now(); } disp.textContent = fmtDur(left); ph.textContent = mwState("pomodoro").phase === "break" ? "Break" : "Focus"; };
+        el.querySelector("[data-mw-pom-go]").addEventListener("click", () => { const s = mwState("pomodoro"); if (s.endsAt) mwSetState("pomodoro", { endsAt: 0, phase: "focus" }); else mwSetState("pomodoro", { endsAt: Date.now() + 25 * 60000, phase: "focus" }); renderWidgets(); });
+        if (mwState("pomodoro").endsAt) miniInterval(setInterval(tick, 500)); } },
+    { id: "word-sprint", name: "Word sprint", icon: "edit", blurb: "A timed writing burst.",
+      render() { const s = mwState("word-sprint"); const left = s.endsAt ? s.endsAt - Date.now() : 0; return s.endsAt ? `<div class="mw-big" data-mw-sp>${fmtDur(left > 0 ? left : 0)}</div><div class="mw-row"><button class="btn btn--quiet btn--sm" data-mw-sp-stop>Stop</button></div>` : `<div class="mw-row" data-mw-sp-pick>${[10, 15, 20].map(m => `<button class="btn btn--ghost btn--sm" data-mw-sp="${m}">${m} min</button>`).join("")}</div>`; },
+      wire(el) { el.querySelectorAll("[data-mw-sp]").forEach(b => b.addEventListener("click", () => { mwSetState("word-sprint", { endsAt: Date.now() + (+b.dataset.mwSp) * 60000 }); renderWidgets(); }));
+        const stop = el.querySelector("[data-mw-sp-stop]"); stop && stop.addEventListener("click", () => { mwSetState("word-sprint", { endsAt: 0 }); renderWidgets(); });
+        const disp = el.querySelector("[data-mw-sp]"); if (mwState("word-sprint").endsAt) miniInterval(setInterval(() => { const s = mwState("word-sprint"); const left = s.endsAt - Date.now(); const d = el.querySelector("[data-mw-sp]"); if (left <= 0) { mwSetState("word-sprint", { endsAt: 0 }); toast("Sprint done. Great work."); renderWidgets(); return; } if (d) d.textContent = fmtDur(left); }, 500)); } },
+    { id: "streak", name: "Reading streak", icon: "check", blurb: "Days in a row you showed up.",
+      render() { const s = mwState("streak"); return `<div class="mw-big">${s.count || 0} 🔥</div><p class="mw-sub">${s.last === todayKey() ? "Logged for today" : "Not logged today"}</p><button class="btn btn--ghost btn--full btn--sm" data-mw-streak ${s.last === todayKey() ? "disabled" : ""}>I read today</button>`; },
+      wire(el) { const b = el.querySelector("[data-mw-streak]"); b && b.addEventListener("click", () => { const s = mwState("streak"); const y = new Date(Date.now() - 86400000); const yk = y.getFullYear() + "-" + (y.getMonth() + 1) + "-" + y.getDate(); const cont = s.last === yk; mwSetState("streak", { count: cont ? (s.count || 0) + 1 : 1, last: todayKey() }); renderWidgets(); }); } },
+    { id: "countdown", name: "Countdown", icon: "clock", blurb: "Days until a date you set.",
+      render() { const s = mwState("countdown"); if (!s.target) return `<p class="mw-sub">No date set yet.</p><button class="btn btn--ghost btn--full btn--sm" data-mw-cd-set>Set a date</button>`; const days = Math.ceil((new Date(s.target).getTime() - Date.now()) / 86400000); return `<div class="mw-big">${days >= 0 ? days : 0}</div><p class="mw-sub">${days > 0 ? "days to " : days === 0 ? "today: " : "since "}${esc(s.label || "your date")}</p><button class="btn btn--quiet btn--full btn--sm" data-mw-cd-set>Change</button>`; },
+      wire(el) { const b = el.querySelector("[data-mw-cd-set]"); b && b.addEventListener("click", () => { const t = (window.prompt("Date (YYYY-MM-DD)", mwState("countdown").target || "") || "").trim(); if (!t) return; const label = (window.prompt("What is it? (optional)", mwState("countdown").label || "") || "").trim(); mwSetState("countdown", { target: t, label }); renderWidgets(); }); } },
+    pickerWidget("quote", "Quote of the day", "sparkle", "A line to keep you writing.", MW_QUOTES, "New quote"),
+    pickerWidget("prompt", "Writing prompt", "edit", "A spark when the page is blank.", MW_PROMPTS, "New prompt"),
+    pickerWidget("fortune", "Fortune cookie", "sparkle", "A tiny fortune, on demand.", MW_FORTUNES, "Crack it open"),
+    pickerWidget("eightball", "Magic 8-ball", "sparkle", "Ask the page a question.", MW_EIGHTBALL, "Ask again"),
+    pickerWidget("affirmation", "Affirmation", "heart", "A kind word for the writer.", MW_AFFIRM, "Another"),
+    pickerWidget("didyouknow", "Did you know", "book", "A small fact about books.", MW_FACTS, "Tell me more"),
+    { id: "fandom-roulette", name: "Fandom roulette", icon: "shuffle", blurb: "Spin for a fandom to explore.",
+      render() { const f = rand(FANDOMS); return `<p class="mw-out" data-mw-out>${esc(f)}</p><button class="btn btn--ghost btn--full btn--sm" data-mw-roll>Spin</button>`; },
+      wire(el) { const out = el.querySelector("[data-mw-out]"); el.querySelector("[data-mw-roll]").addEventListener("click", () => { const f = rand(FANDOMS); out.textContent = f; out.classList.remove("mw-pop"); void out.offsetWidth; out.classList.add("mw-pop"); }); out.style.cursor = "pointer"; out.addEventListener("click", () => navigate("tag/" + encodeURIComponent(out.textContent))); } },
+    { id: "tag-roulette", name: "Tag roulette", icon: "tag", blurb: "Spin for a tag to browse.",
+      render() { const t = rand(TAG_SUGGEST); return `<p class="mw-out" data-mw-out>${esc(t)}</p><button class="btn btn--ghost btn--full btn--sm" data-mw-roll>Spin</button>`; },
+      wire(el) { const out = el.querySelector("[data-mw-out]"); el.querySelector("[data-mw-roll]").addEventListener("click", () => { const t = rand(TAG_SUGGEST); out.textContent = t; out.classList.remove("mw-pop"); void out.offsetWidth; out.classList.add("mw-pop"); }); out.style.cursor = "pointer"; out.addEventListener("click", () => navigate("tag/" + encodeURIComponent(out.textContent))); } },
+    { id: "dice", name: "Dice roller", icon: "sparkle", blurb: "Roll a d6 or a d20.",
+      render() { return `<div class="mw-big" data-mw-out>-</div><div class="mw-row"><button class="btn btn--ghost btn--sm" data-mw-die="6">d6</button><button class="btn btn--ghost btn--sm" data-mw-die="20">d20</button></div>`; },
+      wire(el) { const out = el.querySelector("[data-mw-out]"); el.querySelectorAll("[data-mw-die]").forEach(b => b.addEventListener("click", () => { out.textContent = 1 + Math.floor(Math.random() * (+b.dataset.mwDie)); out.classList.remove("mw-pop"); void out.offsetWidth; out.classList.add("mw-pop"); })); } },
+    { id: "coin", name: "Coin flip", icon: "sparkle", blurb: "Heads or tails, your call.",
+      render() { return `<div class="mw-big" data-mw-out>?</div><button class="btn btn--ghost btn--full btn--sm" data-mw-roll>Flip</button>`; },
+      wire(el) { const out = el.querySelector("[data-mw-out]"); el.querySelector("[data-mw-roll]").addEventListener("click", () => { out.textContent = Math.random() < 0.5 ? "Heads" : "Tails"; out.classList.remove("mw-pop"); void out.offsetWidth; out.classList.add("mw-pop"); }); } },
+    { id: "mood", name: "Mood check", icon: "heart", blurb: "How are you today? It remembers.",
+      render() { const s = mwState("mood"); const set = ["😀", "🙂", "😐", "😔", "😠", "😴", "🥰", "🤔"]; return `<div class="mw-moods">${set.map(m => `<button class="mw-mood ${s.day === todayKey() && s.emoji === m ? "is-on" : ""}" data-mw-mood="${m}">${m}</button>`).join("")}</div><p class="mw-sub">${s.day === todayKey() ? "Saved for today" : "Pick one"}</p>`; },
+      wire(el) { el.querySelectorAll("[data-mw-mood]").forEach(b => b.addEventListener("click", () => { mwSetState("mood", { emoji: b.dataset.mwMood, day: todayKey() }); renderWidgets(); })); } },
+    { id: "sticky", name: "Sticky note", icon: "edit", blurb: "A scrap of text that stays put.",
+      render() { const s = mwState("sticky"); return `<textarea class="mw-sticky" data-mw-sticky placeholder="Jot something...">${esc(s.text || "")}</textarea>`; },
+      wire(el) { const t = el.querySelector("[data-mw-sticky]"); let tm = null; t.addEventListener("input", () => { clearTimeout(tm); tm = setTimeout(() => mwSetState("sticky", { text: t.value }), 300); }); } },
+    { id: "to-read", name: "To-read list", icon: "bookmark", blurb: "A quick list you can tick off.",
+      render() { const s = mwState("to-read"); const items = Array.isArray(s.items) ? s.items : []; return `<ul class="mw-list">${items.map((it, i) => `<li><button class="mw-li-del" data-mw-tr-del="${i}" aria-label="Remove">&times;</button><span>${esc(it)}</span></li>`).join("") || '<li class="muted">Nothing yet.</li>'}</ul><button class="btn btn--ghost btn--full btn--sm" data-mw-tr-add>Add a title</button>`; },
+      wire(el) { const add = el.querySelector("[data-mw-tr-add]"); add && add.addEventListener("click", () => { const v = (window.prompt("Add to your list") || "").trim(); if (!v) return; const s = mwState("to-read"); const items = Array.isArray(s.items) ? s.items.slice() : []; items.push(v); mwSetState("to-read", { items }); renderWidgets(); }); el.querySelectorAll("[data-mw-tr-del]").forEach(b => b.addEventListener("click", () => { const s = mwState("to-read"); const items = (s.items || []).slice(); items.splice(+b.dataset.mwTrDel, 1); mwSetState("to-read", { items }); renderWidgets(); })); } },
+    { id: "water", name: "Water nudge", icon: "check", blurb: "Count your glasses for the day.",
+      render() { const s = mwState("water"); const n = s.day === todayKey() ? (s.n || 0) : 0; return `<div class="mw-big">${n} 💧</div><p class="mw-sub">glasses today</p><div class="mw-row"><button class="btn btn--ghost btn--sm" data-mw-water="1">+1</button><button class="btn btn--quiet btn--sm" data-mw-water="-1">-1</button></div>`; },
+      wire(el) { el.querySelectorAll("[data-mw-water]").forEach(b => b.addEventListener("click", () => { const s = mwState("water"); const n = Math.max(0, (s.day === todayKey() ? (s.n || 0) : 0) + (+b.dataset.mwWater)); mwSetState("water", { n, day: todayKey() }); renderWidgets(); })); } },
+    { id: "stretch", name: "Stretch nudge", icon: "sparkle", blurb: "A gentle reminder to move.",
+      render() { return `<p class="mw-sub">Been reading a while? Roll your shoulders, look away from the screen, breathe.</p><button class="btn btn--ghost btn--full btn--sm" data-mw-stretch>I stretched</button>`; },
+      wire(el) { el.querySelector("[data-mw-stretch]").addEventListener("click", () => toast("Nice. Your future self says thanks.")); } },
+    { id: "breathing", name: "Breathing", icon: "heart", blurb: "A calm 4-7-8 breathing circle.",
+      render() { return `<div class="mw-breathe" data-mw-breathe><span class="mw-breathe__dot"></span><span class="mw-breathe__txt">Tap to begin</span></div>`; },
+      wire(el) { const box = el.querySelector("[data-mw-breathe]"); const txt = box.querySelector(".mw-breathe__txt"); let on = false, ph = 0; const phases = [["Breathe in", 4000, "in"], ["Hold", 7000, "hold"], ["Breathe out", 8000, "out"]]; let tm = null; const step = () => { const [label, ms, cls] = phases[ph % 3]; txt.textContent = label; box.classList.remove("is-in", "is-hold", "is-out"); box.classList.add("is-" + cls); ph++; tm = setTimeout(step, ms); }; box.addEventListener("click", () => { on = !on; if (on) { ph = 0; step(); } else { clearTimeout(tm); box.classList.remove("is-in", "is-hold", "is-out"); txt.textContent = "Tap to begin"; } }); miniCleanup(() => clearTimeout(tm)); } },
+    { id: "cat", name: "Screen cat", icon: "sparkle", blurb: "Send a cat strolling across your screen.",
+      render() { return `<p class="mw-sub">A cat wanders past when you call it.</p><button class="btn btn--ghost btn--full btn--sm" data-mw-cat>Here, kitty</button>`; },
+      wire(el) { el.querySelector("[data-mw-cat]").addEventListener("click", catWalk); } },
+    { id: "confetti", name: "Confetti", icon: "sparkle", blurb: "A little burst to celebrate a milestone.",
+      render() { return `<p class="mw-sub">Finished a chapter? Give yourself a moment.</p><button class="btn btn--ghost btn--full btn--sm" data-mw-conf>Celebrate</button>`; },
+      wire(el) { el.querySelector("[data-mw-conf]").addEventListener("click", confettiBurst); } },
+    { id: "petals", name: "Falling petals", icon: "sparkle", blurb: "Soft petals drift down the page.",
+      render() { const on = !!mwState("petals").on; return `<p class="mw-sub">A quiet, drifting backdrop.</p><button class="btn ${on ? "btn--primary" : "btn--ghost"} btn--full btn--sm" data-mw-petals>${on ? "Turn off" : "Turn on"}</button>`; },
+      wire(el) { el.querySelector("[data-mw-petals]").addEventListener("click", () => { const on = !mwState("petals").on; mwSetState("petals", { on }); togglePetals(on); renderWidgets(); }); } },
+    { id: "focus", name: "Focus mode", icon: "book", blurb: "Dim the rails and center the words.",
+      render() { const on = !!mwState("focus").on; return `<p class="mw-sub">Quiets everything but the page.</p><button class="btn ${on ? "btn--primary" : "btn--ghost"} btn--full btn--sm" data-mw-focus>${on ? "Turn off" : "Turn on"}</button>`; },
+      wire(el) { el.querySelector("[data-mw-focus]").addEventListener("click", () => { const on = !mwState("focus").on; mwSetState("focus", { on }); document.body.classList.toggle("focus-mode", on); renderWidgets(); }); } },
+    { id: "accent", name: "Accent shuffler", icon: "sparkle", blurb: "Recolor the site's accent on a whim.",
+      render() { return `<p class="mw-sub">Current accent: <b>${esc(settings.accent || "default")}</b></p><button class="btn btn--ghost btn--full btn--sm" data-mw-accent>Shuffle</button>`; },
+      wire(el) { el.querySelector("[data-mw-accent]").addEventListener("click", () => { const ids = ACCENTS.map(a => a.id).filter(x => x !== settings.accent); settings.accent = rand(ids); applySettings(); renderWidgets(); }); } },
+    { id: "wpm", name: "Reading pace", icon: "clock", blurb: "Estimate your words per minute.",
+      render() { const s = mwState("wpm"); return `<div class="mw-row"><input class="mw-in" type="number" min="0" placeholder="words" data-mw-w value="${esc(s.w || "")}"><input class="mw-in" type="number" min="0" placeholder="minutes" data-mw-m value="${esc(s.m || "")}"></div><p class="mw-sub" data-mw-wpm>${s.w && s.m ? Math.round(s.w / s.m) + " words per minute" : "Enter words and minutes"}</p>`; },
+      wire(el) { const w = el.querySelector("[data-mw-w]"), m = el.querySelector("[data-mw-m]"), out = el.querySelector("[data-mw-wpm]"); const upd = () => { mwSetState("wpm", { w: w.value, m: m.value }); out.textContent = (+w.value && +m.value) ? Math.round(+w.value / +m.value) + " words per minute" : "Enter words and minutes"; }; w.addEventListener("input", upd); m.addEventListener("input", upd); } },
+    { id: "chapters-today", name: "Chapters today", icon: "book", blurb: "A tally you bump as you read.",
+      render() { const s = mwState("chapters-today"); const n = s.day === todayKey() ? (s.n || 0) : 0; return `<div class="mw-big">${n}</div><p class="mw-sub">chapters today</p><div class="mw-row"><button class="btn btn--ghost btn--sm" data-mw-ch="1">+1</button><button class="btn btn--quiet btn--sm" data-mw-ch="-1">-1</button></div>`; },
+      wire(el) { el.querySelectorAll("[data-mw-ch]").forEach(b => b.addEventListener("click", () => { const s = mwState("chapters-today"); const n = Math.max(0, (s.day === todayKey() ? (s.n || 0) : 0) + (+b.dataset.mwCh)); mwSetState("chapters-today", { n, day: todayKey() }); renderWidgets(); })); } },
+    { id: "gratitude", name: "Gratitude line", icon: "heart", blurb: "One good thing, saved for today.",
+      render() { const s = mwState("gratitude"); return s.day === todayKey() && s.text ? `<p class="mw-out">${esc(s.text)}</p><button class="btn btn--quiet btn--full btn--sm" data-mw-grat>Change</button>` : `<button class="btn btn--ghost btn--full btn--sm" data-mw-grat>Add one good thing</button>`; },
+      wire(el) { el.querySelector("[data-mw-grat]").addEventListener("click", () => { const v = (window.prompt("One good thing today") || "").trim(); if (!v) return; mwSetState("gratitude", { text: v, day: todayKey() }); renderWidgets(); }); } },
+    { id: "spinner", name: "Yes or no", icon: "shuffle", blurb: "Let the page decide for you.",
+      render() { return `<div class="mw-big" data-mw-out>?</div><button class="btn btn--ghost btn--full btn--sm" data-mw-roll>Decide</button>`; },
+      wire(el) { const out = el.querySelector("[data-mw-out]"); el.querySelector("[data-mw-roll]").addEventListener("click", () => { out.textContent = rand(["Yes", "No", "Maybe", "Later", "Go for it", "Not now"]); out.classList.remove("mw-pop"); void out.offsetWidth; out.classList.add("mw-pop"); }); } }
+  ];
+
+  // Timer/interval bookkeeping so re-renders never leak or double up.
+  let miniIntervals = [], miniCleanups = [];
+  function miniInterval(id) { miniIntervals.push(id); }
+  function miniCleanup(fn) { miniCleanups.push(fn); }
+  function clearMiniTimers() { miniIntervals.forEach(clearInterval); miniIntervals = []; miniCleanups.forEach(fn => { try { fn(); } catch (e) {} }); miniCleanups = []; }
+
+  function installedWidgetsHTML() {
+    const ids = mwLoad();
+    const cards = ids.map(id => {
+      const def = MINI_WIDGETS.find(w => w.id === id); if (!def) return "";
+      return `<div class="widget mini-widget" data-mw="${esc(id)}">
+        <div class="widget__label mw-head"><span>${icon(def.icon || "sparkle", 13)} ${esc(def.name)}</span><button class="mw-remove" data-mw-remove="${esc(id)}" aria-label="Remove ${esc(def.name)}">&times;</button></div>
+        <div class="mw-body">${def.render()}</div>
+      </div>`;
+    }).join("");
+    return cards + `<button class="widget mw-add" data-mw-open>${icon("plus", 15)} Add widgets</button>`;
+  }
+  function wireMiniWidgets(root) {
+    clearMiniTimers();
+    const scope = root || document;
+    scope.querySelectorAll(".mini-widget").forEach(card => {
+      const id = card.dataset.mw; const def = MINI_WIDGETS.find(w => w.id === id);
+      const body = card.querySelector(".mw-body");
+      if (def && def.wire && body) { try { def.wire(body); } catch (e) {} }
+    });
+    scope.querySelectorAll("[data-mw-remove]").forEach(b => b.addEventListener("click", (e) => { e.stopPropagation(); const id = b.dataset.mwRemove; mwSave(mwLoad().filter(x => x !== id)); renderWidgetsEverywhere(); }));
+    scope.querySelectorAll("[data-mw-open]").forEach(b => b.addEventListener("click", openWidgetPicker));
+  }
+  // Both the desktop rail and the open mobile sheet reflect an install change.
+  function renderWidgetsEverywhere() {
+    renderWidgets();
+    const sheetBody = $("#railSheetBody");
+    if (sheetBody && $("#railSheet") && $("#railSheet").classList.contains("is-open") && /Widgets/.test(sheetBody.textContent || "")) {
+      sheetBody.innerHTML = `<h2 class="rail__title" style="margin-bottom:16px">Widgets</h2>${widgetHTML()}`;
+      wireMiniWidgets(sheetBody);
+    }
+  }
+  function openWidgetPicker() {
+    const installed = new Set(mwLoad());
+    const rows = MINI_WIDGETS.map(def => `<button class="mw-pick-row ${installed.has(def.id) ? "is-in" : ""}" data-mw-pick="${esc(def.id)}">
+      <span class="mw-pick-ic">${icon(def.icon || "sparkle", 16)}</span>
+      <span class="mw-pick-txt"><span class="mw-pick-name">${esc(def.name)}</span><span class="mw-pick-blurb">${esc(def.blurb)}</span></span>
+      <span class="mw-pick-act">${installed.has(def.id) ? icon("check", 15) + " Added" : icon("plus", 15) + " Add"}</span>
+    </button>`).join("");
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <h2 style="font-size:20px">Add widgets</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <p class="muted" style="font-size:13px;margin:0 0 14px">Little extras for your widget station. They live on this device only. Tap to add or remove.</p>
+      <div class="mw-pick-list">${rows}</div>
+      <div class="modal-actions" style="margin-top:16px"><button class="btn btn--primary" data-modal-cancel>Done</button></div>`, "Add widgets");
+    $$("#modalCard [data-mw-pick]").forEach(b => b.addEventListener("click", () => {
+      const id = b.dataset.mwPick; const ids = mwLoad();
+      if (ids.includes(id)) { mwSave(ids.filter(x => x !== id)); if (id === "petals") togglePetals(false); if (id === "focus") document.body.classList.remove("focus-mode"); }
+      else mwSave(ids.concat([id]));
+      const nowIn = mwLoad().includes(id);
+      b.classList.toggle("is-in", nowIn);
+      b.querySelector(".mw-pick-act").innerHTML = nowIn ? icon("check", 15) + " Added" : icon("plus", 15) + " Add";
+      renderWidgetsEverywhere();
+    }));
+  }
+
+  // ---- page-level effects for the fun widgets ----
+  function catWalk() {
+    const c = document.createElement("div"); c.className = "mw-catrun"; c.textContent = "🐈";
+    document.body.appendChild(c);
+    c.addEventListener("animationend", () => c.remove());
+    setTimeout(() => { if (c.parentNode) c.remove(); }, 9000);
+  }
+  function confettiBurst() {
+    const box = document.createElement("div"); box.className = "mw-confetti";
+    const colors = ["#ab5a67", "#7d5a86", "#4f8079", "#b1673f", "#5f6bb0", "#d9a7a0"];
+    for (let i = 0; i < 26; i++) { const p = document.createElement("i"); p.style.left = (10 + Math.random() * 80) + "%"; p.style.background = colors[i % colors.length]; p.style.animationDelay = (Math.random() * 0.25) + "s"; p.style.transform = "rotate(" + Math.floor(Math.random() * 360) + "deg)"; box.appendChild(p); }
+    document.body.appendChild(box);
+    setTimeout(() => box.remove(), 2200);
+  }
+  let petalTimer = null;
+  function togglePetals(on) {
+    let layer = $("#mwPetals");
+    if (!on) { if (petalTimer) { clearInterval(petalTimer); petalTimer = null; } if (layer) layer.remove(); return; }
+    if (!layer) { layer = document.createElement("div"); layer.id = "mwPetals"; layer.className = "mw-petals"; document.body.appendChild(layer); }
+    if (petalTimer) return;
+    petalTimer = setInterval(() => {
+      if (!document.getElementById("mwPetals")) { clearInterval(petalTimer); petalTimer = null; return; }
+      const p = document.createElement("i"); p.textContent = "🌸"; p.style.left = Math.random() * 100 + "%"; p.style.animationDuration = (6 + Math.random() * 5) + "s"; p.style.fontSize = (10 + Math.random() * 10) + "px";
+      layer.appendChild(p); setTimeout(() => p.remove(), 11000);
+    }, 900);
+  }
+  // Restore ambient effects the reader left on, once per load.
+  function restoreMiniEffects() {
+    if (mwState("petals").on) togglePetals(true);
+    if (mwState("focus").on) document.body.classList.add("focus-mode");
+  }
 
   // The "Your week" widget, from real reading progress. Only counts we can
   // actually derive: no invented word totals.
@@ -5098,7 +5349,7 @@
   function openRailSheet(kind) {
     const body = $("#railSheetBody");
     if (kind === "activity") body.innerHTML = `<h2 class="rail__title" style="margin-bottom:4px">Activity</h2><p class="rail__note">Recent activity from the people and works you follow.</p>${activityHTML()}`;
-    else body.innerHTML = `<h2 class="rail__title" style="margin-bottom:16px">Widgets</h2>${widgetHTML()}`;
+    else { body.innerHTML = `<h2 class="rail__title" style="margin-bottom:16px">Widgets</h2>${widgetHTML()}`; wireMiniWidgets(body); }
     openOverlay($("#railSheet"));
     if (kind === "activity" && isLive() && WispDB.signedIn) markNotificationsSeen();
   }
@@ -6879,6 +7130,7 @@
     applySettings();
     renderActivity();
     renderWidgets();
+    restoreMiniEffects();       // bring back ambient widgets (petals, focus) the reader left on
 
     // Header and chrome.
     $("#themeBtn").addEventListener("click", openTheme);
