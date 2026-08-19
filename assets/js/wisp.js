@@ -6013,6 +6013,7 @@
     const s = mwState("water");
     if (!s.remind) return;
     const today = todayKey();
+    if (s.metDay === today) return;                        // already hit the goal today (glasses may be cleared)
     const n = s.day === today ? (s.n || 0) : 0;
     if (n >= waterGoal(s)) return;                         // met for today, rest easy
     const hour = new Date().getHours();
@@ -6277,18 +6278,19 @@
         const s = mwState("water"); const today = todayKey();
         const n = s.day === today ? (s.n || 0) : 0;
         const goal = waterGoal(s);
-        const met = n >= goal;
-        const pct = Math.min(100, Math.round(n / goal * 100));
+        const metToday = s.metDay === today;                       // goal was reached today (glasses may be cleared)
         const remind = !!s.remind;
-        const dots = Array.from({ length: goal }, (_, i) => `<span class="mw-water-dot${i < n ? " is-full" : ""}"></span>`).join("");
+        // A row of real glasses the reader fills up. Tap one to fill to it.
+        const glasses = Array.from({ length: goal }, (_, i) =>
+          `<button class="mw-glass${i < n ? " is-full" : ""}" data-mw-fill="${i + 1}" title="${i + 1} ${i + 1 === 1 ? "glass" : "glasses"}" aria-label="Fill to ${i + 1}">${icon("water", 26)}</button>`).join("");
+        const label = metToday ? "goal met today &#127881;" : "glasses today";
         return `
-          <div class="mw-water${met ? " is-met" : ""}">
-            <div class="mw-water-head"><span class="mw-water-count">${n}<span class="mw-water-of"> / ${goal}</span></span><span class="mw-water-label">${met ? "goal met 🎉" : "glasses today"}</span></div>
-            <div class="mw-water-dots">${dots}</div>
-            <div class="mw-water-bar" role="progressbar" aria-valuenow="${n}" aria-valuemin="0" aria-valuemax="${goal}"><span style="width:${pct}%"></span></div>
+          <div class="mw-water${metToday ? " is-met" : ""}">
+            <div class="mw-water-head"><span class="mw-water-count">${n}<span class="mw-water-of"> / ${goal}</span></span><span class="mw-water-label">${label}</span></div>
+            <div class="mw-water-glasses" role="group" aria-label="Glasses of water">${glasses}</div>
             <div class="mw-row">
               <button class="btn btn--ghost btn--sm" data-mw-water="1">${icon("water", 13)} Had a glass</button>
-              <button class="btn btn--quiet btn--sm" data-mw-water="-1" ${n ? "" : "disabled"}>Undo</button>
+              <button class="btn btn--quiet btn--sm" data-mw-water-clear ${n ? "" : "disabled"}>Clear</button>
             </div>
             <div class="mw-water-cfg">
               <span class="mw-water-goalset">Daily goal <span class="mw-stepper"><button data-mw-water-goal="-1" aria-label="Lower goal">&minus;</button><b>${goal}</b><button data-mw-water-goal="1" aria-label="Raise goal">+</button></span></span>
@@ -6297,15 +6299,33 @@
           </div>`;
       },
       wire(el) {
-        el.querySelectorAll("[data-mw-water]").forEach(b => b.addEventListener("click", () => {
+        // Set today's count to `n`. On first reaching the goal: celebrate, mark the
+        // day met (so reminders stop), then auto-clear the glasses for a fresh
+        // round — the reader never has to undo each one.
+        const setTo = (n) => {
           const s = mwState("water"); const today = todayKey();
           const cur = s.day === today ? (s.n || 0) : 0;
           const goal = waterGoal(s);
-          const n = Math.max(0, cur + (+b.dataset.mwWater));
-          mwSetState("water", { n, day: today });
-          if (+b.dataset.mwWater > 0 && cur < goal && n >= goal) celebrate("You hit your water goal", "That's " + goal + " glasses today. Nicely done.", "💧");
+          const nn = Math.max(0, Math.min(goal, n));
+          const justMet = nn >= goal && cur < goal;
+          mwSetState("water", { n: nn, day: today, metDay: (justMet || s.metDay === today) ? today : s.metDay });
+          if (justMet) {
+            celebrate("You hit your water goal", "That's " + goal + " glasses today. Nicely done.", "💧");
+            setTimeout(() => { const s2 = mwState("water"); if (s2.day === todayKey() && (s2.n || 0) >= waterGoal(s2)) { mwSetState("water", { n: 0, day: todayKey() }); renderWidgets(); } }, 2600);
+          }
           renderWidgets();
+        };
+        el.querySelectorAll("[data-mw-fill]").forEach(b => b.addEventListener("click", () => {
+          const s = mwState("water"); const cur = s.day === todayKey() ? (s.n || 0) : 0;
+          const target = +b.dataset.mwFill;
+          setTo(target === cur ? cur - 1 : target);   // tap the top glass to empty it, else fill up to it
         }));
+        el.querySelectorAll("[data-mw-water]").forEach(b => b.addEventListener("click", () => {
+          const s = mwState("water"); const cur = s.day === todayKey() ? (s.n || 0) : 0;
+          setTo(cur + (+b.dataset.mwWater));
+        }));
+        const clr = el.querySelector("[data-mw-water-clear]");
+        if (clr) clr.addEventListener("click", () => { mwSetState("water", { n: 0, day: todayKey() }); renderWidgets(); });
         el.querySelectorAll("[data-mw-water-goal]").forEach(b => b.addEventListener("click", () => {
           const s = mwState("water");
           const goal = Math.max(1, Math.min(20, waterGoal(s) + (+b.dataset.mwWaterGoal)));

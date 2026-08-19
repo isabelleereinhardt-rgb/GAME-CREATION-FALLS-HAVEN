@@ -1999,14 +1999,15 @@ button.pill--link:hover { border-color: var(--rose); color: var(--rose-ink); bac
 .mw-water-of { font-size: 17px; color: var(--ink3); }
 .mw-water-label { font-size: 12px; color: var(--ink3); letter-spacing: .02em; }
 .mw-water.is-met .mw-water-count { color: #2a7ab0; }
-.mw-water-dots { display: flex; flex-wrap: wrap; gap: 5px; margin: 9px 0 8px; }
-.mw-water-dot { width: 14px; height: 18px; border-radius: 0 0 7px 7px / 0 0 9px 9px; position: relative;
-  background: color-mix(in srgb, #58a6d6 16%, transparent); border: 1px solid color-mix(in srgb, #58a6d6 34%, transparent); transition: background .18s, border-color .18s; }
-.mw-water-dot::before { content: ""; position: absolute; left: 50%; top: -4px; width: 8px; height: 8px; transform: translateX(-50%) rotate(45deg);
-  background: inherit; border-radius: 3px 0 0 0; }
-.mw-water-dot.is-full { background: #58a6d6; border-color: #3f8fc0; }
-.mw-water-bar { height: 7px; border-radius: 999px; background: color-mix(in srgb, #58a6d6 15%, var(--card)); overflow: hidden; }
-.mw-water-bar > span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #6fb7e0, #3f8fc0); transition: width .28s ease; }
+/* A row of real glasses the reader fills up; empty ones are dimmed. */
+.mw-water-glasses { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 9px; }
+.mw-glass { border: 0; background: none; padding: 2px; cursor: pointer; line-height: 0; border-radius: 8px;
+  transition: transform .12s ease; -webkit-tap-highlight-color: transparent; }
+.mw-glass svg { display: block; opacity: .32; filter: grayscale(.65); transition: opacity .16s ease, filter .16s ease, transform .16s ease; }
+.mw-glass.is-full svg { opacity: 1; filter: none; }
+.mw-glass:hover { transform: translateY(-2px); }
+.mw-glass:focus-visible { outline: none; box-shadow: 0 0 0 2px color-mix(in srgb, #3f8fc0 60%, transparent); }
+.mw-water.is-met .mw-water-count { color: #2a7ab0; }
 .mw-water-cfg { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 11px; flex-wrap: wrap; }
 .mw-water-goalset { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ink2); }
 .mw-stepper { display: inline-flex; align-items: center; gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }

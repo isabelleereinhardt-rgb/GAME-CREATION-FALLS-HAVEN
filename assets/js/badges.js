@@ -34,7 +34,6 @@
     { id: "peoples-choice",name: "People's Choice", cat: "contest", tier: "silver", img: "rosette-silver.png", desc: "The entry readers voted for most.",      how: "Win the reader vote in an event." },
     // Milestones -------------------------------------------------------------
     { id: "first-publication", name: "First Publication", cat: "milestone", tier: "gold", img: "seal-gold.png", desc: "Published a first work on Wisp.",       how: "Publish your first work.", auto: function (s) { return (s.works || 0) >= 1; } },
-    { id: "prolific",      name: "Prolific",       cat: "milestone", tier: "silver", img: "seal-silver.png",  desc: "A shelf's worth of published works.",     how: "Publish ten or more works.", auto: function (s) { return (s.works || 0) >= 10; } },
     { id: "unlocked",      name: "Milestone Unlocked", cat: "milestone", tier: "gold", img: "padlock-gold.png", desc: "Crossed a hearts milestone.",           how: "Reach 100 hearts across your works.", auto: function (s) { return (s.hearts || 0) >= 100; } },
     { id: "legend",        name: "Legend",         cat: "milestone", tier: "gold",   img: "star-black.png",    desc: "A rare, standout honor.",                 how: "Earn a special recognition from the team." },
     // Consistency & streaks --------------------------------------------------
