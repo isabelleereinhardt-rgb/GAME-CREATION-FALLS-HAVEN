@@ -199,17 +199,17 @@
 
   /* ---------- CSS ---------- */
   var CSS = SKIN_CSS +
-    '.lucky-stage{position:fixed;left:0;right:0;bottom:0;height:150px;pointer-events:none;z-index:24;overflow:hidden}' +
+    '.lucky-stage{position:fixed;left:0;right:0;bottom:0;height:250px;pointer-events:none;z-index:24;overflow:hidden}' +
     '.lucky-stage[hidden]{display:none}' +
-    '.lucky-walk{position:absolute;bottom:8px;left:100vw;pointer-events:auto;cursor:pointer;animation:lucky-walk var(--pace,34s) linear infinite}' +
-    '.lucky-bob{animation:lucky-bob .62s ease-in-out infinite}' +
+    '.lucky-walk{position:absolute;bottom:10px;left:100vw;pointer-events:auto;cursor:pointer;animation:lucky-walk var(--pace,34s) linear infinite}' +
+    '.lucky-bob{animation:lucky-bob .6s ease-in-out infinite}' +
     '.lucky-leg{transform-box:fill-box;transform-origin:50% 0;animation:lucky-leg .62s ease-in-out infinite}' +
     '.lucky-tail{transform-box:fill-box;transform-origin:0 100%;animation:lucky-tail 1.6s ease-in-out infinite}' +
     '.lucky-eye{transform-box:fill-box;transform-origin:50% 50%;animation:lucky-blink 4.2s ease-in-out infinite}' +
     '@keyframes lucky-walk{from{transform:translateX(0)}to{transform:translateX(calc(-100vw - 120px))}}' +
-    '@keyframes lucky-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.5px)}}' +
-    '@keyframes lucky-leg{0%,100%{transform:rotate(15deg)}50%{transform:rotate(-15deg)}}' +
-    '@keyframes lucky-tail{0%,100%{transform:rotate(-8deg)}50%{transform:rotate(10deg)}}' +
+    '@keyframes lucky-bob{0%,100%{transform:translateY(0)}25%{transform:translateY(-2.8px)}50%{transform:translateY(0)}75%{transform:translateY(-1.4px)}}' +
+    '@keyframes lucky-leg{0%,100%{transform:rotate(20deg)}50%{transform:rotate(-20deg)}}' +
+    '@keyframes lucky-tail{0%,100%{transform:rotate(-12deg)}50%{transform:rotate(16deg)}}' +
     '@keyframes lucky-blink{0%,92%,100%{transform:scaleY(1)}96%{transform:scaleY(.1)}}' +
     '@keyframes lucky-hop{0%,100%{transform:translateY(0) scaleY(1)}18%{transform:translateY(0) scaleY(.9)}50%{transform:translateY(-13px) scaleY(1.04)}82%{transform:translateY(0) scaleY(.94)}}' +
     '@keyframes lucky-hopaway{0%,58%{transform:translateX(0)}100%{transform:translateX(calc(-1 * var(--exit,92vw)))}}' +
@@ -243,12 +243,13 @@
     '.lucky-treat{position:absolute;bottom:4px;left:-30px;line-height:0;opacity:0}' +
     '.lucky-walk.treating .lucky-treat{animation:treat-appear 4.6s ease-out forwards}' +
     '@keyframes treat-appear{0%{opacity:0;transform:translateY(-6px) scale(.7)}14%{opacity:1;transform:none}70%{opacity:1}100%{opacity:0}}' +
-    /* Reduce-motion / Wisp calm: park him still at the left, but keep him alive. */
+    /* Lucky is an opt-in companion the reader chose, so OS Low Power Mode does not
+       freeze him — his own walk toggle is the off switch. Only Wisp's explicit
+       "reduce motion" setting parks him: still, but blinking and breathing. */
     ':root[data-motion="reduce"] .lucky-walk{animation:none;left:26px}' +
     ':root[data-motion="reduce"] .lucky-leg{animation:none}' +
     ':root[data-motion="reduce"] .lucky-tip{animation:none;opacity:1}' +
     ':root[data-motion="reduce"] .lucky-bob{animation:lucky-breathe 4.4s ease-in-out infinite}' +
-    '@media (prefers-reduced-motion: reduce){.lucky-walk{animation:none;left:26px}.lucky-leg{animation:none}.lucky-tip{animation:none;opacity:1}.lucky-bob{animation:lucky-breathe 4.4s ease-in-out infinite}}' +
     '@keyframes lucky-breathe{0%,100%{transform:translateY(0) scaleY(1)}50%{transform:translateY(-.5px) scaleY(1.012)}}' +
     /* settings modal */
     '.lucky-modal-back{position:fixed;inset:0;z-index:120;background:color-mix(in srgb,var(--ink) 34%,transparent);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:40px 16px}' +
