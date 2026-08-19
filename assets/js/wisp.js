@@ -5662,7 +5662,12 @@
   function mwPersistRemote() {
     if (!(window.WispDB && WispDB.enabled && WispDB.signedIn && WispDB.saveWidgets)) return;
     if (mwRemoteTimer) clearTimeout(mwRemoteTimer);
-    mwRemoteTimer = setTimeout(() => { mwRemoteTimer = null; try { WispDB.saveWidgets({ installed: MW.installed, state: MW.state }); } catch (e) {} }, 700);
+    mwRemoteTimer = setTimeout(() => {
+      mwRemoteTimer = null;
+      const payload = { installed: MW.installed, state: MW.state };
+      if (window.WispCompanion && WispCompanion.getPrefs) payload.companion = WispCompanion.getPrefs();
+      try { WispDB.saveWidgets(payload); } catch (e) {}
+    }, 700);
   }
   function mwPersist() { mwPersistLocal(); mwPersistRemote(); }
   function mwLoad() { return MW.installed.slice(); }
@@ -5679,17 +5684,19 @@
     if (mwSyncedFor === pid) return;
     mwSyncedFor = pid;
     const remote = WispDB.getWidgets ? WispDB.getWidgets() : null;
-    const hasRemote = remote && typeof remote === "object" &&
+    const hasWidgets = remote && typeof remote === "object" &&
       ((Array.isArray(remote.installed) && remote.installed.length) || (remote.state && Object.keys(remote.state).length));
-    if (hasRemote) {
+    const hasCompanion = remote && typeof remote === "object" && remote.companion && typeof remote.companion === "object";
+    if (hasWidgets) {
       MW.installed = Array.isArray(remote.installed) ? remote.installed.slice() : [];
       MW.state = (remote.state && typeof remote.state === "object") ? remote.state : {};
       mwPersistLocal();
       applyAmbientWidgetState();
       renderWidgetsEverywhere();
-    } else {
-      mwPersistRemote();   // account empty (or column unmigrated): upload this device's station
     }
+    // The reading companion (Lucky) rides in the same synced blob.
+    if (hasCompanion && window.WispCompanion && WispCompanion.applyPrefs) WispCompanion.applyPrefs(remote.companion);
+    if (!hasWidgets && !hasCompanion) mwPersistRemote();   // account empty (or column unmigrated): upload this device's state
   }
   // Reflect ambient toggles (petals, focus mode) after a cross-device sync.
   function applyAmbientWidgetState() {
@@ -5840,9 +5847,12 @@
     { id: "breathing", name: "Breathing", icon: "heart", blurb: "A 4-7-8 breathing circle.",
       render() { return `<div class="mw-breathe" data-mw-breathe><span class="mw-breathe__dot"></span><span class="mw-breathe__txt">Tap to begin</span></div>`; },
       wire(el) { const box = el.querySelector("[data-mw-breathe]"); const txt = box.querySelector(".mw-breathe__txt"); let on = false, ph = 0; const phases = [["Breathe in", 4000, "in"], ["Hold", 7000, "hold"], ["Breathe out", 8000, "out"]]; let tm = null; const step = () => { const [label, ms, cls] = phases[ph % 3]; txt.textContent = label; box.classList.remove("is-in", "is-hold", "is-out"); box.classList.add("is-" + cls); ph++; tm = setTimeout(step, ms); }; box.addEventListener("click", () => { on = !on; if (on) { ph = 0; step(); } else { clearTimeout(tm); box.classList.remove("is-in", "is-hold", "is-out"); txt.textContent = "Tap to begin"; } }); miniCleanup(() => clearTimeout(tm)); } },
-    { id: "cat", name: "Screen cat", icon: "paw", blurb: "A cat strolls the screen.",
-      render() { return `<p class="mw-sub">A cat wanders past when you call it.</p><button class="btn btn--ghost btn--full btn--sm" data-mw-cat>Here, kitty</button>`; },
-      wire(el) { el.querySelector("[data-mw-cat]").addEventListener("click", catWalk); } },
+    { id: "cat", name: "Lucky the cat", icon: "paw", blurb: "A cat who strolls the page.",
+      render() { const sum = (window.WispCompanion && WispCompanion.summary) ? WispCompanion.summary() : "Your reading companion."; return `<p class="mw-sub" data-mw-cat-sum>${esc(sum)}</p><div class="mw-row"><button class="btn btn--ghost btn--sm" data-mw-cat-customize>Customize</button><button class="btn btn--quiet btn--sm" data-mw-cat-stroll>Take a stroll</button></div>`; },
+      wire(el) {
+        const cz = el.querySelector("[data-mw-cat-customize]"); if (cz) cz.addEventListener("click", () => { if (window.WispCompanion) WispCompanion.openSettings(); });
+        const st = el.querySelector("[data-mw-cat-stroll]"); if (st) st.addEventListener("click", () => { if (window.WispCompanion) WispCompanion.stroll(); });
+      } },
     { id: "confetti", name: "Confetti", icon: "party", blurb: "A burst of confetti.",
       render() { return `<p class="mw-sub">Finished a chapter? Give yourself a moment.</p><button class="btn btn--ghost btn--full btn--sm" data-mw-conf>Celebrate</button>`; },
       wire(el) { el.querySelector("[data-mw-conf]").addEventListener("click", confettiBurst); } },
@@ -9049,7 +9059,8 @@
       // underneath and an already-signed-in reader never sees the sign-in form.
       if (WispDB.configured) renderAuthGate(true);
       WispDB.onChange(syncAuthHeader);
-      WispDB.onChange(mwSyncFromAccount);   // pull the account's widget station across devices
+      WispDB.onChange(mwSyncFromAccount);   // pull the account's widget station (and companion) across devices
+      document.addEventListener("wisp-companion-changed", () => mwPersistRemote());   // sync Lucky's look across devices
       // A password-reset link lands the reader back here with a recovery
       // session: show the "set a new password" screen when that happens.
       WispDB.onRecovery(openSetNewPassword);
