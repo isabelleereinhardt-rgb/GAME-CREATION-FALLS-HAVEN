@@ -5539,6 +5539,66 @@
   }
   function hideBadgePop() { badgePopHideT = setTimeout(() => { if (badgePopEl) badgePopEl.classList.remove("is-on"); }, 90); }
 
+  /* ---- profile conversations wall (Wattpad-style, kept understated) ---- */
+  function conversationsHTML() {
+    return `
+      <div class="shelf conv" id="convShelf">
+        <div class="shelf__head"><span class="shelf__title">Conversations</span></div>
+        <div class="conv-compose" data-conv-compose hidden>
+          <input class="conv-input" type="text" maxlength="2000" placeholder="Post a message" data-conv-input aria-label="Post a message">
+          <button class="btn btn--primary btn--sm" data-conv-post>Post</button>
+        </div>
+        <div class="conv-list" id="convList"><p class="muted" style="font-size:13px;padding:6px 2px">Loading…</p></div>
+      </div>`;
+  }
+  async function mountConversations(profileId) {
+    const shelf = $("#convShelf"); if (!shelf || !profileId) return;
+    const canPost = !!(window.WispDB && WispDB.signedIn);
+    const compose = shelf.querySelector("[data-conv-compose]");
+    if (compose && canPost) compose.hidden = false;
+    const myId = window.WispDB && WispDB.user && WispDB.user.id;
+    const list = $("#convList");
+    let posts = [];
+    const render = () => {
+      if (!posts.length) { list.innerHTML = `<p class="muted" style="font-size:13px;padding:6px 2px">No messages yet.${canPost ? " Be the first to say something." : ""}</p>`; return; }
+      list.innerHTML = posts.map(p => {
+        const who = p.author_name || "Reader";
+        const canDel = myId && (p.author_id === myId || profileId === myId);
+        return `<div class="conv-post">
+          <span class="conv-av">${esc((who[0] || "?").toUpperCase())}</span>
+          <div class="conv-cbody">
+            <div class="conv-meta"><a class="conv-who" href="#/user/${esc(p.author_handle || p.author_id)}">${esc(who)}</a><span class="conv-when">${WispDB.relTime(p.created_at)}</span>${canDel ? `<button class="conv-del" data-conv-del="${esc(p.id)}" aria-label="Delete this message">&times;</button>` : ""}</div>
+            <div class="conv-text">${esc(p.body)}</div>
+          </div>
+        </div>`;
+      }).join("");
+    };
+    posts = await WispDB.listProfilePosts(profileId).catch(() => []);
+    render();
+    const input = shelf.querySelector("[data-conv-input]");
+    const postBtn = shelf.querySelector("[data-conv-post]");
+    const submit = async () => {
+      const body = (input.value || "").trim(); if (!body) return;
+      postBtn.disabled = true;
+      try {
+        const saved = await WispDB.postProfilePost(profileId, body);
+        if (saved === false) { toast("Conversations need migration 025 on your Supabase."); postBtn.disabled = false; return; }
+        input.value = "";
+        posts = await WispDB.listProfilePosts(profileId).catch(() => posts);
+        render();
+      } catch (e) { toast((e && e.message) || "Could not post."); }
+      postBtn.disabled = false;
+    };
+    if (postBtn) postBtn.addEventListener("click", submit);
+    if (input) input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); submit(); } });
+    list.addEventListener("click", async (e) => {
+      const del = e.target.closest("[data-conv-del]"); if (!del) return;
+      const id = del.dataset.convDel;
+      try { await WispDB.deleteProfilePost(id); posts = posts.filter(p => p.id !== id); render(); }
+      catch (err) { toast("Could not delete."); }
+    });
+  }
+
   function renderProfileSignedOut() {
     $("#screen-profile").innerHTML = `
       <div class="page page--wide">
@@ -5593,8 +5653,10 @@
           <div class="shelf__head"><span class="shelf__title">Published works</span></div>
           ${pinnedCards}
         </div>
+        ${conversationsHTML()}
       </div>`;
     $("#themeBtn2") && $("#themeBtn2").addEventListener("click", openTheme);
+    mountConversations(uid);
   }
   async function loadProfile() {
     if (!WispDB.signedIn) { renderProfileSignedOut(); return; }
@@ -5676,8 +5738,10 @@
         </div>
         ${earned.length ? `<div class="shelf"><div class="shelf__head"><span class="shelf__title">Badge case</span><button class="btn--link" data-badge-case>View all</button></div><div class="badge-case">${badgeCaseHTML(earned)}</div></div>` : ""}
         <div class="shelf"><div class="shelf__head"><span class="shelf__title">Works</span></div>${worksHTML}</div>
+        ${conversationsHTML()}
       </div>`;
     if (following) userState.following.add(p.id); else userState.following.delete(p.id);
+    mountConversations(p.id);
   }
   function renderProfile() {
     if (isLive()) return loadProfile();

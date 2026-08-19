@@ -591,6 +591,39 @@ window.WispDB = (function () {
       return (data && data[0]) || null;
     } catch (e) { if (missingColumn(e)) return false; console.warn("[wisp] grantBadges failed:", e && e.message); return false; }
   }
+  // Profile conversations wall (migration 025). Resilient: reads/writes fail
+  // soft until the table exists, so the app keeps working without it.
+  async function listProfilePosts(profileId, limit) {
+    if (!client || !profileId) return [];
+    try {
+      const { data, error } = await client.from("profile_posts")
+        .select("id, body, created_at, author_id, author_name, author_handle")
+        .eq("profile_id", profileId).order("created_at", { ascending: false }).limit(limit || 40);
+      if (error) { if (missingTable(error) || missingColumn(error)) return []; throw error; }
+      return data || [];
+    } catch (e) { return []; }
+  }
+  async function postProfilePost(profileId, body) {
+    if (!user) throw new Error("Sign in to post.");
+    const row = {
+      profile_id: profileId, author_id: user.id, body: body,
+      author_name: (profile && profile.display_name) || "Reader",
+      author_handle: (profile && profile.handle) || null
+    };
+    try {
+      const { data, error } = await client.from("profile_posts").insert(row).select().single();
+      if (error) { if (missingTable(error) || missingColumn(error)) return false; throw error; }
+      return data;
+    } catch (e) { if (missingTable(e) || missingColumn(e)) return false; throw e; }
+  }
+  async function deleteProfilePost(id) {
+    if (!user || !client) return false;
+    try {
+      const { error } = await client.from("profile_posts").delete().eq("id", id);
+      if (error) { if (missingTable(error)) return false; throw error; }
+      return true;
+    } catch (e) { if (missingTable(e)) return false; return false; }
+  }
   async function getProfile(idOrHandle) {
     if (!idOrHandle) return null;
     let q = client.from("profiles").select("*");
@@ -1361,6 +1394,7 @@ window.WispDB = (function () {
     toggle, myRelations, getComments, postComment, editComment, deleteComment, getReactions, toggleReaction, uploadCover,
     toggleFollow, amFollowing, followCounts, myFollowingIds, getNotifications,
     updateProfile, getProfile, getWidgets, saveWidgets, saveMyBadges, grantBadges, worksByAuthor,
+    listProfilePosts, postProfilePost, deleteProfilePost,
     listEvents, myEventIds, toggleEventJoin, getEvent, eventMemberCount, listEventPosts, postToEvent, deleteEventPost,
     listHubs, myHubIds, hubMemberCounts, toggleHubMembership, hubDetail, worksInHub, worksByTag,
     getAdminSettings, setAdminPassword, createEvent, updateEvent, deleteEvent, createHub, updateHub, deleteHub, adminDeleteWork,
