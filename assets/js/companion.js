@@ -201,15 +201,17 @@
   var CSS = SKIN_CSS +
     '.lucky-stage{position:fixed;left:0;right:0;bottom:0;height:250px;pointer-events:none;z-index:24;overflow:hidden}' +
     '.lucky-stage[hidden]{display:none}' +
-    '.lucky-walk{position:absolute;bottom:10px;left:100vw;pointer-events:auto;cursor:pointer;animation:lucky-walk var(--pace,34s) linear infinite}' +
-    '.lucky-bob{animation:lucky-bob .6s ease-in-out infinite}' +
+    /* Gait matched exactly to the original World-Without-God cat: a slow stroll
+       right-to-left with a gentle bob, an even leg swing, and a lazy tail. */
+    '.lucky-walk{position:absolute;bottom:6px;left:100vw;pointer-events:auto;cursor:pointer;animation:lucky-walk var(--pace,34s) linear infinite}' +
+    '.lucky-bob{animation:lucky-bob .62s ease-in-out infinite}' +
     '.lucky-leg{transform-box:fill-box;transform-origin:50% 0;animation:lucky-leg .62s ease-in-out infinite}' +
     '.lucky-tail{transform-box:fill-box;transform-origin:0 100%;animation:lucky-tail 1.6s ease-in-out infinite}' +
     '.lucky-eye{transform-box:fill-box;transform-origin:50% 50%;animation:lucky-blink 4.2s ease-in-out infinite}' +
     '@keyframes lucky-walk{from{transform:translateX(0)}to{transform:translateX(calc(-100vw - 120px))}}' +
-    '@keyframes lucky-bob{0%,100%{transform:translateY(0)}25%{transform:translateY(-2.8px)}50%{transform:translateY(0)}75%{transform:translateY(-1.4px)}}' +
-    '@keyframes lucky-leg{0%,100%{transform:rotate(20deg)}50%{transform:rotate(-20deg)}}' +
-    '@keyframes lucky-tail{0%,100%{transform:rotate(-12deg)}50%{transform:rotate(16deg)}}' +
+    '@keyframes lucky-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.5px)}}' +
+    '@keyframes lucky-leg{0%,100%{transform:rotate(15deg)}50%{transform:rotate(-15deg)}}' +
+    '@keyframes lucky-tail{0%,100%{transform:rotate(-8deg)}50%{transform:rotate(10deg)}}' +
     '@keyframes lucky-blink{0%,92%,100%{transform:scaleY(1)}96%{transform:scaleY(.1)}}' +
     '@keyframes lucky-hop{0%,100%{transform:translateY(0) scaleY(1)}18%{transform:translateY(0) scaleY(.9)}50%{transform:translateY(-13px) scaleY(1.04)}82%{transform:translateY(0) scaleY(.94)}}' +
     '@keyframes lucky-hopaway{0%,58%{transform:translateX(0)}100%{transform:translateX(calc(-1 * var(--exit,92vw)))}}' +
@@ -252,7 +254,7 @@
        effect. (Petals, confetti, and page flourishes still respect Reduce motion.) */
     ':root[data-motion="reduce"] .lucky-walk{animation:lucky-walk var(--pace,34s) linear infinite !important}' +
     ':root[data-motion="reduce"] .lucky-walk.treating{animation:lucky-hopaway 4.6s ease-in forwards !important}' +
-    ':root[data-motion="reduce"] .lucky-bob{animation:lucky-bob .6s ease-in-out infinite !important}' +
+    ':root[data-motion="reduce"] .lucky-bob{animation:lucky-bob .62s ease-in-out infinite !important}' +
     ':root[data-motion="reduce"] .lucky-leg{animation:lucky-leg .62s ease-in-out infinite !important}' +
     ':root[data-motion="reduce"] .lucky-tail{animation:lucky-tail 1.6s ease-in-out infinite !important}' +
     ':root[data-motion="reduce"] .lucky-eye{animation:lucky-blink 4.2s ease-in-out infinite !important}' +
