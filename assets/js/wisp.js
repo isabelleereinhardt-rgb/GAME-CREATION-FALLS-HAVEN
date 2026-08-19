@@ -2572,7 +2572,7 @@
       <div class="comment">
         <span class="comment__av" ${c.author ? 'style="background:var(--rose);color:#fbf3e8"' : ""}>${esc(c.init)}</span>
         <div>
-          <div><span class="comment__who">${esc(c.who)}</span>${c.author ? ' <span class="pill" style="padding:2px 6px">Author</span>' : ""}<span class="comment__when">${esc(c.when)}</span></div>
+          <div><span class="comment__who">${esc(c.who)}</span>${c.author ? ' <span class="pill" style="padding:2px 6px">Author</span>' : ""}${badgeMiniRow(c.badges || (c.author ? ["beloved", "kept-the-flame"] : []))}<span class="comment__when">${esc(c.when)}</span></div>
           <div class="comment__text">${esc(c.text)}</div>
           <div class="comment__acts"><button data-heart-c>${icon("heart",12)} Heart</button><button data-reply>Reply</button></div>
         </div>
@@ -5358,6 +5358,102 @@
   /* ======================================================================= */
   /*  SCREEN: PROFILE                                                         */
   /* ======================================================================= */
+  /* =========================================================================
+     BADGES  ·  the metallic award case (art lives in window.WispBadges)
+     A profile's badges = what was granted/showcased (stored on the profile, or
+     in localStorage when there is no backend) plus what its own numbers earn.
+     ========================================================================= */
+  let lastBadgeCase = { ids: [], name: "" };   // powers the "+N" / View-all opener
+  function badgeLocalKey(who) { return "wisp.badges." + (who || "me"); }
+  function readLocalBadges(who) {
+    try { const v = JSON.parse(localStorage.getItem(badgeLocalKey(who)) || "[]"); return Array.isArray(v) ? v : []; } catch (e) { return []; }
+  }
+  function writeLocalBadges(who, ids) {
+    try { localStorage.setItem(badgeLocalKey(who), JSON.stringify(ids || [])); } catch (e) {}
+  }
+  // Stored (granted) badge ids for a profile: the DB column when present, else
+  // the on-device fallback so the case still works without a backend.
+  function storedBadgesFor(profileObj, who) {
+    if (profileObj && Array.isArray(profileObj.badges) && profileObj.badges.length) return profileObj.badges.slice();
+    return readLocalBadges(who);
+  }
+  // Ordered earned ids: granted ∪ auto-earned(from own numbers), in catalog order.
+  function earnedBadgeIds(stored, stats) {
+    if (!window.WispBadges) return [];
+    const set = new Set(Array.isArray(stored) ? stored : []);
+    if (stats) WispBadges.earnedFrom(stats).forEach(id => set.add(id));
+    return WispBadges.CATALOG.map(b => b.id).filter(id => set.has(id));
+  }
+  function badgeChip(id, size, cls) {
+    if (!window.WispBadges) return "";
+    const def = WispBadges.byId(id); if (!def) return "";
+    return `<span class="wisp-badge ${cls || ""}" data-badge="${esc(id)}" tabindex="0" role="button" aria-label="${esc(def.name)}, ${esc(WispBadges.tierLabel(def.tier))}">${WispBadges.svg(id, size || 44)}</span>`;
+  }
+  function badgeRowHTML(ids, max, size) {
+    ids = ids || [];
+    if (!ids.length) return "";
+    const cap = max || 7, shown = ids.slice(0, cap), extra = ids.length - shown.length;
+    return `<div class="badge-row">${shown.map(id => badgeChip(id, size || 38)).join("")}${extra > 0 ? `<button class="badge-more" data-badge-case aria-label="See all badges">+${extra}</button>` : ""}</div>`;
+  }
+  // The full case: every badge, earned ones bright, the rest dimmed as goals.
+  function badgeCaseHTML(earnedIds) {
+    if (!window.WispBadges) return "";
+    const earned = new Set(earnedIds || []);
+    return WispBadges.categories().map(c => {
+      const cells = c.badges.map(b => `<div class="badge-cell ${earned.has(b.id) ? "is-earned" : "is-locked"}">${badgeChip(b.id, 54)}<span class="badge-cell__name">${esc(b.name)}</span></div>`).join("");
+      return `<div class="badge-group"><div class="badge-group__label">${esc(c.label)}</div><div class="badge-grid">${cells}</div></div>`;
+    }).join("");
+  }
+  function openBadgeCase(earnedIds, name) {
+    const earned = (earnedIds || []).length;
+    const total = window.WispBadges ? WispBadges.CATALOG.length : 0;
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <h2 style="font-size:20px">${name ? esc(name) + "'s badge case" : "Badge case"}</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <p class="muted" style="font-size:13px;margin:0 0 14px">${earned} of ${total} earned. Hover or tap a badge to see what it takes.</p>
+      <div class="badge-case">${badgeCaseHTML(earnedIds)}</div>`, "Badge case");
+  }
+  // A small set of badges beside a name (comments, cards). Silent if none.
+  function badgeMiniRow(ids, max) {
+    ids = ids || []; if (!ids.length) return "";
+    return `<span class="badge-mini">${ids.slice(0, max || 3).map(id => badgeChip(id, 18, "wisp-badge--mini")).join("")}</span>`;
+  }
+
+  /* ---- hover / focus detail card ---- */
+  let badgePopEl = null, badgePopHideT = null;
+  function ensureBadgePop() {
+    if (badgePopEl) return badgePopEl;
+    badgePopEl = document.createElement("div");
+    badgePopEl.className = "badge-pop"; badgePopEl.id = "badgePop";
+    badgePopEl.addEventListener("mouseenter", () => clearTimeout(badgePopHideT));
+    badgePopEl.addEventListener("mouseleave", hideBadgePop);
+    document.body.appendChild(badgePopEl);
+    return badgePopEl;
+  }
+  function showBadgePop(chip) {
+    if (!window.WispBadges) return;
+    const id = chip.getAttribute("data-badge"); const def = WispBadges.byId(id); if (!def) return;
+    clearTimeout(badgePopHideT);
+    const pop = ensureBadgePop();
+    pop.innerHTML =
+      `<div class="badge-pop__art">${WispBadges.svg(id, 66)}</div>` +
+      `<div class="badge-pop__body"><div class="badge-pop__name">${esc(def.name)}</div>` +
+      `<div class="badge-pop__tier badge-pop__tier--${def.tier}">${esc(WispBadges.tierLabel(def.tier))}</div>` +
+      `<div class="badge-pop__desc">${esc(def.desc)}</div>` +
+      `<div class="badge-pop__how">${esc(def.how)}</div></div>`;
+    pop.classList.add("is-on");
+    const r = chip.getBoundingClientRect();
+    const pw = pop.offsetWidth, ph = pop.offsetHeight;
+    let left = r.left + r.width / 2 - pw / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - pw - 8));
+    let top = r.top - ph - 10;
+    if (top < 8) top = r.bottom + 10;
+    pop.style.left = left + "px"; pop.style.top = top + "px";
+  }
+  function hideBadgePop() { badgePopHideT = setTimeout(() => { if (badgePopEl) badgePopEl.classList.remove("is-on"); }, 90); }
+
   function renderProfileSignedOut() {
     $("#screen-profile").innerHTML = `
       <div class="page page--wide">
@@ -5374,6 +5470,8 @@
     const handle = p.handle ? "@" + p.handle : "";
     const published = (works || []).filter(w => w.status === "ongoing" || w.status === "complete");
     const hearts = (works || []).reduce((n, w) => n + (+w.hearts_count || 0), 0);
+    const earned = earnedBadgeIds(storedBadgesFor(p, WispDB.user && WispDB.user.id), { works: published.length, hearts: hearts, words: p.words || 0 });
+    lastBadgeCase = { ids: earned, name: name };
     const pinnedCards = published.length
       ? `<div class="work-grid">${published.map(w => cardGallery(WispDB.toCard(w))).join("")}</div>`
       : `<p class="muted" style="font-size:14px;padding:16px 4px">Nothing published yet. Your posted works will show here.</p>`;
@@ -5391,12 +5489,17 @@
               <div><b>${WispDB.fmtCount(counts.followers)}</b><span>Followers</span></div>
               <div><b>${WispDB.fmtCount(counts.following)}</b><span>Following</span></div>
             </div>
+            ${earned.length ? badgeRowHTML(earned, 7, 40) : ""}
           </div>
           <div style="display:flex;flex-direction:column;gap:8px">
             <button class="btn btn--quiet btn--sm" id="themeBtn2">${icon("gear",15)} Customize theme</button>
             <button class="btn btn--quiet btn--sm" data-edit-profile>${icon("edit",15)} Edit profile</button>
             <button class="btn btn--quiet btn--sm" data-nav="write">${icon("book",15)} Your works</button>
           </div>
+        </div>
+        <div class="shelf">
+          <div class="shelf__head"><span class="shelf__title">Badge case</span><span class="shelf__note">${earned.length} of ${window.WispBadges ? WispBadges.CATALOG.length : 0} earned</span></div>
+          <div class="badge-case">${badgeCaseHTML(earned)}</div>
         </div>
         <div class="shelf">
           <div class="shelf__head"><span class="shelf__title">Published works</span></div>
@@ -5457,6 +5560,9 @@
   }
   function renderUserProfile(p, works, counts, following) {
     const name = p.display_name || "Reader";
+    const hearts = (works || []).reduce((n, w) => n + (+((w.hearts_count != null) ? w.hearts_count : w.hearts) || 0), 0);
+    const earned = earnedBadgeIds(storedBadgesFor(p, p.id), { works: works.length, hearts: hearts, words: p.words || 0 });
+    lastBadgeCase = { ids: earned, name: name };
     const worksHTML = works.length
       ? `<div class="work-grid">${works.map(cardGallery).join("")}</div>`
       : `<p class="muted" style="font-size:14px;padding:16px 4px">No published works yet.</p>`;
@@ -5474,11 +5580,13 @@
               <div><b>${WispDB.fmtCount(counts.followers)}</b><span>Followers</span></div>
               <div><b>${WispDB.fmtCount(counts.following)}</b><span>Following</span></div>
             </div>
+            ${earned.length ? badgeRowHTML(earned, 7, 40) : ""}
           </div>
           <div style="display:flex;flex-direction:column;gap:8px">
             <button class="btn ${following ? "btn--quiet is-on-quiet" : "btn--primary"} btn--sm" data-follow="${p.id}" aria-pressed="${following}">${following ? "Following" : "Follow"}</button>
           </div>
         </div>
+        ${earned.length ? `<div class="shelf"><div class="shelf__head"><span class="shelf__title">Badge case</span><button class="btn--link" data-badge-case>View all</button></div><div class="badge-case">${badgeCaseHTML(earned)}</div></div>` : ""}
         <div class="shelf"><div class="shelf__head"><span class="shelf__title">Works</span></div>${worksHTML}</div>
       </div>`;
     if (following) userState.following.add(p.id); else userState.following.delete(p.id);
@@ -5486,6 +5594,11 @@
   function renderProfile() {
     if (isLive()) return loadProfile();
     const P = W.PROFILE;
+    // A demo showcase so the badge case is populated to look at without a backend.
+    const demoStored = readLocalBadges("me");
+    const demoBadges = demoStored.length ? demoStored : ["grand-prize", "kept-the-flame", "beloved", "night-owl", "spring-bloom", "kind-soul", "first-words"];
+    const earned = earnedBadgeIds(demoBadges, { works: P.stats.works, hearts: 640, words: 60000 });
+    lastBadgeCase = { ids: earned, name: P.name };
     $("#screen-profile").innerHTML = `
       <div class="page page--wide">
         <div class="profile-hero">
@@ -5500,11 +5613,17 @@
               <div><b>${P.stats.followers}</b><span>Followers</span></div>
               <div><b>${P.stats.following}</b><span>Following</span></div>
             </div>
+            ${badgeRowHTML(earned, 7, 40)}
           </div>
           <div style="display:flex;flex-direction:column;gap:8px">
             <button class="btn btn--quiet btn--sm" id="themeBtn2">${icon("gear",15)} Customize theme</button>
             <button class="btn btn--quiet btn--sm" data-toast="Arrange your profile theme, pinned works, and widgets here.">Edit profile</button>
           </div>
+        </div>
+
+        <div class="shelf">
+          <div class="shelf__head"><span class="shelf__title">Badge case</span><span class="shelf__note">${earned.length} of ${window.WispBadges ? WispBadges.CATALOG.length : 0} earned</span></div>
+          <div class="badge-case">${badgeCaseHTML(earned)}</div>
         </div>
 
         <div class="shelf">
@@ -7233,8 +7352,18 @@
     if (e.target.closest("#screen-write [data-fmt]")) e.preventDefault();
   });
 
+  // Badge hover/focus detail cards (delegated so they work anywhere a badge is).
+  document.addEventListener("mouseover", (e) => { const b = e.target.closest && e.target.closest(".wisp-badge[data-badge]"); if (b) showBadgePop(b); });
+  document.addEventListener("mouseout", (e) => { const b = e.target.closest && e.target.closest(".wisp-badge[data-badge]"); if (b) hideBadgePop(); });
+  document.addEventListener("focusin", (e) => { const b = e.target.closest && e.target.closest(".wisp-badge[data-badge]"); if (b) showBadgePop(b); });
+  document.addEventListener("focusout", (e) => { const b = e.target.closest && e.target.closest(".wisp-badge[data-badge]"); if (b) hideBadgePop(); });
+
   // Event delegation for the whole app.
   document.addEventListener("click", (e) => {
+    const badgeCaseBtn = e.target.closest("[data-badge-case]");
+    if (badgeCaseBtn) { openBadgeCase(lastBadgeCase.ids, lastBadgeCase.name); return; }
+    const badgeChipEl = e.target.closest(".wisp-badge[data-badge]");
+    if (badgeChipEl) { showBadgePop(badgeChipEl); return; }   // tap-to-reveal on touch
     const nav = e.target.closest("[data-nav]");
     if (nav) {
       if (nav.dataset.nav === "profile" && window.WispDB && WispDB.enabled && !WispDB.signedIn) { openAuth("in"); return; }
@@ -8059,6 +8188,22 @@
         </section>
 
         <section class="admin-sec">
+          <h3>Award badges</h3>
+          <p class="muted admin-panel__note" style="margin-top:0">Give a member a badge for a contest win, kindness, or just for fun. Enter their handle, load, pick badges, and save. Needs migration 024.</p>
+          <div class="admin-add">
+            <div class="admin-add__row">
+              <input type="text" id="admin-badge-handle" placeholder="@handle" class="admin-filter" style="margin:0">
+              <button class="btn btn--quiet btn--sm" data-admin-badge-load>Load</button>
+            </div>
+            <div class="badge-award" id="admin-badge-grid" hidden></div>
+            <div class="admin-add__row" id="admin-badge-save-row" hidden>
+              <button class="btn btn--primary btn--sm" data-admin-badge-save>Save badges</button>
+              <span class="muted" id="admin-badge-target" style="font-size:12.5px"></span>
+            </div>
+          </div>
+        </section>
+
+        <section class="admin-sec">
           <h3>Admin password</h3>
           <div class="admin-add">
             <input type="password" id="admin-new-pw" placeholder="New admin password" autocomplete="new-password">
@@ -8213,6 +8358,46 @@
           if (seq === workSeq) showWorkResults(rows || [], q);
         } catch (e) { if (seq === workSeq) showWorkResults([], q); }
       }, 220);
+    });
+
+    // Award badges: load a member by handle, toggle badges, save.
+    let badgeTarget = null, badgeSel = new Set();
+    const bGrid = card.querySelector("#admin-badge-grid");
+    const bSaveRow = card.querySelector("#admin-badge-save-row");
+    const bTargetLbl = card.querySelector("#admin-badge-target");
+    const paintBadgeGrid = () => {
+      if (!bGrid || !window.WispBadges) return;
+      bGrid.innerHTML = WispBadges.CATALOG.map(b => `<button type="button" class="badge-award__cell ${badgeSel.has(b.id) ? "is-on" : ""}" data-badge-toggle="${esc(b.id)}" title="${esc(b.name)}">${WispBadges.svg(b.id, 38)}<span>${esc(b.name)}</span></button>`).join("");
+    };
+    const bLoad = card.querySelector("[data-admin-badge-load]");
+    bLoad && bLoad.addEventListener("click", async () => {
+      const h = ((card.querySelector("#admin-badge-handle") || {}).value || "").trim().replace(/^@/, "");
+      if (!h) { toast("Enter a handle first."); return; }
+      try {
+        const prof = await WispDB.getProfile(h);
+        if (!prof) { toast("No member with that handle."); return; }
+        badgeTarget = prof; badgeSel = new Set(Array.isArray(prof.badges) ? prof.badges : []);
+        paintBadgeGrid();
+        if (bGrid) bGrid.hidden = false; if (bSaveRow) bSaveRow.hidden = false;
+        if (bTargetLbl) bTargetLbl.textContent = "Editing " + (prof.display_name || ("@" + prof.handle));
+      } catch (e) { toast((e && e.message) || "Could not load that member."); }
+    });
+    bGrid && bGrid.addEventListener("click", (e) => {
+      const t = e.target.closest("[data-badge-toggle]"); if (!t) return;
+      const id = t.dataset.badgeToggle;
+      badgeSel.has(id) ? badgeSel.delete(id) : badgeSel.add(id);
+      t.classList.toggle("is-on", badgeSel.has(id));
+    });
+    const bSave = card.querySelector("[data-admin-badge-save]");
+    bSave && bSave.addEventListener("click", async () => {
+      if (!badgeTarget) return;
+      bSave.disabled = true;
+      try {
+        const res = await WispDB.grantBadges(badgeTarget.id, Array.from(badgeSel));
+        if (res === false) toast("Badges need migration 024 and an admin row.");
+        else toast("Badges updated for " + (badgeTarget.display_name || ("@" + badgeTarget.handle)) + ".");
+      } catch (e) { toast((e && e.message) || "Could not save badges."); }
+      bSave.disabled = false;
     });
 
     // Categories: add and delete event/hub kinds.

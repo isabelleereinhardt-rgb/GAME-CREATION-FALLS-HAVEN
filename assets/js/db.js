@@ -569,6 +569,28 @@ window.WispDB = (function () {
       return true;
     } catch (e) { if (missingColumn(e)) return false; console.warn("[wisp] saveWidgets failed:", e && e.message); return false; }
   }
+  // Badges live on the profile row as a jsonb array of badge ids. Reads come
+  // free with select *. Own writes fail softly until migration 024; admin grants
+  // to other profiles need the admin update policy that migration adds.
+  async function saveMyBadges(ids) {
+    if (!user || !client) return false;
+    try {
+      const { error } = await client.from("profiles").update({ badges: ids || [] }).eq("id", user.id);
+      if (error) { if (missingColumn(error)) return false; throw error; }
+      if (profile) profile.badges = ids || [];
+      return true;
+    } catch (e) { if (missingColumn(e)) return false; console.warn("[wisp] saveMyBadges failed:", e && e.message); return false; }
+  }
+  async function grantBadges(idOrHandle, ids) {
+    if (!client || !idOrHandle) return null;
+    try {
+      let q = client.from("profiles").update({ badges: ids || [] });
+      q = looksUuid(idOrHandle) ? q.eq("id", idOrHandle) : q.eq("handle", String(idOrHandle).replace(/^@/, ""));
+      const { data, error } = await q.select("id,handle,display_name,badges");
+      if (error) { if (missingColumn(error)) return false; throw error; }
+      return (data && data[0]) || null;
+    } catch (e) { if (missingColumn(e)) return false; console.warn("[wisp] grantBadges failed:", e && e.message); return false; }
+  }
   async function getProfile(idOrHandle) {
     if (!idOrHandle) return null;
     let q = client.from("profiles").select("*");
@@ -1338,7 +1360,7 @@ window.WispDB = (function () {
     mySeries, getSeries, worksInSeries, findOrCreateSeries, updateSeries, deleteSeries, countInSeries,
     toggle, myRelations, getComments, postComment, editComment, deleteComment, getReactions, toggleReaction, uploadCover,
     toggleFollow, amFollowing, followCounts, myFollowingIds, getNotifications,
-    updateProfile, getProfile, getWidgets, saveWidgets, worksByAuthor,
+    updateProfile, getProfile, getWidgets, saveWidgets, saveMyBadges, grantBadges, worksByAuthor,
     listEvents, myEventIds, toggleEventJoin, getEvent, eventMemberCount, listEventPosts, postToEvent, deleteEventPost,
     listHubs, myHubIds, hubMemberCounts, toggleHubMembership, hubDetail, worksInHub, worksByTag,
     getAdminSettings, setAdminPassword, createEvent, updateEvent, deleteEvent, createHub, updateHub, deleteHub, adminDeleteWork,
