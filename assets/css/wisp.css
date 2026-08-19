@@ -1917,6 +1917,31 @@ button.pill--link:hover { border-color: var(--rose); color: var(--rose-ink); bac
 .mw-out { font-size: 14px; color: var(--ink); line-height: 1.5; margin: 0 0 10px; min-height: 1.4em; }
 .mw-row { display: flex; gap: 8px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
 .mw-row .btn { flex: 1; }
+
+/* Water nudge: goal, progress, hourly reminders. */
+.mw-water-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.mw-water-count { font: 30px/1 var(--font-display); color: var(--ink); font-variant-numeric: tabular-nums; }
+.mw-water-of { font-size: 17px; color: var(--ink3); }
+.mw-water-label { font-size: 12px; color: var(--ink3); letter-spacing: .02em; }
+.mw-water.is-met .mw-water-count { color: #2a7ab0; }
+.mw-water-dots { display: flex; flex-wrap: wrap; gap: 5px; margin: 9px 0 8px; }
+.mw-water-dot { width: 14px; height: 18px; border-radius: 0 0 7px 7px / 0 0 9px 9px; position: relative;
+  background: color-mix(in srgb, #58a6d6 16%, transparent); border: 1px solid color-mix(in srgb, #58a6d6 34%, transparent); transition: background .18s, border-color .18s; }
+.mw-water-dot::before { content: ""; position: absolute; left: 50%; top: -4px; width: 8px; height: 8px; transform: translateX(-50%) rotate(45deg);
+  background: inherit; border-radius: 3px 0 0 0; }
+.mw-water-dot.is-full { background: #58a6d6; border-color: #3f8fc0; }
+.mw-water-bar { height: 7px; border-radius: 999px; background: color-mix(in srgb, #58a6d6 15%, var(--card)); overflow: hidden; }
+.mw-water-bar > span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #6fb7e0, #3f8fc0); transition: width .28s ease; }
+.mw-water-cfg { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 11px; flex-wrap: wrap; }
+.mw-water-goalset { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ink2); }
+.mw-stepper { display: inline-flex; align-items: center; gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.mw-stepper button { border: 0; background: var(--card); color: var(--ink2); width: 24px; height: 24px; font-size: 15px; line-height: 1; cursor: pointer; }
+.mw-stepper button:hover { background: color-mix(in srgb, var(--rose) 12%, var(--card)); color: var(--rose-ink); }
+.mw-stepper b { min-width: 22px; text-align: center; font: 600 13.5px var(--font-text); color: var(--ink); font-variant-numeric: tabular-nums; }
+.mw-water-remind { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--card);
+  color: var(--ink2); border-radius: 999px; padding: 5px 11px; font: 600 12px var(--font-text); cursor: pointer; transition: all .15s; }
+.mw-water-remind:hover { border-color: #58a6d6; color: #2a7ab0; }
+.mw-water-remind.is-on { border-color: #58a6d6; background: color-mix(in srgb, #58a6d6 14%, var(--card)); color: #2a7ab0; }
 .mw-pop { animation: mw-pop .3s ease; }
 @keyframes mw-pop { 0% { transform: scale(.86); opacity: .3; } 100% { transform: scale(1); opacity: 1; } }
 .mw-add { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;

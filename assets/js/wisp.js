@@ -2822,6 +2822,23 @@
     return "";
   }
 
+  // contenteditable sometimes drops typed text *inside* an embed figure (e.g. a
+  // writer clicks just under a video and the caret lands within the player's
+  // element). figureOrImgToMd only captures the embed itself, so that stray text
+  // would be lost on save. This pulls back any writer text the figure is holding
+  // that is not part of the embed's own chrome (the iframe, its source link, the
+  // image and its caption, the hover tools) so it survives serialization.
+  function figureStrayText(node) {
+    if (!node || node.nodeType !== 1 || !node.cloneNode) return "";
+    const clone = node.cloneNode(true);
+    clone.querySelectorAll(
+      "iframe, img, figcaption, .embed__source, .img-tools, .embed-link__label, .embed-link__host, [class*='embed--']"
+    ).forEach(n => n.remove());
+    return (clone.textContent || "")
+      .replace(new RegExp(String.fromCharCode(0xA0), "g"), " ")
+      .replace(/\s+/g, " ").trim();
+  }
+
   function editorHtmlToMd(el) {
     if (!el) return "";
     const BLOCK = new Set(["p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "ul", "ol", "hr", "pre"]);
@@ -2839,6 +2856,9 @@
         flushInline();
         const b = figureOrImgToMd(node);
         if (b && b.trim()) blocks.push(b);
+        // Recover any text the writer typed that got absorbed into the figure.
+        const stray = figureStrayText(node);
+        if (stray) blocks.push(stray);
       } else if (node.nodeType === 1 && BLOCK.has(tag)) {
         flushInline();
         const b = serializeBlock(node, tag);
@@ -4246,6 +4266,8 @@
         bodyEd.addEventListener(ev, () => setTimeout(updateEditorEmpty, 0)));
       // Images carry their own controls: scale (small/medium/full) and remove.
       decorateEditorImages();
+      // Video/map/audio embeds become non-editable, each with a paragraph after.
+      decorateEditorEmbeds();
       bodyEd.addEventListener("click", (e) => {
         const gm = e.target.closest(".gc-mark");
         if (gm) { e.preventDefault(); openGrammarPop(gm); return; }
@@ -5705,7 +5727,64 @@
     const installed = new Set(MW.installed);
     togglePetals(installed.has("petals") && !!(MW.state.petals && MW.state.petals.on));
     document.body.classList.toggle("focus-mode", installed.has("focus") && !!(MW.state.focus && MW.state.focus.on));
+    armWaterReminders();
   }
+
+  // ---- Water goal + hourly reminders ---------------------------------------
+  // Readers set a daily glasses goal and, if they ask for it, Wisp nudges them
+  // about once an hour during waking hours until they reach it. Nudges use the
+  // browser's notifications when granted, and fall back to an in-app toast so a
+  // reader with notifications off still gets the reminder while the tab is open.
+  function waterGoal(s) { const g = s && +s.goal; return g >= 1 && g <= 20 ? g : 8; }
+  function requestNotifyPermission() {
+    return new Promise(resolve => {
+      try {
+        if (!("Notification" in window)) return resolve("unsupported");
+        if (Notification.permission !== "default") return resolve(Notification.permission);
+        const p = Notification.requestPermission(res => resolve(res || Notification.permission));
+        if (p && p.then) p.then(res => resolve(res)).catch(() => resolve(Notification.permission));
+      } catch (e) { resolve("denied"); }
+    });
+  }
+  function waterNotify() {
+    const s = mwState("water"); const today = todayKey();
+    const n = s.day === today ? (s.n || 0) : 0;
+    const goal = waterGoal(s);
+    const left = Math.max(0, goal - n);
+    const body = left <= 1 ? "One more glass to reach today's goal." : left + " more glasses to reach today's goal.";
+    let shown = false;
+    try {
+      if (("Notification" in window) && Notification.permission === "granted") {
+        const nt = new Notification("Time for a glass of water", { body: body, tag: "wisp-water", renotify: true });
+        nt.onclick = function () { try { window.focus(); } catch (e) {} nt.close(); };
+        shown = true;
+      }
+    } catch (e) {}
+    if (!shown && document.getElementById("toast")) toast("Time for a glass of water — " + body);
+  }
+  let waterTimer = null;
+  function waterReminderTick() {
+    if (!MW.installed || MW.installed.indexOf("water") < 0) return;
+    const s = mwState("water");
+    if (!s.remind) return;
+    const today = todayKey();
+    const n = s.day === today ? (s.n || 0) : 0;
+    if (n >= waterGoal(s)) return;                         // met for today, rest easy
+    const hour = new Date().getHours();
+    if (hour < 8 || hour >= 22) return;                    // no overnight pings
+    const last = +s.last || 0;
+    if (Date.now() - last < 60 * 60 * 1000) return;        // at most one an hour
+    mwSetState("water", { last: Date.now() });
+    waterNotify();
+  }
+  function armWaterReminders() {
+    if (waterTimer) return;
+    // Check every few minutes; the tick itself throttles to one nudge an hour.
+    waterTimer = setInterval(waterReminderTick, 4 * 60 * 1000);
+    setTimeout(waterReminderTick, 12000);                  // a first check shortly after load
+  }
+  // A small handle so the reminder logic can be exercised by tests.
+  window.WispWater = { tick: waterReminderTick, notify: waterNotify, goal: waterGoal };
 
   // A few tracking widgets fill themselves in from real reading, so the reader
   // never has to tap +1. Called when a chapter opens in the reader; each chapter
@@ -5919,9 +5998,58 @@
         el.querySelectorAll("[data-mw-tr-toggle]").forEach(b => b.addEventListener("click", () => { const arr = items(); const i = +b.dataset.mwTrToggle; if (arr[i]) { arr[i].done = !arr[i].done; mwSetState("to-read", { items: arr }); renderWidgets(); } }));
         el.querySelectorAll("[data-mw-tr-del]").forEach(b => b.addEventListener("click", () => { const arr = items(); arr.splice(+b.dataset.mwTrDel, 1); mwSetState("to-read", { items: arr }); renderWidgets(); }));
       } },
-    { id: "water", name: "Water nudge", icon: "check", blurb: "Glasses of water today.",
-      render() { const s = mwState("water"); const n = s.day === todayKey() ? (s.n || 0) : 0; return `<div class="mw-big">${n} 💧</div><p class="mw-sub">glasses today</p><div class="mw-row"><button class="btn btn--ghost btn--sm" data-mw-water="1">+1</button><button class="btn btn--quiet btn--sm" data-mw-water="-1">-1</button></div>`; },
-      wire(el) { el.querySelectorAll("[data-mw-water]").forEach(b => b.addEventListener("click", () => { const s = mwState("water"); const n = Math.max(0, (s.day === todayKey() ? (s.n || 0) : 0) + (+b.dataset.mwWater)); mwSetState("water", { n, day: todayKey() }); renderWidgets(); })); } },
+    { id: "water", name: "Water nudge", icon: "check", blurb: "Track water, hourly nudges.",
+      render() {
+        const s = mwState("water"); const today = todayKey();
+        const n = s.day === today ? (s.n || 0) : 0;
+        const goal = waterGoal(s);
+        const met = n >= goal;
+        const pct = Math.min(100, Math.round(n / goal * 100));
+        const remind = !!s.remind;
+        const dots = Array.from({ length: goal }, (_, i) => `<span class="mw-water-dot${i < n ? " is-full" : ""}"></span>`).join("");
+        return `
+          <div class="mw-water${met ? " is-met" : ""}">
+            <div class="mw-water-head"><span class="mw-water-count">${n}<span class="mw-water-of"> / ${goal}</span></span><span class="mw-water-label">${met ? "goal met 🎉" : "glasses today"}</span></div>
+            <div class="mw-water-dots">${dots}</div>
+            <div class="mw-water-bar" role="progressbar" aria-valuenow="${n}" aria-valuemin="0" aria-valuemax="${goal}"><span style="width:${pct}%"></span></div>
+            <div class="mw-row">
+              <button class="btn btn--ghost btn--sm" data-mw-water="1">${icon("water", 13)} Had a glass</button>
+              <button class="btn btn--quiet btn--sm" data-mw-water="-1" ${n ? "" : "disabled"}>Undo</button>
+            </div>
+            <div class="mw-water-cfg">
+              <span class="mw-water-goalset">Daily goal <span class="mw-stepper"><button data-mw-water-goal="-1" aria-label="Lower goal">&minus;</button><b>${goal}</b><button data-mw-water-goal="1" aria-label="Raise goal">+</button></span></span>
+              <button class="mw-water-remind${remind ? " is-on" : ""}" data-mw-water-remind aria-pressed="${remind}">${icon(remind ? "bell" : "mute", 12)} ${remind ? "Reminders on" : "Remind me hourly"}</button>
+            </div>
+          </div>`;
+      },
+      wire(el) {
+        el.querySelectorAll("[data-mw-water]").forEach(b => b.addEventListener("click", () => {
+          const s = mwState("water"); const today = todayKey();
+          const cur = s.day === today ? (s.n || 0) : 0;
+          const goal = waterGoal(s);
+          const n = Math.max(0, cur + (+b.dataset.mwWater));
+          mwSetState("water", { n, day: today });
+          if (+b.dataset.mwWater > 0 && cur < goal && n >= goal) celebrate("You hit your water goal", "That's " + goal + " glasses today. Nicely done.", "💧");
+          renderWidgets();
+        }));
+        el.querySelectorAll("[data-mw-water-goal]").forEach(b => b.addEventListener("click", () => {
+          const s = mwState("water");
+          const goal = Math.max(1, Math.min(20, waterGoal(s) + (+b.dataset.mwWaterGoal)));
+          mwSetState("water", { goal }); renderWidgets();
+        }));
+        const rb = el.querySelector("[data-mw-water-remind]");
+        if (rb) rb.addEventListener("click", () => {
+          const s = mwState("water");
+          const turningOn = !s.remind;
+          // Flip the preference right away; ask for notification permission in the
+          // background so the toggle never waits on the browser prompt. In-app
+          // toast nudges still work even if the reader declines notifications.
+          mwSetState("water", { remind: turningOn, last: turningOn ? Date.now() : (s.last || 0) });
+          if (turningOn) { armWaterReminders(); requestNotifyPermission().catch(() => {}); }
+          renderWidgets();
+          toast(turningOn ? "I'll nudge you about once an hour until you reach your goal." : "Water reminders off.");
+        });
+      } },
     { id: "stretch", name: "Stretch break", icon: "leaf", blurb: "A guided little stretch.",
       render() { return `<div class="mw-stretch" data-mw-stretch><div class="mw-fig" data-mw-fig>${stretchFigSVG()}</div><p class="mw-sub" data-mw-stretch-txt>Been reading a while? Take twenty seconds.</p><button class="btn btn--ghost btn--full btn--sm" data-mw-stretch-go>Stretch with me</button></div>`; },
       wire(el) {
@@ -5963,9 +6091,15 @@
     { id: "wpm", name: "Reading pace", icon: "clock", blurb: "Learned as you read.",
       render() { const s = mwState("wpm"); return s.avg ? `<div class="mw-big">${s.avg}</div><p class="mw-sub">words per minute${s.n ? " · from " + s.n + " " + (s.n === 1 ? "read" : "reads") : ""}</p>` : `<p class="mw-sub">Read a chapter or two and I'll learn your pace on my own. No typing.</p>`; },
       wire() {} },
-    { id: "chapters-today", name: "Chapters today", icon: "book", blurb: "Chapters read today.",
-      render() { const s = mwState("chapters-today"); const n = s.day === todayKey() ? (s.n || 0) : 0; return `<div class="mw-big">${n}</div><p class="mw-sub">chapters today</p><div class="mw-row"><button class="btn btn--ghost btn--sm" data-mw-ch="1">+1</button><button class="btn btn--quiet btn--sm" data-mw-ch="-1">-1</button></div>`; },
-      wire(el) { el.querySelectorAll("[data-mw-ch]").forEach(b => b.addEventListener("click", () => { const s = mwState("chapters-today"); const n = Math.max(0, (s.day === todayKey() ? (s.n || 0) : 0) + (+b.dataset.mwCh)); mwSetState("chapters-today", { n, day: todayKey() }); renderWidgets(); })); } },
+    { id: "chapters-today", name: "Chapters today", icon: "book", blurb: "Counts as you read.",
+      render() {
+        const s = mwState("chapters-today");
+        const n = s.day === todayKey() ? (s.n || 0) : 0;
+        return n
+          ? `<div class="mw-big">${n}</div><p class="mw-sub">${n === 1 ? "chapter" : "chapters"} read today · counted for you</p>`
+          : `<p class="mw-sub">Open a chapter and it counts here on its own. No tapping needed.</p>`;
+      },
+      wire() {} },
     { id: "gratitude", name: "Gratitude line", icon: "heart", blurb: "One good thing today.",
       render() { const s = mwState("gratitude"); return s.day === todayKey() && s.text ? `<p class="mw-out">${esc(s.text)}</p><button class="btn btn--quiet btn--full btn--sm" data-mw-grat>Change</button>` : `<button class="btn btn--ghost btn--full btn--sm" data-mw-grat>Add one good thing</button>`; },
       wire(el) { el.querySelector("[data-mw-grat]").addEventListener("click", () => { const v = (window.prompt("One good thing today") || "").trim(); if (!v) return; mwSetState("gratitude", { text: v, day: todayKey() }); renderWidgets(); }); } },
@@ -8782,6 +8916,26 @@
           `<button type="button" class="img-tool" data-img-size="full" title="Full width">L</button>` +
           `<button type="button" class="img-tool img-tool--del" data-img-del title="Remove image">${icon("trash", 13)}</button>`;
         fig.appendChild(tools);
+      }
+    });
+  }
+
+  // Rich embeds (video, map, audio players) and link cards are atomic blocks the
+  // same way inserted images are: the writer must not be able to click into the
+  // player and type text that then vanishes on save. Mark them non-editable and
+  // guarantee an editable paragraph after every embed so the caret always has a
+  // place to land below it. Runs on editor load and after each insert.
+  function decorateEditorEmbeds() {
+    const ed = $("#we-body"); if (!ed) return;
+    const BLK = /^(p|div|h[1-6]|ul|ol|blockquote|pre)$/;
+    ed.querySelectorAll("figure.embed--rich, a.embed--link").forEach(el => {
+      el.setAttribute("contenteditable", "false");
+    });
+    ed.querySelectorAll("figure.embed, a.embed--link").forEach(el => {
+      const nx = el.nextElementSibling;
+      if (!nx || !BLK.test(nx.nodeName.toLowerCase())) {
+        const p = document.createElement("p"); p.appendChild(document.createElement("br"));
+        el.parentNode.insertBefore(p, el.nextSibling);
       }
     });
   }

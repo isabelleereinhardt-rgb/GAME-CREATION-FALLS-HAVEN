@@ -372,11 +372,12 @@
     meter.textContent = dots;
   }
 
-  // Hide him on the reading and writing surfaces (out of the way while you read
-  // or write); show him everywhere else, when walks are on.
+  // Hide him only on the immersive reading surface (out of the way while you
+  // read). He strolls everywhere else, the writing station included, so writers
+  // still get his company while they work.
   function updateVisibility() {
     var h = (location.hash || "").replace(/^#\/?/, "");
-    var hide = /^read(\/|$)/.test(h) || /^write(\/|$)/.test(h);
+    var hide = /^read(\/|$)/.test(h);
     document.body.classList.toggle("companion-hide", hide);
   }
 
