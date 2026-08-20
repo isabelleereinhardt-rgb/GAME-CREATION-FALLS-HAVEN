@@ -3758,12 +3758,13 @@
   function readerText() {
     const parts = [];
     document.querySelectorAll("#screen-reading .para").forEach(par => {
-      let t = "";
-      par.childNodes.forEach(n => {
-        if (n.nodeType === 1 && (n.classList.contains("para__marker") || n.classList.contains("thread-slot"))) return;
-        t += n.textContent || "";
-      });
-      t = t.trim();
+      // Work on a clone so read-aloud reads only the prose: strip the comment
+      // marker, its thread, and any embedded media (images, videos, link cards)
+      // so it never speaks an embed's caption, URL, or iframe title. A block
+      // that is only an embed becomes empty and is skipped.
+      const clone = par.cloneNode(true);
+      clone.querySelectorAll(".para__marker, .thread-slot, .embed, figure, iframe, .embed-block, .embed-link__host").forEach(x => x.remove());
+      const t = (clone.textContent || "").replace(/\s+/g, " ").trim();
       if (t) parts.push(t);
     });
     return parts.join(" ");
@@ -6829,6 +6830,28 @@
     return [{ text: "" }];
   }
 
+  // A 7-day strip (oldest to today) for the reading-streak widget, so it reads
+  // as a consistency tracker rather than a plain daily counter. A day is filled
+  // when it falls inside the current consecutive streak ending at s.last.
+  function streakWeekStrip(s) {
+    const count = s.count || 0;
+    let lastOffset = 99;
+    if (s.last) {
+      const p = String(s.last).split("-").map(Number);
+      const last = new Date(p[0], (p[1] || 1) - 1, p[2] || 1); last.setHours(0, 0, 0, 0);
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      lastOffset = Math.round((today - last) / 86400000);
+    }
+    const WD = ["S", "M", "T", "W", "T", "F", "S"];
+    let out = "";
+    for (let k = 6; k >= 0; k--) {
+      const dt = new Date(); dt.setHours(0, 0, 0, 0); dt.setDate(dt.getDate() - k);
+      const read = count > 0 && k >= lastOffset && k <= lastOffset + count - 1;
+      out += `<span class="mw-week__day ${read ? "is-read" : ""} ${k === 0 ? "is-today" : ""}"><span class="mw-week__dot"></span><span class="mw-week__wd">${WD[dt.getDay()]}</span></span>`;
+    }
+    return out;
+  }
+
   const MINI_WIDGETS = [
     { id: "clock", name: "Live clock", icon: "clock", blurb: "The current time.", render() { return `<div class="mw-big" data-mw-clock>--:--</div>`; },
       wire(el) { const t = el.querySelector("[data-mw-clock]"); const upd = () => { const d = new Date(); let h = d.getHours(); const ap = h >= 12 ? "PM" : "AM"; h = h % 12 || 12; t.textContent = h + ":" + String(d.getMinutes()).padStart(2, "0") + " " + ap; }; upd(); miniInterval(setInterval(upd, 1000)); } },
@@ -6851,15 +6874,17 @@
         const disp = el.querySelector("[data-mw-sp]"); if (mwState("word-sprint").endsAt) miniInterval(setInterval(() => { const s = mwState("word-sprint"); const left = s.endsAt - Date.now(); const d = el.querySelector("[data-mw-sp]"); if (left <= 0) { mwSetState("word-sprint", { endsAt: 0 }); toast("Sprint done. Great work."); renderWidgets(); return; } if (d) d.textContent = fmtDur(left); }, 500)); } },
     { id: "streak", name: "Reading streak", icon: "check", blurb: "Days in a row.",
       render() {
-        const s = mwState("streak"); const done = s.last === todayKey();
-        // When today is already logged (you tapped it, or reading logged it for
-        // you), show a plain confirmation instead of a dead, disabled button that
-        // looks broken when tapped. The button only appears when it will do
-        // something.
-        return `<div class="mw-big">${s.count || 0} 🔥</div>` +
-          (done
-            ? `<p class="mw-sub mw-done">${icon("check", 13)} Logged for today</p>`
-            : `<p class="mw-sub">Not logged today</p><button class="btn btn--ghost btn--full btn--sm" data-mw-streak>I read today</button>`);
+        const s = mwState("streak"); const done = s.last === todayKey(); const n = s.count || 0;
+        // Distinct from "Chapters today" (a count of what you read today): this
+        // is about consistency over days, so it leads with the streak and a
+        // seven-day strip. The log button only shows when it will do something.
+        return `<div class="mw-streak">
+            <div class="mw-streak__top"><span class="mw-streak__n">${n}</span><span class="mw-streak__fire">🔥</span><span class="mw-streak__lbl">day${n === 1 ? "" : "s"} in a row</span></div>
+            <div class="mw-week" aria-hidden="true">${streakWeekStrip(s)}</div>
+            ${done
+              ? `<p class="mw-sub mw-done">${icon("check", 13)} Logged for today</p>`
+              : `<button class="btn btn--ghost btn--full btn--sm" data-mw-streak>I read today</button>`}
+          </div>`;
       },
       wire(el) { const b = el.querySelector("[data-mw-streak]"); b && b.addEventListener("click", () => { const s = mwState("streak"); const y = new Date(Date.now() - 86400000); const yk = y.getFullYear() + "-" + (y.getMonth() + 1) + "-" + y.getDate(); const cont = s.last === yk; const nc = cont ? (s.count || 0) + 1 : 1; mwSetState("streak", { count: nc, last: todayKey() }); mwRefresh("streak"); if (nc >= 3 && nc % 5 === 0) celebrate(nc + " day streak!", "Keep it going.", "🔥"); else if (!reducedMotion()) confettiBurst(); }); } },
     { id: "countdown", name: "Countdown", icon: "clock", blurb: "Days until a date.",
@@ -7316,7 +7341,22 @@
     { id:"forest",   name:"Forest night",  chips:["#1f2821","#d38a97","#e7efe6"] },
     { id:"ocean",    name:"Deep ocean",    chips:["#1c2230","#d98a99","#e6eaf2"] },
     { id:"oled",     name:"True black",    chips:["#000000","#e0919f","#f1eef4"] },
-    { id:"contrast", name:"High contrast", chips:["#ffffff","#99303f","#131313"] }
+    { id:"contrast", name:"High contrast", chips:["#ffffff","#99303f","#131313"] },
+    { id:"frost",       name:"Winter frost",      chips:["#e9eef4","#4f77a3","#1f2630"] },
+    { id:"glacier",     name:"Glacier",           chips:["#dfe6ec","#4d8a93","#22292f"] },
+    { id:"snowfall",    name:"Snowfall",          chips:["#eef1f5","#7d78ad","#262b33"] },
+    { id:"meadow",      name:"Wildflower meadow",  chips:["#eef0e2","#b45c5a","#2b2e22"] },
+    { id:"peony",       name:"Peony garden",      chips:["#f4eae8","#b8566b","#332826"] },
+    { id:"wisteria",    name:"Wisteria",          chips:["#eae8f2","#8763a3","#2a2733"] },
+    { id:"harvest",     name:"Autumn harvest",    chips:["#f1e6d4","#b45c3f","#3a2c1d"] },
+    { id:"maple",       name:"Maple",             chips:["#ecdcc9","#b0503a","#402c1c"] },
+    { id:"rosegarden",  name:"Rose garden",       chips:["#f2e7e0","#b1596a","#362823"] },
+    { id:"cottoncandy", name:"Cotton candy",      chips:["#f3ecf2","#b45c8f","#302733"] },
+    { id:"seashell",    name:"Seashell",          chips:["#f6ebe3","#bd6551","#342a24"] },
+    { id:"mint",        name:"Fresh mint",        chips:["#e6f0ea","#4f9d84","#24302a"] },
+    { id:"periwinkle",  name:"Periwinkle",        chips:["#e9ebf6","#6a6fc0","#26283a"] },
+    { id:"buttercream", name:"Buttercream",       chips:["#f4eed6","#b06a4f","#35301d"] },
+    { id:"dusk",        name:"Lavender dusk",     chips:["#221f2b","#cf8ab4","#ece7f2"] }
   ];
   const ACCENTS = [
     { id:"default", c:"#ab5a67" }, { id:"plum", c:"#7d5a86" }, { id:"sea", c:"#4f8079" },
@@ -7333,7 +7373,8 @@
     r.style.setProperty("--read-size", settings.size + "px");
     r.style.setProperty("--measure", settings.measure);
     document.body.classList.toggle("hide-margins", !settings.margins);
-    const themeColor = { cream:"#f4efe4", sepia:"#ecdfc4", blush:"#f6ecee", sage:"#e9eee4", sky:"#e6ecf2", lavender:"#ece9f3", slate:"#e8eaee", midnight:"#211f26", forest:"#1a221c", ocean:"#181d29", oled:"#000000", contrast:"#ffffff" }[settings.theme];
+    const themeColor = { cream:"#f4efe4", sepia:"#ecdfc4", blush:"#f6ecee", sage:"#e9eee4", sky:"#e6ecf2", lavender:"#ece9f3", slate:"#e8eaee", midnight:"#211f26", forest:"#1a221c", ocean:"#181d29", oled:"#000000", contrast:"#ffffff",
+      frost:"#e9eef4", glacier:"#dfe6ec", snowfall:"#eef1f5", meadow:"#eef0e2", peony:"#f4eae8", wisteria:"#eae8f2", harvest:"#f1e6d4", maple:"#ecdcc9", rosegarden:"#f2e7e0", cottoncandy:"#f3ecf2", seashell:"#f6ebe3", mint:"#e6f0ea", periwinkle:"#e9ebf6", buttercream:"#f4eed6", dusk:"#221f2b" }[settings.theme];
     const meta = $('meta[name="theme-color"]'); if (meta) meta.content = themeColor;
     // reflect prose justify on any open reader
     $$(".prose").forEach(p => { p.dataset.justify = settings.justify ? "on" : "off"; p.dataset.hyphen = settings.justify ? "on" : "off"; });

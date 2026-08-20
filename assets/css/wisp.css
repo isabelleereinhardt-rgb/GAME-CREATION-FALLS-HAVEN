@@ -219,6 +219,149 @@
   --shadow:rgba(0,0,0,.36); --shadow-lg:rgba(0,0,0,.52); color-scheme:dark;
 }
 
+/* --- Winter blues -------------------------------------------------------- */
+/* Winter frost: a pale, icy daylight. */
+:root[data-theme="frost"] {
+  --paper:#e9eef4; --paper2:#dfe7f0; --surface:#f2f5fa; --surface2:#e4ebf3; --card:#f6f9fc;
+  --ink:#1f2630; --ink2:#545e6c; --ink3:#64707f;
+  --line:rgba(31,38,48,.13); --line2:rgba(31,38,48,.07);
+  --rose:#4f77a3; --rose-ink:#3c6089; --rose-wash:rgba(79,119,163,.12);
+  --sage:#5f7a6c; --amber:#a8793f; --shell:#cdd8e6;
+  --shadow:rgba(31,38,48,.08); --shadow-lg:rgba(31,38,48,.16); color-scheme:light;
+}
+/* Glacier: a cool blue-grey with a teal accent. */
+:root[data-theme="glacier"] {
+  --paper:#dfe6ec; --paper2:#d5dee6; --surface:#e9eff4; --surface2:#dae3ea; --card:#eef3f7;
+  --ink:#22292f; --ink2:#556069; --ink3:#657079;
+  --line:rgba(34,41,47,.14); --line2:rgba(34,41,47,.07);
+  --rose:#4d8a93; --rose-ink:#3a6d75; --rose-wash:rgba(77,138,147,.12);
+  --sage:#5f7a70; --amber:#a8793f; --shell:#c8d3dc;
+  --shadow:rgba(34,41,47,.08); --shadow-lg:rgba(34,41,47,.16); color-scheme:light;
+}
+/* Snowfall: a soft white with a frosted periwinkle. */
+:root[data-theme="snowfall"] {
+  --paper:#eef1f5; --paper2:#e5eaf0; --surface:#f6f8fb; --surface2:#e9edf3; --card:#fafbfd;
+  --ink:#262b33; --ink2:#5b636e; --ink3:#6c7480;
+  --line:rgba(38,43,51,.12); --line2:rgba(38,43,51,.06);
+  --rose:#7d78ad; --rose-ink:#625d92; --rose-wash:rgba(125,120,173,.12);
+  --sage:#6a7a6c; --amber:#ac7e46; --shell:#d7dde5;
+  --shadow:rgba(38,43,51,.07); --shadow-lg:rgba(38,43,51,.14); color-scheme:light;
+}
+
+/* --- Garden florals ------------------------------------------------------ */
+/* Wildflower meadow: warm cream with a poppy and a leaf-green sage. */
+:root[data-theme="meadow"] {
+  --paper:#eef0e2; --paper2:#e6e9d6; --surface:#f4f6ea; --surface2:#e9ecdb; --card:#f8f9f0;
+  --ink:#2b2e22; --ink2:#5e6350; --ink3:#6d735d;
+  --line:rgba(43,46,34,.13); --line2:rgba(43,46,34,.07);
+  --rose:#b45c5a; --rose-ink:#954846; --rose-wash:rgba(180,92,90,.11);
+  --sage:#6d8a4f; --amber:#b6844a; --shell:#dbdcc4;
+  --shadow:rgba(43,46,34,.07); --shadow-lg:rgba(43,46,34,.14); color-scheme:light;
+}
+/* Peony garden: a soft warm pink daylight. */
+:root[data-theme="peony"] {
+  --paper:#f4eae8; --paper2:#eddfdc; --surface:#f9f0ee; --surface2:#f0e4e1; --card:#fbf4f2;
+  --ink:#332826; --ink2:#6f5d59; --ink3:#786561;
+  --line:rgba(51,40,38,.12); --line2:rgba(51,40,38,.06);
+  --rose:#b8566b; --rose-ink:#974356; --rose-wash:rgba(184,86,107,.10);
+  --sage:#7d7d5f; --amber:#b6844a; --shell:#e8d6d2;
+  --shadow:rgba(51,40,38,.07); --shadow-lg:rgba(51,40,38,.14); color-scheme:light;
+}
+/* Wisteria: a gentle lilac with a violet accent. */
+:root[data-theme="wisteria"] {
+  --paper:#eae8f2; --paper2:#e1dded; --surface:#f1eff8; --surface2:#e5e1f0; --card:#f5f3fb;
+  --ink:#2a2733; --ink2:#5e5870; --ink3:#6c6579;
+  --line:rgba(42,39,51,.13); --line2:rgba(42,39,51,.07);
+  --rose:#8763a3; --rose-ink:#6c4e85; --rose-wash:rgba(135,99,163,.11);
+  --sage:#6b7d78; --amber:#a8793f; --shell:#dbd6e8;
+  --shadow:rgba(42,39,51,.08); --shadow-lg:rgba(42,39,51,.16); color-scheme:light;
+}
+
+/* --- Autumn and rose garden ---------------------------------------------- */
+/* Autumn harvest: warm amber with a burnt-orange rose. */
+:root[data-theme="harvest"] {
+  --paper:#f1e6d4; --paper2:#ebddc5; --surface:#f6eeda; --surface2:#ece0c8; --card:#f8f1e2;
+  --ink:#3a2c1d; --ink2:#75603f; --ink3:#7a6949;
+  --line:rgba(58,44,29,.15); --line2:rgba(58,44,29,.08);
+  --rose:#b45c3f; --rose-ink:#954730; --rose-wash:rgba(180,92,63,.12);
+  --sage:#7d7a45; --amber:#bb7f39; --shell:#e0cba6;
+  --shadow:rgba(58,44,29,.08); --shadow-lg:rgba(58,44,29,.16); color-scheme:light;
+}
+/* Maple: a deeper warm orange-brown. */
+:root[data-theme="maple"] {
+  --paper:#ecdcc9; --paper2:#e3d0b7; --surface:#f1e4d2; --surface2:#e6d5bd; --card:#f3e9d8;
+  --ink:#402c1c; --ink2:#7a5f3e; --ink3:#7b6743;
+  --line:rgba(64,44,28,.16); --line2:rgba(64,44,28,.08);
+  --rose:#b0503a; --rose-ink:#913e2b; --rose-wash:rgba(176,80,58,.12);
+  --sage:#7b7642; --amber:#bb7a34; --shell:#d8bf98;
+  --shadow:rgba(64,44,28,.09); --shadow-lg:rgba(64,44,28,.18); color-scheme:light;
+}
+/* Rose garden: a warm rosy terracotta daylight. */
+:root[data-theme="rosegarden"] {
+  --paper:#f2e7e0; --paper2:#ebdbd1; --surface:#f8efe9; --surface2:#eee0d8; --card:#faf3ee;
+  --ink:#362823; --ink2:#705a51; --ink3:#79635a;
+  --line:rgba(54,40,35,.13); --line2:rgba(54,40,35,.07);
+  --rose:#b1596a; --rose-ink:#914656; --rose-wash:rgba(177,89,106,.11);
+  --sage:#83805f; --amber:#b6844a; --shell:#e4d1c7;
+  --shadow:rgba(54,40,35,.07); --shadow-lg:rgba(54,40,35,.14); color-scheme:light;
+}
+
+/* --- Pastel fairy tale --------------------------------------------------- */
+/* Cotton candy: a pastel pink with a candy accent. */
+:root[data-theme="cottoncandy"] {
+  --paper:#f3ecf2; --paper2:#ebe0ec; --surface:#f8f1f6; --surface2:#eee4ef; --card:#fbf5fa;
+  --ink:#302733; --ink2:#675a6c; --ink3:#6f6376;
+  --line:rgba(48,39,51,.12); --line2:rgba(48,39,51,.06);
+  --rose:#b45c8f; --rose-ink:#944875; --rose-wash:rgba(180,92,143,.10);
+  --sage:#6f7d9a; --amber:#b6844a; --shell:#e6d9e6;
+  --shadow:rgba(48,39,51,.07); --shadow-lg:rgba(48,39,51,.14); color-scheme:light;
+}
+/* Seashell: a pale peach pastel. */
+:root[data-theme="seashell"] {
+  --paper:#f6ebe3; --paper2:#efdfd4; --surface:#faf1ea; --surface2:#f1e5db; --card:#fcf5f0;
+  --ink:#342a24; --ink2:#6f5e52; --ink3:#79665a;
+  --line:rgba(52,42,36,.12); --line2:rgba(52,42,36,.06);
+  --rose:#bd6551; --rose-ink:#9c5040; --rose-wash:rgba(189,101,81,.11);
+  --sage:#7f7d5c; --amber:#b6844a; --shell:#ead6c8;
+  --shadow:rgba(52,42,36,.07); --shadow-lg:rgba(52,42,36,.14); color-scheme:light;
+}
+/* Fresh mint: a pale mint pastel with a green accent. */
+:root[data-theme="mint"] {
+  --paper:#e6f0ea; --paper2:#dbe8e0; --surface:#eff6f2; --surface2:#e0ece5; --card:#f4f9f6;
+  --ink:#24302a; --ink2:#556358; --ink3:#647466;
+  --line:rgba(36,48,42,.13); --line2:rgba(36,48,42,.07);
+  --rose:#4f9d84; --rose-ink:#3d7d68; --rose-wash:rgba(79,157,132,.12);
+  --sage:#5f8a6f; --amber:#a8793f; --shell:#cbe0d4;
+  --shadow:rgba(36,48,42,.07); --shadow-lg:rgba(36,48,42,.14); color-scheme:light;
+}
+/* Periwinkle: a soft blue-lilac pastel. */
+:root[data-theme="periwinkle"] {
+  --paper:#e9ebf6; --paper2:#dfe2f0; --surface:#f1f2fa; --surface2:#e3e6f2; --card:#f5f6fc;
+  --ink:#26283a; --ink2:#575b73; --ink3:#666a82;
+  --line:rgba(38,40,58,.13); --line2:rgba(38,40,58,.07);
+  --rose:#6a6fc0; --rose-ink:#5257a0; --rose-wash:rgba(106,111,192,.12);
+  --sage:#6480a0; --amber:#a8793f; --shell:#d5d9ec;
+  --shadow:rgba(38,40,58,.08); --shadow-lg:rgba(38,40,58,.16); color-scheme:light;
+}
+/* Buttercream: a pale warm-yellow daylight. */
+:root[data-theme="buttercream"] {
+  --paper:#f4eed6; --paper2:#ece4c4; --surface:#f8f3df; --surface2:#ede6cb; --card:#faf6e8;
+  --ink:#35301d; --ink2:#6f6741; --ink3:#756c46;
+  --line:rgba(53,48,29,.14); --line2:rgba(53,48,29,.07);
+  --rose:#b06a4f; --rose-ink:#925339; --rose-wash:rgba(176,106,79,.11);
+  --sage:#7f7d45; --amber:#b58436; --shell:#e3d7ad;
+  --shadow:rgba(53,48,29,.07); --shadow-lg:rgba(53,48,29,.14); color-scheme:light;
+}
+/* Lavender dusk: a soft lilac dark. */
+:root[data-theme="dusk"] {
+  --paper:#221f2b; --paper2:#2a2634; --surface:#272330; --surface2:#302b3b; --card:#2b2736;
+  --ink:#ece7f2; --ink2:#b3aac0; --ink3:#988fa8;
+  --line:rgba(236,231,242,.13); --line2:rgba(236,231,242,.07);
+  --rose:#cf8ab4; --rose-ink:#dda3c5; --rose-wash:rgba(207,138,180,.15);
+  --sage:#97a6c0; --amber:#cfa869; --shell:#17151d;
+  --shadow:rgba(0,0,0,.36); --shadow-lg:rgba(0,0,0,.52); color-scheme:dark;
+}
+
 /* Accent override: readers may repaint the rose without leaving their theme. */
 :root[data-accent="plum"]   { --rose:#7d5a86; --rose-ink:#654a70; --rose-wash:rgba(125,90,134,.12); }
 :root[data-accent="sea"]    { --rose:#4f8079; --rose-ink:#3d655f; --rose-wash:rgba(79,128,121,.12); }
@@ -2150,6 +2293,21 @@ button.pill--link:hover { border-color: var(--rose); color: var(--rose-ink); bac
 .mw-mood-day.is-today .mw-mood-emoji { border-color: var(--rose); box-shadow: 0 0 0 1px var(--rose); }
 .mw-mood-wd { font: 10px var(--font-text); color: var(--ink3); }
 .mw-mood-day.is-today .mw-mood-wd { color: var(--rose-ink); font-weight: 600; }
+/* Reading streak: a consecutive-days tracker, distinct from the plain
+   "chapters today" counter. Leads with the streak number, then a seven-day
+   consistency strip so the last week reads at a glance. */
+.mw-streak__top { display: flex; align-items: baseline; justify-content: center; gap: 7px; padding: 2px 0 4px; }
+.mw-streak__n { font: 34px/1 var(--font-display); color: var(--ink); font-variant-numeric: tabular-nums; }
+.mw-streak__fire { font-size: 20px; line-height: 1; }
+.mw-streak__lbl { font-size: 12.5px; color: var(--ink3); }
+.mw-week { display: flex; justify-content: space-between; gap: 3px; margin: 8px 0 11px; }
+.mw-week__day { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; }
+.mw-week__dot { width: 100%; max-width: 22px; aspect-ratio: 1 / 1; border-radius: 999px;
+  border: 1px solid var(--line); background: color-mix(in srgb, var(--line) 26%, transparent); transition: background .16s ease, border-color .16s ease; }
+.mw-week__day.is-read .mw-week__dot { background: var(--rose); border-color: var(--rose); box-shadow: 0 1px 4px color-mix(in srgb, var(--rose) 45%, transparent); }
+.mw-week__day.is-today .mw-week__dot { border-color: var(--rose-ink); }
+.mw-week__wd { font: 10px var(--font-text); color: var(--ink3); }
+.mw-week__day.is-today .mw-week__wd { color: var(--rose-ink); font-weight: 600; }
 .mw-list { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .mw-list li { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink2); }
 .mw-li-del { border: 0; background: none; color: var(--ink3); cursor: pointer; font-size: 15px; line-height: 1; }

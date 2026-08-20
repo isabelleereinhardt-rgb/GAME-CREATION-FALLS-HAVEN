@@ -17,7 +17,7 @@
 
   var LS = "wisp.companion";
   var DEF = {
-    name: "Lucky", skin: "tabby", acc: "bell", personality: "sweet",
+    name: "Lucky", skin: "tabby", acc: "headbow", personality: "sweet",
     walks: true, tips: true, treatsOn: true,
     pace: 34, pets: 0, treatsGiven: 0,
     companion: "none", treat: "sardine"
@@ -27,6 +27,12 @@
     var s = {};
     try { s = JSON.parse(localStorage.getItem(LS) || "{}") || {}; } catch (e) { s = {}; }
     var out = {}; for (var k in DEF) out[k] = (s[k] === undefined ? DEF[k] : s[k]);
+    // An earlier build shipped collar accessories (bell, scarf, pearls ...) that
+    // the author has since retired. If a saved wardrobe points at one that is no
+    // longer drawn, fall back to the default so he never shows up half-dressed.
+    // (ACC_ART is not assigned yet at load time, so match against the id list.)
+    var VALID_ACC = ["headbow", "partyhat", "crown", "flowers", "beret", "beanie", "halo", "glasses", "tophat", "bunny", "sprout", "bare"];
+    if (VALID_ACC.indexOf(out.acc) < 0) out.acc = DEF.acc;
     return out;
   }
   function save() {
@@ -50,9 +56,10 @@
     ["siamese", "Solstice", "Siamese, blue eyes"]
   ];
   var ACCESSORIES = [
-    ["bell", "Gold bell"], ["bow", "Ribbon bow"], ["crown", "Tiny crown"],
-    ["flowers", "Flower crown"], ["pearls", "Pearl collar"], ["scarf", "Winter scarf"],
-    ["pendant", "Star pendant"], ["kerchief", "Kerchief"], ["bare", "Bare"]
+    ["headbow", "Head bow"], ["partyhat", "Party hat"], ["crown", "Tiny crown"],
+    ["flowers", "Flower crown"], ["beret", "Beret"], ["beanie", "Beanie"],
+    ["halo", "Halo"], ["glasses", "Round glasses"], ["tophat", "Top hat"],
+    ["bunny", "Bunny ears"], ["sprout", "Sprout"], ["bare", "Bare"]
   ];
   var COMPANIONS = [
     ["none", "Walks alone", "Default"],
@@ -125,60 +132,34 @@
     '[data-skin="siamese"]{--fur:#e6dcd0;--fur2:#c3b3a4;--fur3:#6b5648;--head:#efe7dd;--belly:#fdf8f3;--ear:#8a6a5c;--nose:#d79aa2;--eye:#5f8fc4;--paw:#f6efe6;--paw-line:#c6b6a4}';
 
   /* ---------- drawings (author's own art) ----------
-     Accessories are drawn in two layers so they sit like something he is
-     wearing rather than a sticker on his cheek: a short piece of the collar
-     (accBack) tucks behind his head, coming round from the neck; the collar
-     band and its charm (accFront) cross the front of his throat, centred
-     under his chin. Head-top pieces (crown, flower crown) are front-only. */
+     Every accessory is now worn on the head, where it reads clearly at sprite
+     size (the older collar pieces have been retired). Each is a small group of
+     paths in the same frame as the cat, drawn front-only. Anchors: the top of
+     the skull sits near x20 y6, the ear tips around y2, and the eyes at x15 and
+     x25, so the glasses land on the face. */
   var ACC_ART = {
-    // collar band under the chin + a gold bell hanging at the centre
-    bell: {
-      back: '<path d="M31.4 23.8Q31 26.4 28.6 28.8" stroke="#a4506f" stroke-width="2" fill="none" stroke-linecap="round"/>',
-      front: '<path d="M11 26.6Q20 32.8 29 26.6" stroke="#b0567a" stroke-width="2.4" fill="none" stroke-linecap="round"/>' +
-        '<path d="M20 31.6v1.5" stroke="#7d5a20" stroke-width=".9" stroke-linecap="round"/>' +
-        '<circle cx="20" cy="34.9" r="2.3" fill="#e6b95e" stroke="#7d5a20" stroke-width=".8"/>' +
-        '<path d="M19 34.5h2" stroke="#7d5a20" stroke-width=".7" stroke-linecap="round"/><circle cx="19.4" cy="34.1" r=".5" fill="#f6dca0"/>'
-    },
-    // collar band + a ribbon bow knotted at the centre
-    bow: {
-      back: '<path d="M31.4 23.8Q31 26.4 28.6 28.8" stroke="#d76e90" stroke-width="1.9" fill="none" stroke-linecap="round"/>',
-      front: '<path d="M11 26.6Q20 32.4 29 26.6" stroke="#e8799c" stroke-width="2.2" fill="none" stroke-linecap="round"/>' +
-        '<path d="M20 31.9 14.6 29.9 15.5 34.6Z" fill="#e8799c" stroke="#93304f" stroke-width=".6" stroke-linejoin="round"/>' +
-        '<path d="M20 31.9 25.4 29.9 24.5 34.6Z" fill="#e8799c" stroke="#93304f" stroke-width=".6" stroke-linejoin="round"/>' +
-        '<circle cx="20" cy="32" r="1.5" fill="#f7b3c7" stroke="#93304f" stroke-width=".5"/>'
-    },
-    // a thin cord + a little gold star pendant
-    pendant: {
-      back: '<path d="M31.4 24Q31 26.4 28.8 28.6" stroke="#bd9550" stroke-width="1.2" fill="none" stroke-linecap="round"/>',
-      front: '<path d="M11 26.8Q20 32.4 29 26.8" stroke="#c9a15c" stroke-width="1.3" fill="none" stroke-linecap="round"/>' +
-        '<path d="M20 31.9l.95 1.95 2.15.2-1.6 1.45.5 2.1-2-1.15-2 1.15.5-2.1-1.6-1.45 2.15-.2z" fill="#e6b95e" stroke="#7d5a20" stroke-width=".6" stroke-linejoin="round"/>'
-    },
-    // a strand of pearls following the collar line
-    pearls: {
-      back: '<circle cx="30.8" cy="25.2" r="1.3" fill="#efe7dd" stroke="#a89a90" stroke-width=".55"/><circle cx="29.8" cy="27.6" r="1.3" fill="#efe7dd" stroke="#a89a90" stroke-width=".55"/>',
-      front: '<circle cx="11.8" cy="27.2" r="1.4" fill="#fbf7f2" stroke="#8f7f78" stroke-width=".6"/><circle cx="14.4" cy="29.4" r="1.4" fill="#fbf7f2" stroke="#8f7f78" stroke-width=".6"/><circle cx="17.4" cy="30.9" r="1.4" fill="#fbf7f2" stroke="#8f7f78" stroke-width=".6"/><circle cx="20.6" cy="31.3" r="1.4" fill="#fbf7f2" stroke="#8f7f78" stroke-width=".6"/><circle cx="23.6" cy="30.6" r="1.4" fill="#fbf7f2" stroke="#8f7f78" stroke-width=".6"/><circle cx="26.4" cy="29" r="1.4" fill="#fbf7f2" stroke="#8f7f78" stroke-width=".6"/>'
-    },
-    // a soft winter scarf wrapping the throat, with a hanging end
-    scarf: {
-      back: '<path d="M31.6 23.4Q31.2 26.4 28.4 29.2" stroke="#9c4a68" stroke-width="3.6" fill="none" stroke-linecap="round"/>',
-      front: '<path d="M11 26.4Q20 33.2 29 26.4" stroke="#b0567a" stroke-width="4.6" fill="none" stroke-linecap="round"/>' +
-        '<path d="M16.6 31.8l-2.2 6.8 4.8-1.3z" fill="#95496a" stroke="#7c3350" stroke-width=".6" stroke-linejoin="round"/>' +
-        '<path d="M13 28.4Q20 33 27 28.4" stroke="#f7c8d8" stroke-width=".9" fill="none"/>'
-    },
-    // a triangle kerchief knotted at the throat
-    kerchief: {
-      back: '<path d="M31.4 23.8Q31 26.4 28.6 28.8" stroke="#7a3149" stroke-width="2" fill="none" stroke-linecap="round"/>',
-      front: '<path d="M13.8 30.4 26.2 30.4 20 39Z" fill="#8c3b57" stroke="#571f34" stroke-width=".8" stroke-linejoin="round"/>' +
-        '<circle cx="20" cy="30.4" r="1.7" fill="#8c3b57" stroke="#571f34" stroke-width=".7"/>' +
-        '<circle cx="18.8" cy="32.6" r=".7" fill="#f7c8d8"/><circle cx="21.4" cy="32.4" r=".7" fill="#f7c8d8"/><circle cx="20" cy="35" r=".7" fill="#f7c8d8"/>'
-    },
-    // head-top pieces: no collar, just the crown / flowers resting on his head
-    crown: {
-      back: '', front: '<path d="M14.8 12.2l1-6 2.9 2.9 1.8-3.8 1.8 3.8 2.9-2.9 1 6z" fill="#e6b95e" stroke="#7d5a20" stroke-width=".9" stroke-linejoin="round"/><circle cx="17.4" cy="10.4" r=".85" fill="#b0567a"/><circle cx="20.5" cy="9.7" r=".95" fill="#b0567a"/><circle cx="23.6" cy="10.4" r=".85" fill="#b0567a"/>'
-    },
-    flowers: {
-      back: '', front: '<path d="M13.4 13q3.2-4.4 6.8-4.4T27 13" stroke="#6f8f5f" stroke-width="1.4" fill="none" stroke-linecap="round"/><circle cx="14.6" cy="11.8" r="2" fill="#fdf2f5" stroke="#b0567a" stroke-width=".7"/><circle cx="20.2" cy="8.8" r="2.3" fill="#fdf2f5" stroke="#b0567a" stroke-width=".7"/><circle cx="25.8" cy="11.8" r="2" fill="#fdf2f5" stroke="#b0567a" stroke-width=".7"/><circle cx="14.6" cy="11.8" r=".8" fill="#e6b95e"/><circle cx="20.2" cy="8.8" r=".9" fill="#e6b95e"/><circle cx="25.8" cy="11.8" r=".8" fill="#e6b95e"/>'
-    }
+    // a ribbon bow tied at one ear
+    headbow: { back: '', front: '<path d="M14.6 6.6 10.2 4.3 10.9 9.3Z" fill="#cf5a90" stroke="#9c3f6e" stroke-width=".55" stroke-linejoin="round"/><path d="M14.6 6.6 19 4.3 18.3 9.3Z" fill="#cf5a90" stroke="#9c3f6e" stroke-width=".55" stroke-linejoin="round"/><circle cx="14.6" cy="6.6" r="1.4" fill="#d97aa8" stroke="#9c3f6e" stroke-width=".45"/><circle cx="14.1" cy="6.1" r=".5" fill="#f7c8db"/>' },
+    // a striped cone with a pom on top
+    partyhat: { back: '', front: '<path d="M18.9 1.4 14.3 8.4 22.9 8Z" fill="#f2e6d0" stroke="#cbb48a" stroke-width=".55" stroke-linejoin="round"/><path d="M16.1 6.7 20 7.1" stroke="#9a8a4a" stroke-width="1.15" stroke-linecap="round"/><path d="M16.9 4.9 20.3 5.3" stroke="#9a8a4a" stroke-width="1.15" stroke-linecap="round"/><circle cx="18.9" cy="1.1" r="1.5" fill="#c9548f"/>' },
+    // a little gold crown between the ears
+    crown: { back: '', front: '<path d="M14.8 12.2l1-6 2.9 2.9 1.8-3.8 1.8 3.8 2.9-2.9 1 6z" fill="#e6b95e" stroke="#7d5a20" stroke-width=".9" stroke-linejoin="round"/><circle cx="17.4" cy="10.4" r=".85" fill="#b0567a"/><circle cx="20.5" cy="9.7" r=".95" fill="#b0567a"/><circle cx="23.6" cy="10.4" r=".85" fill="#b0567a"/>' },
+    // a garland of flowers across the brow
+    flowers: { back: '', front: '<path d="M13.4 13q3.2-4.4 6.8-4.4T27 13" stroke="#6f8f5f" stroke-width="1.4" fill="none" stroke-linecap="round"/><circle cx="14.6" cy="11.8" r="2" fill="#fdf2f5" stroke="#b0567a" stroke-width=".7"/><circle cx="20.2" cy="8.8" r="2.3" fill="#fdf2f5" stroke="#b0567a" stroke-width=".7"/><circle cx="25.8" cy="11.8" r="2" fill="#fdf2f5" stroke="#b0567a" stroke-width=".7"/><circle cx="14.6" cy="11.8" r=".8" fill="#e6b95e"/><circle cx="20.2" cy="8.8" r=".9" fill="#e6b95e"/><circle cx="25.8" cy="11.8" r=".8" fill="#e6b95e"/>' },
+    // a burgundy beret tilted over one ear
+    beret: { back: '', front: '<ellipse cx="17.5" cy="6" rx="6.4" ry="3.5" fill="#6d2a3f"/><path d="M11.4 6.6Q17.5 9.6 23.7 6.6Q23.4 8.4 17.5 8.5Q11.7 8.4 11.4 6.6Z" fill="#5a2334"/><circle cx="17.5" cy="2.7" r="1" fill="#7d3450"/><path d="M13.4 4.6Q16.2 3.1 19.4 3.7" stroke="#8a3a52" stroke-width=".8" fill="none" stroke-linecap="round"/>' },
+    // a knit cap with a band and a pom
+    beanie: { back: '', front: '<path d="M13.9 8A6.1 6.6 0 0 1 26.1 8Z" fill="#b0567a"/><path d="M13.7 7.7Q20 10.2 26.3 7.7L26.3 6.2Q20 8.6 13.7 6.2Z" fill="#cf7f9a"/><path d="M17 2.9 16.6 7.6M20 1.9 20 7.9M23 2.9 23.4 7.6" stroke="#9c4a68" stroke-width=".55" fill="none" stroke-linecap="round"/><circle cx="20" cy="1.7" r="1.5" fill="#f7c8d8" stroke="#d99bb4" stroke-width=".4"/>' },
+    // a gold ring floating just above, with a sparkle
+    halo: { back: '', front: '<ellipse cx="20" cy="2.5" rx="6" ry="1.85" fill="none" stroke="#e6b95e" stroke-width="1.7"/><ellipse cx="20" cy="2.5" rx="6" ry="1.85" fill="none" stroke="#cf9f45" stroke-width=".5"/><path d="M8.6 1.5 9.2 3.1 10.8 3.7 9.2 4.3 8.6 5.9 8 4.3 6.4 3.7 8 3.1Z" fill="#e6b95e"/>' },
+    // round wire glasses over the eyes
+    glasses: { back: '', front: '<circle cx="15" cy="19.8" r="3.3" fill="#fff" fill-opacity=".14" stroke="#9a7a3a" stroke-width="1.2"/><circle cx="25" cy="19.8" r="3.3" fill="#fff" fill-opacity=".14" stroke="#9a7a3a" stroke-width="1.2"/><path d="M18.2 19.1Q20 18.3 21.8 19.1" stroke="#9a7a3a" stroke-width="1.1" fill="none" stroke-linecap="round"/><path d="M11.8 19.1 9.4 18.4M28.2 19.1 30.6 18.4" stroke="#9a7a3a" stroke-width=".9" fill="none" stroke-linecap="round"/>' },
+    // a silk top hat with a band
+    tophat: { back: '', front: '<ellipse cx="19" cy="6" rx="6.3" ry="1.75" fill="#2b2730"/><path d="M15.6 6.1 15.6 1.5Q15.6 .6 16.5 .55L21.5 .55Q22.4 .6 22.4 1.5L22.4 6.1Z" fill="#2b2730"/><ellipse cx="19" cy="1" rx="3.4" ry=".8" fill="#37333d"/><path d="M15.6 4.3 22.4 4.3 22.4 5.7 15.6 5.7Z" fill="#7c3350"/>' },
+    // tall bunny ears on a thin headband
+    bunny: { back: '', front: '<ellipse cx="16.9" cy="3.5" rx="1.8" ry="4" fill="#f7dbe6" stroke="#d99bb4" stroke-width=".4"/><ellipse cx="16.9" cy="3.8" rx="0.75" ry="2.7" fill="#f4a6c0"/><ellipse cx="23.1" cy="3.5" rx="1.8" ry="4" fill="#f7dbe6" stroke="#d99bb4" stroke-width=".4"/><ellipse cx="23.1" cy="3.8" rx="0.75" ry="2.7" fill="#f4a6c0"/><path d="M13.9 6.6Q20 3.7 26.1 6.6" stroke="#8a5a86" stroke-width="1.9" fill="none" stroke-linecap="round"/>' },
+    // a single hopeful sprout on top
+    sprout: { back: '', front: '<path d="M20 6.6 20 2.6" stroke="#6f8f5f" stroke-width="1.3" fill="none" stroke-linecap="round"/><path d="M20 4Q16.5 2.7 16.3 5.9Q19 6.1 20 4Z" fill="#7bab6f" stroke="#5f8f52" stroke-width=".3" stroke-linejoin="round"/><path d="M20 3.1Q23.5 1.6 23.9 4.9Q21 5.2 20 3.1Z" fill="#89bd77" stroke="#5f8f52" stroke-width=".3" stroke-linejoin="round"/>' }
   };
   function accBack(acc) { var a = ACC_ART[acc]; return a ? a.back : ""; }
   function accFront(acc) { var a = ACC_ART[acc]; return a ? a.front : ""; }
