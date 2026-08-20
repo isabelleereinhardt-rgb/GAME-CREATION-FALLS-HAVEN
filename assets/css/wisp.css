@@ -2064,8 +2064,13 @@ mark.hl--purple { background: rgba(190, 130, 255, 0.42); }
 .embed--link { display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 13px 15px; border: 1px solid var(--line); border-radius: 12px; text-decoration: none; background: var(--card, #fff); }
 .embed--link:hover { border-color: var(--rose); }
-.embed-link__label { font: 600 15px var(--font-display); color: var(--ink); }
+.embed-link__main { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+.embed-link__main svg { color: var(--rose-ink); flex: none; }
+.embed-link__label { font: 600 15px var(--font-display); color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.embed-link__side { display: inline-flex; align-items: center; gap: 8px; flex: none; }
 .embed-link__host { font-size: 12px; color: var(--ink3); white-space: nowrap; }
+.embed-link__arrow { font-size: 13px; color: var(--ink3); }
 
 /* ---- Calendar past days + gift exchange bits ---------------------------- */
 .dpick__cell--past { aspect-ratio: 1; display: flex; align-items: center; justify-content: center;

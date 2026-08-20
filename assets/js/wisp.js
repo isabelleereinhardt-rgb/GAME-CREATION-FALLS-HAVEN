@@ -2911,8 +2911,15 @@
     let host = ""; try { host = new URL(url).hostname.replace(/^www\./, ""); } catch (e) {}
     // With no label, name the card by its site rather than dumping the whole
     // (often enormous) URL into the title, which read as broken.
-    const title = (label && label.trim()) ? label.trim() : (host || url);
-    return `<a class="embed embed--link" href="${esc(url)}" target="_blank" rel="noopener nofollow"><span class="embed-link__label">${esc(title)}</span><span class="embed-link__host">${esc(host)} &#8599;</span></a>`;
+    const hasLabel = !!(label && label.trim());
+    const title = hasLabel ? label.trim() : (host || url);
+    // Show the host on the right only when it is not already the title, so an
+    // unlabeled card reads "google.com  ↗" instead of "google.com  google.com ↗".
+    const sub = (hasLabel && host) ? `<span class="embed-link__host">${esc(host)}</span>` : "";
+    return `<a class="embed embed--link" href="${esc(url)}" target="_blank" rel="noopener nofollow">` +
+      `<span class="embed-link__main">${icon("external", 15)}<span class="embed-link__label">${esc(title)}</span></span>` +
+      `<span class="embed-link__side">${sub}<span class="embed-link__arrow" aria-hidden="true">&#8599;</span></span>` +
+      `</a>`;
   }
   function richEmbedHTML(url, label) {
     const info = embedInfo(url);
@@ -3068,7 +3075,7 @@
     if (!node || node.nodeType !== 1 || !node.cloneNode) return "";
     const clone = node.cloneNode(true);
     clone.querySelectorAll(
-      "iframe, img, figcaption, .embed__source, .img-tools, .embed-link__label, .embed-link__host, [class*='embed--']"
+      "iframe, img, figcaption, .embed__source, .img-tools, .embed-link__main, .embed-link__side, .embed-link__label, .embed-link__host, [class*='embed--']"
     ).forEach(n => n.remove());
     return (clone.textContent || "")
       .replace(new RegExp(String.fromCharCode(0xA0), "g"), " ")
