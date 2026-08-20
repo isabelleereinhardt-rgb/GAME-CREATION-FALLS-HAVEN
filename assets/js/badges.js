@@ -47,7 +47,7 @@
     { id: "rank-regular",  name: "Regular",       cat: "rank", tier: "bronze", img: "chevron-dark-3.png",   desc: "Here often.",                      how: "Keep coming back." },
     { id: "rank-familiar", name: "Familiar Face", cat: "rank", tier: "silver", img: "chevron-silver-2.png", desc: "A known member.",                  how: "Stay active in the community." },
     { id: "rank-veteran",  name: "Veteran",       cat: "rank", tier: "silver", img: "chevron-silver-3.png", desc: "Been around a long time.",         how: "Stick with Wisp long-term." },
-    { id: "rank-oldguard", name: "Mainstay",      cat: "rank", tier: "gold",   img: "chevron-gold-2.png",   desc: "A reliable, long-standing member.", how: "Keep showing up over the years." },
+    { id: "rank-oldguard", name: "Team Player",   cat: "rank", tier: "gold",   img: "chevron-gold-2.png",   desc: "A reliable, long-standing member.", how: "Keep showing up over the years." },
     { id: "rank-pillar",   name: "Pillar",        cat: "rank", tier: "gold",   img: "chevron-gold-3.png",   desc: "A core part of the community.",     how: "Earn the community's trust over time." },
     // Ratings ----------------------------------------------------------------
     { id: "well-rated",    name: "Well-Rated",     cat: "rating",  tier: "bronze", img: "star-3.png",        desc: "A solid average reader rating.", how: "Average 3 stars or more across your books (5+ ratings).", auto: function (s) { return (s.ratingsCount || 0) >= 5 && (s.avgRating || 0) >= 3; } },

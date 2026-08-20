@@ -1993,7 +1993,15 @@
           <span class="resume__body">
             <span class="eyebrow rose" style="display:block;margin-bottom:5px">Continue reading</span>
             <span class="resume__title">${esc(LIVE.resume.work.title)}</span>
-            <span class="progress"><span class="progress__track"><span class="progress__fill" style="width:${Math.max(6, LIVE.resume.progress.percent || 6)}%"></span></span><span class="progress__label">Chapter ${LIVE.resume.progress.chapter_number || 1}${LIVE.resume.progress.percent ? " &middot; " + Math.round(LIVE.resume.progress.percent) + "%" : ""}</span></span>
+            ${(function () {
+              var rp = LIVE.resume.progress || {};
+              var tot = Math.max(1, +LIVE.resume.work.chapters || +rp.chapter_number || 1);
+              var chn = Math.max(1, +rp.chapter_number || 1);
+              var inCh = Math.min(1, Math.max(0, (+rp.percent || 0) / 100));
+              var pct = Math.min(100, Math.round(((chn - 1 + inCh) / tot) * 100));
+              var label = tot > 1 ? "Chapter " + chn + " of " + tot : "Chapter " + chn;
+              return '<span class="progress"><span class="progress__track"><span class="progress__fill" style="width:' + Math.max(5, pct) + '%"></span></span><span class="progress__label">' + label + '</span></span>';
+            })()}
           </span>
           <span style="color:var(--rose);display:flex;align-items:center">${icon("chev",20)}</span>
         </button>` : ""}
@@ -3287,7 +3295,10 @@
     mountReaderTools();
     if (ch) { wireLiveReading(w, ch); wireLiveHighlights(w, ch); wireReadingGlobalsOnce(); }
     if (ch && isComic && paras.length) wireComicReader(paras.length);
-    // Record that this work was opened, for history + Continue reading.
+    // Track this work/chapter so scroll progress saves against it, and record
+    // that the work was opened, for history + Continue reading.
+    readingCtx = ch ? { workId: w.id, chapterNumber: ch.number } : null;
+    lastProgSave = 0; lastProgPct = -1;
     if (WispDB.signedIn && ch) WispDB.saveProgress(w.id, ch.number, 0);
   }
 
@@ -3724,6 +3735,9 @@
   // Persistent document/#main listeners are wired exactly once; they read the
   // current reading DOM at event time so re-renders never leak handlers.
   let readingGlobalsWired = false;
+  // Which work/chapter the reader is in, so scroll progress can be saved and
+  // "Continue reading" can advance. Set when a chapter renders.
+  let readingCtx = null, lastProgSave = 0, lastProgPct = -1;
   function updateReadProgress() {
     const bar = $("#readProgress > i"); if (!bar) return;
     const el = readerScroller();
@@ -3731,6 +3745,12 @@
     const pct = max > 0 ? Math.min(100, Math.round(100 * el.scrollTop / max)) : 0;
     bar.style.width = pct + "%";
     const chip = $("#readProgress .reader__pct"); if (chip) chip.textContent = pct + "%";
+    // Persist the real position, throttled, so the resume card reflects it. The
+    // initial render saves percent 0; this climbs it as the reader scrolls.
+    if (window.WispDB && WispDB.signedIn && readingCtx && WispDB.saveProgress && Math.abs(pct - lastProgPct) >= 3) {
+      const now = Date.now();
+      if (now - lastProgSave > 3000) { lastProgSave = now; lastProgPct = pct; WispDB.saveProgress(readingCtx.workId, readingCtx.chapterNumber, pct); }
+    }
   }
   function wireReadingGlobalsOnce() {
     if (readingGlobalsWired) return;
@@ -5742,7 +5762,7 @@
         pin.disabled = true;
         try {
           const res = await WispDB.setProfilePostPinned(id, on);
-          if (res === false) { toast("Pinning needs migration 025 on your Supabase."); pin.disabled = false; return; }
+          if (res === false) { toast("Pinning needs migration 027 on your Supabase."); pin.disabled = false; return; }
           const t = posts.find(p => p.id === id); if (t) t.pinned = on;
           render();
           toast(on ? "Message pinned." : "Message unpinned.");

@@ -979,12 +979,14 @@ mark.hl--purple { background: rgba(190, 130, 255, 0.42); }
 .toolbar .hl-chip { width: 17px; height: 17px; min-width: 0; padding: 0; border-radius: 50%;
   border: 1px solid var(--line); cursor: pointer; flex: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.4); }
 .toolbar .hl-chip:hover { transform: scale(1.12); }
-.hl-chip--yellow { background: rgba(245, 193, 90, 0.95); }
-.hl-chip--green  { background: rgba(57, 230, 90, 0.9); }
-.hl-chip--pink   { background: rgba(255, 74, 170, 0.9); }
-.hl-chip--blue   { background: rgba(70, 190, 255, 0.9); }
-.hl-chip--orange { background: rgba(255, 150, 46, 0.95); }
-.hl-chip--purple { background: rgba(190, 130, 255, 0.9); }
+/* The swatch fill must beat the generic `.toolbar button { background: none }`
+   and its :hover, so the colours are marked important. */
+.toolbar .hl-chip--yellow { background: rgba(245, 193, 90, 0.95) !important; }
+.toolbar .hl-chip--green  { background: rgba(57, 200, 84, 0.95) !important; }
+.toolbar .hl-chip--pink   { background: rgba(255, 74, 170, 0.95) !important; }
+.toolbar .hl-chip--blue   { background: rgba(70, 190, 255, 0.95) !important; }
+.toolbar .hl-chip--orange { background: rgba(255, 150, 46, 0.98) !important; }
+.toolbar .hl-chip--purple { background: rgba(190, 130, 255, 0.95) !important; }
 .toolbar .hl-chip--none { background: var(--card); color: var(--ink3); font-size: 13px; line-height: 1;
   display: grid; place-items: center; box-shadow: none; }
 .toolbar .hl-chip--none:hover { color: var(--ink); border-color: var(--ink3); }
