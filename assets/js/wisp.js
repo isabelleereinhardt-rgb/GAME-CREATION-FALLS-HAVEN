@@ -2497,6 +2497,9 @@
   /* ======================================================================= */
   function renderWork(id) {
     const w = activeById(id) || W.byId.amber;
+    // Safe mode checks age before opening a mature or explicit work's page too,
+    // not only when reading, so clicking onto one asks first.
+    if (needsGate(w)) { showGate(w, () => renderWork(id)); return; }
     markVisited(w.id);
     let rows;
     if (w._db) {
@@ -7135,10 +7138,10 @@
   }
   function toggleSafeMode() {
     if (settings.adultOK) {                       // currently off: turn it back on, no confirm needed
-      settings.adultOK = false; save(); syncSafeMode();
-      toast("Safe mode on. Explicit works ask for age confirmation.");
+      settings.adultOK = false; gatePassed.clear(); save(); syncSafeMode();
+      toast("Safe mode on. Mature and explicit works ask for age confirmation.");
     } else {                                       // currently on: turning off unlocks adult content
-      confirmDialog({ title: "Turn safe mode off?", body: "Explicit works will open without an age check. Only do this if you are 18 or older.", confirmText: "I'm 18 or older" },
+      confirmDialog({ title: "Turn safe mode off?", body: "Mature and explicit works will open without an age check. Only do this if you are 18 or older.", confirmText: "I'm 18 or older" },
         () => { settings.adultOK = true; save(); syncSafeMode(); toast("Safe mode off."); });
     }
   }
@@ -7192,7 +7195,7 @@
     $("#measureSlider").addEventListener("input", e => { settings.measure = +e.target.value; applySettings(); });
     const safeOpt = $("#optSafe");
     safeOpt && safeOpt.addEventListener("change", e => {
-      if (e.target.checked) { settings.adultOK = false; save(); syncSafeMode(); toast("Safe mode on."); }
+      if (e.target.checked) { settings.adultOK = false; gatePassed.clear(); save(); syncSafeMode(); toast("Safe mode on."); }
       else { e.target.checked = true; toggleSafeMode(); }   // revert until the age confirm passes
     });
     $("#optDyslexia").addEventListener("change", e => { settings.dyslexia = e.target.checked; applySettings(); });
@@ -7330,7 +7333,18 @@
   /* ======================================================================= */
   /*  ADULT GATE / CONTENT WARNING                                            */
   /* ======================================================================= */
-  function needsGate(w) { return w && (w.rating === "E") && !settings.adultOK; }
+  // Which works the reader has already confirmed their age for THIS session, so
+  // flipping between chapters of the same work doesn't ask again. It is not
+  // persisted: while safe mode is on, opening a mature or explicit work in a
+  // fresh session asks once more. Confirming here never turns safe mode off
+  // (that is a deliberate choice in settings), so the next mature/explicit work
+  // still checks.
+  const gatePassed = new Set();
+  // Safe mode (on when settings.adultOK is false) checks age before opening a
+  // Mature or Explicit work. General and Teen works never ask.
+  function needsGate(w) {
+    return !!(w && (w.rating === "M" || w.rating === "E") && !settings.adultOK && !gatePassed.has(w.id));
+  }
   function showGate(w, onPass) {
     $("#gateMount").innerHTML = `
       <div class="gate" role="dialog" aria-modal="true" aria-label="Content notice">
@@ -7339,7 +7353,7 @@
           <h2>${esc(w.title)}</h2>
           <p>This work is rated <b>${RATE[w.rating]}</b>${w.warnings.length ? " and carries the following warnings:" : "."}</p>
           ${w.warnings.length ? `<div class="gate__warnings">${w.warnings.map(x => `<span class="pill">${esc(x)}</span>`).join("")}</div>` : ""}
-          <p style="font-size:13.5px;color:var(--ink3)">We remember your choice so this stops appearing.</p>
+          <p style="font-size:13.5px;color:var(--ink3)">Safe mode is on, so mature and explicit works check first. Turn it off in settings if you would rather not be asked.</p>
           <div class="gate__actions">
             <button class="btn btn--quiet" data-gate="back">Take me back</button>
             <button class="btn btn--primary" data-gate="ok">I am 18 or older, continue</button>
@@ -7349,7 +7363,10 @@
     const app = $("#app"); if (app) app.setAttribute("inert", "");
     const dismiss = () => { if (app) app.removeAttribute("inert"); $("#gateMount").innerHTML = ""; };
     $('[data-gate="back"]').addEventListener("click", () => { dismiss(); navigate("home"); });
-    $('[data-gate="ok"]').addEventListener("click", () => { settings.adultOK = true; save(); dismiss(); onPass(); });
+    // Let this work through for the session, but keep safe mode on so the next
+    // mature or explicit work still asks. Turning safe mode off is a separate,
+    // deliberate choice in settings.
+    $('[data-gate="ok"]').addEventListener("click", () => { if (w && w.id) gatePassed.add(w.id); dismiss(); onPass(); });
     $('[data-gate="ok"]').focus();
   }
 

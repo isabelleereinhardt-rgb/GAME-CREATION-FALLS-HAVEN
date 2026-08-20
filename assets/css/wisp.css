@@ -942,14 +942,17 @@ body.hide-margins .para__marker { display: none; }
 }
 .thread__compose textarea:focus { border-color: var(--rose); }
 
-/* Highlight selection popover. */
+/* Highlight selection popover. Always a dark, high-contrast chip with light
+   text: var(--ink) flips to a light colour on dark themes, which made the
+   white labels vanish, so the surface is fixed here instead of theme-tied. */
 .hl-pop {
   position: absolute; z-index: 30; display: none; gap: 2px;
-  background: var(--ink); color: #fff; border-radius: 9px; padding: 4px;
-  box-shadow: 0 10px 30px var(--shadow-lg);
+  background: #2b2730; color: #fff; border: 1px solid rgba(255,255,255,.16);
+  border-radius: 9px; padding: 4px;
+  box-shadow: 0 12px 30px rgba(0,0,0,.42);
 }
-.hl-pop button { background: none; border: 0; color: #fff; cursor: pointer; padding: 6px 10px; border-radius: 6px; font: 13px var(--font-text); }
-.hl-pop button:hover { background: rgba(255,255,255,.16); }
+.hl-pop button { background: none; border: 0; color: #f6f1ee; cursor: pointer; padding: 6px 11px; border-radius: 6px; font: 500 13px var(--font-text); }
+.hl-pop button:hover { background: rgba(255,255,255,.18); color: #fff; }
 /* A marker-style highlight that hugs the text and keeps it readable in either
    theme: the text colour is inherited (never the browser's default black) and
    the background clones across line wraps so multi-line highlights look clean. */
