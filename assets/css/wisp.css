@@ -1154,6 +1154,8 @@ mark.hl--purple { background: rgba(190, 130, 255, 0.42); }
 .tag-pick:hover { border-color: var(--rose); background: var(--rose-wash); color: var(--rose-ink); }
 .tag-pick svg { color: var(--ink3); }
 .tag-pick:hover svg { color: var(--rose); }
+/* "Use what I typed" fallback pick: a dashed outline so it reads as an add-new. */
+.tag-pick--free { border-style: dashed; font-style: italic; }
 
 /* ---------------------------------------------------------------------------
    13. Writing station

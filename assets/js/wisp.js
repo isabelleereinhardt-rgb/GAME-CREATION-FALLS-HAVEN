@@ -2161,20 +2161,44 @@
   }
   // Fill a section's live results from the current query, excluding what's already
   // chosen on either side. Touches only the results box, so the search keeps focus.
+  const tagSearchSeq = { inc: 0, exc: 0 };
   function renderTagResults(kind) {
     const box = document.querySelector(`[data-tagresults="${kind}"]`); if (!box) return;
-    const q = (browseTagQ[kind] || "").trim().toLowerCase();
+    const rawQ = (browseTagQ[kind] || "").trim();
+    const q = rawQ.toLowerCase();
     const chosenInc = filterState.tagsInc, chosenExc = filterState.tagsExc;
-    let matches = tagCatalog().filter(t => {
-      const lc = t.toLowerCase();
-      if (chosenInc.has(t) || chosenExc.has(t)) return false;
-      return !q || lc.indexOf(q) >= 0;
+    const seen = new Set();
+    const pill = (t) => `<button class="tag-pick" data-tagadd="${kind}:${esc(t)}">${icon("plus", 12)} ${esc(t)}</button>`;
+    const collect = (list) => list.filter(t => {
+      const lc = (t || "").toLowerCase();
+      if (!lc || seen.has(lc) || chosenInc.has(t) || chosenExc.has(t)) return false;
+      if (q && lc.indexOf(q) < 0) return false;
+      seen.add(lc); return true;
     });
-    // With no query, show a handful of popular starters; with one, show more.
-    matches = matches.slice(0, q ? 40 : 18);
-    box.innerHTML = matches.length
-      ? matches.map(t => `<button class="tag-pick" data-tagadd="${kind}:${esc(t)}">${icon("plus", 12)} ${esc(t)}</button>`).join("")
-      : `<p class="muted" style="font-size:12px;margin:6px 2px 0">${q ? "No tags match &ldquo;" + esc(browseTagQ[kind]) + "&rdquo;." : "Start typing to find a tag."}</p>`;
+    let matches = collect(tagCatalog()).slice(0, q ? 60 : 18);
+    // Paint what the local catalog knows immediately (keeps the box responsive),
+    // then merge in a live tag lookup for custom tags the catalog hasn't loaded.
+    const paint = (list) => {
+      const exactKnown = q && list.some(t => t.toLowerCase() === q);
+      // Always let a reader add exactly what they typed, so a custom tag not yet
+      // in the catalog can still be used as a filter.
+      const freeform = (q && !exactKnown)
+        ? `<button class="tag-pick tag-pick--free" data-tagadd="${kind}:${esc(rawQ)}">${icon("plus", 12)} Use &ldquo;${esc(rawQ)}&rdquo;</button>`
+        : "";
+      box.innerHTML = (list.length || freeform)
+        ? list.map(pill).join("") + freeform
+        : `<p class="muted" style="font-size:12px;margin:6px 2px 0">Start typing to find a tag.</p>`;
+    };
+    paint(matches);
+    if (q && isLive() && window.WispDB && WispDB.searchTags) {
+      const token = ++tagSearchSeq[kind];
+      WispDB.searchTags(rawQ, 40).then(remote => {
+        if (token !== tagSearchSeq[kind]) return;                 // a newer keystroke won
+        if ((browseTagQ[kind] || "").trim() !== rawQ) return;     // query changed under us
+        const extra = collect(remote || []);
+        if (extra.length) paint(matches.concat(extra).slice(0, 80));
+      }).catch(() => {});
+    }
   }
   // After the browse screen re-renders, put the queries back and refocus the box
   // the reader was using, so add-then-keep-searching flows without interruption.
@@ -2201,15 +2225,22 @@
     return Array.from(m.entries()).sort((a, b) => b[1] - a[1]);
   }
   // Every label a work can be filtered by: its tags plus its fandoms/sources,
-  // so include and exclude both work on fandoms as well as tags.
-  function workLabelSet(w) { const s = new Set(w.tags || []); splitSource(w.source).forEach(x => s.add(x)); return s; }
+  // lowercased so include/exclude match regardless of the case the reader typed
+  // (and so a free-form custom tag still catches the work).
+  function workLabelSet(w) {
+    const s = new Set();
+    (w.tags || []).forEach(t => s.add(String(t).toLowerCase()));
+    splitSource(w.source).forEach(x => s.add(String(x).toLowerCase()));
+    return s;
+  }
+  const lc = (t) => String(t).toLowerCase();
   function filteredWorks() {
     let list = activeWorks().slice();
     if (filterState.type !== "all") list = list.filter(w => w.type === filterState.type);
     list = statusFilter(list);
     if (filterState.ratings.size) list = list.filter(w => filterState.ratings.has(w.rating));
-    if (filterState.tagsInc.size) list = list.filter(w => { const L = workLabelSet(w); return Array.from(filterState.tagsInc).every(t => L.has(t)); });
-    if (filterState.tagsExc.size) list = list.filter(w => { const L = workLabelSet(w); return !Array.from(filterState.tagsExc).some(t => L.has(t)); });
+    if (filterState.tagsInc.size) list = list.filter(w => { const L = workLabelSet(w); return Array.from(filterState.tagsInc).every(t => L.has(lc(t))); });
+    if (filterState.tagsExc.size) list = list.filter(w => { const L = workLabelSet(w); return !Array.from(filterState.tagsExc).some(t => L.has(lc(t))); });
     if (userState.mutedTags.size) list = list.filter(w => !userState.mutedTags.has(w.source) && !(w.tags || []).some(t => userState.mutedTags.has(t)));
     if (userState.blockedUsers.size) list = list.filter(w => !userState.blockedUsers.has(w.author));
     if (filterState.q) {
@@ -2229,8 +2260,8 @@
     if (!isLive()) return filteredWorks();
     let list = (LIVE.works || []).slice();
     list = statusFilter(list);
-    if (filterState.tagsInc.size) list = list.filter(w => { const L = workLabelSet(w); return Array.from(filterState.tagsInc).every(t => L.has(t)); });
-    if (filterState.tagsExc.size) list = list.filter(w => { const L = workLabelSet(w); return !Array.from(filterState.tagsExc).some(t => L.has(t)); });
+    if (filterState.tagsInc.size) list = list.filter(w => { const L = workLabelSet(w); return Array.from(filterState.tagsInc).every(t => L.has(lc(t))); });
+    if (filterState.tagsExc.size) list = list.filter(w => { const L = workLabelSet(w); return !Array.from(filterState.tagsExc).some(t => L.has(lc(t))); });
     if (userState.mutedTags.size) list = list.filter(w => !userState.mutedTags.has(w.source) && !(w.tags || []).some(t => userState.mutedTags.has(t)));
     if (userState.blockedUsers.size) list = list.filter(w => !userState.blockedUsers.has(w.author));
     return list;

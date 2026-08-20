@@ -399,6 +399,19 @@ window.WispDB = (function () {
     if (error) return [];
     return (data || []).map(t => t.name).filter(Boolean);
   }
+  // Live tag lookup as the reader types in a filter box, so a custom tag any
+  // author created is found even when it is past the pre-loaded catalog's cap.
+  // Matches anywhere in the name, case-insensitively.
+  async function searchTags(q, limit) {
+    if (!client || !q) return [];
+    const s = String(q).replace(/[%_,]/g, " ").trim();
+    if (!s) return [];
+    try {
+      const { data, error } = await client.from("tags").select("name").ilike("name", "%" + s + "%").order("name").limit(limit || 40);
+      if (error) return [];
+      return (data || []).map(t => t.name).filter(Boolean);
+    } catch (e) { return []; }
+  }
   // Fandoms writers have actually used, so a fandom one person types becomes a
   // suggestion for everyone else, exactly the way new tags do.
   async function listFandoms(limit) {
@@ -1499,7 +1512,7 @@ window.WispDB = (function () {
     onRecovery(fn) { recoveryListeners.add(fn); return () => recoveryListeners.delete(fn); },
     init, signUp, signIn, signOut, resetPassword, updatePassword,
     listWorks, getWork, getChapters, myWorks, listFeatured, isFeatured, setFeatured, unsetFeatured,
-    createWork, updateWork, deleteWork, setWorkStatus, firstChapter, saveChapter, deleteChapter, setChapterNumber, swapChapterNumbers, listTags, listFandoms, getUpcoming, setTags,
+    createWork, updateWork, deleteWork, setWorkStatus, firstChapter, saveChapter, deleteChapter, setChapterNumber, swapChapterNumbers, listTags, searchTags, listFandoms, getUpcoming, setTags,
     mySeries, getSeries, worksInSeries, findOrCreateSeries, updateSeries, deleteSeries, countInSeries,
     toggle, myRelations, getComments, postComment, editComment, deleteComment, recordRead, rateWork, getMyRating, myRatings, getReactions, toggleReaction, uploadCover,
     toggleFollow, amFollowing, followCounts, myFollowingIds, getNotifications,
