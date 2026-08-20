@@ -2909,7 +2909,10 @@
   }
   function linkCardHTML(url, label) {
     let host = ""; try { host = new URL(url).hostname.replace(/^www\./, ""); } catch (e) {}
-    return `<a class="embed embed--link" href="${esc(url)}" target="_blank" rel="noopener nofollow"><span class="embed-link__label">${esc(label || url)}</span><span class="embed-link__host">${esc(host)} &#8599;</span></a>`;
+    // With no label, name the card by its site rather than dumping the whole
+    // (often enormous) URL into the title, which read as broken.
+    const title = (label && label.trim()) ? label.trim() : (host || url);
+    return `<a class="embed embed--link" href="${esc(url)}" target="_blank" rel="noopener nofollow"><span class="embed-link__label">${esc(title)}</span><span class="embed-link__host">${esc(host)} &#8599;</span></a>`;
   }
   function richEmbedHTML(url, label) {
     const info = embedInfo(url);
@@ -2972,7 +2975,21 @@
       else if (tag === "span" && n.classList && n.classList.contains("fs-lg")) out += inner.trim() ? `{+${inner}+}` : inner;
       else if (tag === "span" && n.classList && n.classList.contains("fs-sm")) out += inner.trim() ? `{-${inner}-}` : inner;
       else if (tag === "code") out += "`" + inner + "`";
-      else if (tag === "a") { const href = n.getAttribute("href") || ""; out += /^(https?:|mailto:)/i.test(href) ? `[${inner}](${href})` : inner; }
+      else if (tag === "a") {
+        const href = n.getAttribute("href") || "";
+        if (n.classList && n.classList.contains("embed--link")) {
+          // A link-card embed can end up nested inside a paragraph (it is an
+          // inline <a>): serialize it to @[label](url) from its label span, not
+          // as an ordinary [text](url) link, so it stays an embed on reload.
+          const labEl = n.querySelector(".embed-link__label");
+          let label = labEl ? (labEl.textContent || "").trim() : "";
+          let lhost = ""; try { lhost = new URL(href).hostname.replace(/^www\./, ""); } catch (e) {}
+          if (label === lhost || label === href) label = "";
+          out += /^https?:\/\//i.test(href) ? `@[${label}](${href})` : "";
+        } else {
+          out += /^(https?:|mailto:)/i.test(href) ? `[${inner}](${href})` : inner;
+        }
+      }
       else out += inner;
     });
     return out;
@@ -3017,6 +3034,19 @@
       if (!size && node.classList) size = node.classList.contains("is-small") ? "small" : node.classList.contains("is-medium") ? "medium" : "";
       return (size === "small" || size === "medium") ? `![${alt}](${src} "${size}")` : `![${alt}](${src})`;
     }
+    // A link-card embed is a bare <a class="embed embed--link"> (no figure): the
+    // label rides in its own span, so read that rather than the whole textContent
+    // (which also holds the host line). A label equal to the host was the default,
+    // not something the writer typed, so drop it back to an empty label.
+    if (node.matches && node.matches("a.embed--link")) {
+      const href = node.getAttribute("href") || "";
+      if (!/^https?:\/\//i.test(href)) return "";
+      const labEl = node.querySelector(".embed-link__label");
+      let label = labEl ? (labEl.textContent || "").trim() : "";
+      let host = ""; try { host = new URL(href).hostname.replace(/^www\./, ""); } catch (e) {}
+      if (label === host || label === href) label = "";
+      return `@[${label}](${href})`;
+    }
     const a = node.querySelector ? node.querySelector(".embed__source a[href], a[href]") : null;
     if (a) {
       const href = a.getAttribute("href") || "";
@@ -3058,7 +3088,7 @@
     };
     Array.from(el.childNodes).forEach(node => {
       const tag = node.nodeType === 1 ? node.nodeName.toLowerCase() : "";
-      if (node.nodeType === 1 && (tag === "figure" || tag === "img")) {
+      if (node.nodeType === 1 && (tag === "figure" || tag === "img" || (tag === "a" && node.classList && node.classList.contains("embed--link")))) {
         flushInline();
         const b = figureOrImgToMd(node);
         if (b && b.trim()) blocks.push(b);
@@ -10177,8 +10207,20 @@
   function insertEmbedBlock(text) {
     const ed = $("#we-body"); if (!ed) return;
     ed.focus();
-    try { document.execCommand("insertHTML", false, "<p>" + esc(text) + "</p>"); }
-    catch (e) { const p = document.createElement("p"); p.textContent = text; ed.appendChild(p); }
+    // Render the embed as an atomic, non-editable block the way inserted images
+    // are: the writer sees the real player or link card, never a line of @[](...)
+    // markup. It also makes each embed its own <figure>/<a> block, so several in
+    // a row can no longer collapse onto one line (inserting raw <p> text at the
+    // caret merged them, and a line holding two embeds then rendered as plain
+    // text for readers). A trailing paragraph keeps a place for the caret below.
+    const m = String(text).match(/^@\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)$/);
+    const html = m ? (richEmbedHTML(m[2], m[1]) + "<p><br></p>") : ("<p>" + esc(text) + "</p>");
+    try { document.execCommand("insertHTML", false, html); }
+    catch (e) {
+      const tmp = document.createElement("div"); tmp.innerHTML = html;
+      while (tmp.firstChild) ed.appendChild(tmp.firstChild);
+    }
+    decorateEditorEmbeds();
     updateEditorEmpty();
   }
   // Drop an uploaded image straight into the chapter as a real picture the way
