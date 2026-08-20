@@ -42,17 +42,17 @@
     // Community & kindness ---------------------------------------------------
     { id: "guardian",      name: "Guardian",       cat: "community", tier: "gold", img: "shield-gold.png",   desc: "Helps keep Wisp kind and safe.",          how: "Be a moderator or a trusted helper." },
     { id: "verified",      name: "Verified",       cat: "community", tier: "gold", img: "check-gold.png",    desc: "A trusted, verified member.",             how: "Be verified by the Wisp team." },
-    // Member rank: a little light that grows the longer you stay with Wisp ----
-    { id: "rank-newcomer", name: "Spark",   cat: "rank", tier: "bronze", img: "chevron-dark-2.png",   desc: "Just lit. New to Wisp.",                    how: "Join Wisp." },
-    { id: "rank-regular",  name: "Flicker", cat: "rank", tier: "bronze", img: "chevron-dark-3.png",   desc: "Catching, and coming back.",                how: "Keep coming back." },
-    { id: "rank-familiar", name: "Glow",    cat: "rank", tier: "silver", img: "chevron-silver-2.png", desc: "A steady, familiar light.",                 how: "Become a familiar part of the community." },
-    { id: "rank-veteran",  name: "Ember",   cat: "rank", tier: "silver", img: "chevron-silver-3.png", desc: "Warm through every season.",                how: "Stay with Wisp over time." },
-    { id: "rank-oldguard", name: "Flame",   cat: "rank", tier: "gold",   img: "chevron-gold-2.png",   desc: "Burning bright for the long haul.",         how: "Be here through the seasons." },
-    { id: "rank-pillar",   name: "Beacon",  cat: "rank", tier: "gold",   img: "chevron-gold-3.png",   desc: "A light the whole community reads by.",     how: "Earn the community's deep trust." },
+    // Member rank: a plain ladder the team awards as members stay with Wisp ----
+    { id: "rank-newcomer", name: "Newcomer",      cat: "rank", tier: "bronze", img: "chevron-dark-2.png",   desc: "New to Wisp.",                     how: "Join Wisp." },
+    { id: "rank-regular",  name: "Regular",       cat: "rank", tier: "bronze", img: "chevron-dark-3.png",   desc: "Here often.",                      how: "Keep coming back." },
+    { id: "rank-familiar", name: "Familiar Face", cat: "rank", tier: "silver", img: "chevron-silver-2.png", desc: "A known member.",                  how: "Stay active in the community." },
+    { id: "rank-veteran",  name: "Veteran",       cat: "rank", tier: "silver", img: "chevron-silver-3.png", desc: "Been around a long time.",         how: "Stick with Wisp long-term." },
+    { id: "rank-oldguard", name: "Mainstay",      cat: "rank", tier: "gold",   img: "chevron-gold-2.png",   desc: "A reliable, long-standing member.", how: "Keep showing up over the years." },
+    { id: "rank-pillar",   name: "Pillar",        cat: "rank", tier: "gold",   img: "chevron-gold-3.png",   desc: "A core part of the community.",     how: "Earn the community's trust over time." },
     // Ratings ----------------------------------------------------------------
-    { id: "well-rated",    name: "Well-Rated",     cat: "rating",  tier: "bronze", img: "star-3.png",        desc: "Readers rate their work highly.",         how: "Keep a solid reader rating." },
-    { id: "highly-rated",  name: "Highly Rated",   cat: "rating",  tier: "silver", img: "star-4.png",        desc: "Consistently four-star loved.",           how: "Hold a four-star reader rating." },
-    { id: "five-star",     name: "Five-Star Author", cat: "rating", tier: "gold",  img: "star-5.png",        desc: "A perfect five with readers.",            how: "Earn a five-star reader rating." }
+    { id: "well-rated",    name: "Well-Rated",     cat: "rating",  tier: "bronze", img: "star-3.png",        desc: "A solid average reader rating.", how: "Average 3 stars or more across your books (5+ ratings).", auto: function (s) { return (s.ratingsCount || 0) >= 5 && (s.avgRating || 0) >= 3; } },
+    { id: "highly-rated",  name: "Highly Rated",   cat: "rating",  tier: "silver", img: "star-4.png",        desc: "A high average reader rating.",  how: "Average 4 stars or more across your books (5+ ratings).", auto: function (s) { return (s.ratingsCount || 0) >= 5 && (s.avgRating || 0) >= 4; } },
+    { id: "five-star",     name: "Five-Star Author", cat: "rating", tier: "gold",  img: "star-5.png",        desc: "A near-perfect average rating.", how: "Average 4.5 stars or more across your books (10+ ratings).", auto: function (s) { return (s.ratingsCount || 0) >= 10 && (s.avgRating || 0) >= 4.5; } }
   ];
   var BY = {}; CAT.forEach(function (b) { BY[b.id] = b; });
 

@@ -2130,7 +2130,12 @@
     const seen = new Set(), out = [];
     const push = (t) => { const v = (t || "").trim(); if (v && !seen.has(v.toLowerCase())) { seen.add(v.toLowerCase()); out.push(v); } };
     allTags().forEach(([t]) => push(t));
+    // Fandoms/sources on the visible works are filterable too, so a reader can
+    // include or exclude by fandom (e.g. "Hamilton"), not only by tag. This is
+    // why a custom fandom an author typed still shows up in the search.
+    activeWorks().forEach(w => splitSource(w.source).forEach(push));
     (TAG_SUGGEST || []).forEach(push);
+    (typeof FANDOMS !== "undefined" ? FANDOMS : []).forEach(push);
     (browseTagsFromDB || []).forEach(push);
     return out;
   }
@@ -2187,13 +2192,16 @@
     activeWorks().forEach(w => (w.tags || []).forEach(t => m.set(t, (m.get(t) || 0) + 1)));
     return Array.from(m.entries()).sort((a, b) => b[1] - a[1]);
   }
+  // Every label a work can be filtered by: its tags plus its fandoms/sources,
+  // so include and exclude both work on fandoms as well as tags.
+  function workLabelSet(w) { const s = new Set(w.tags || []); splitSource(w.source).forEach(x => s.add(x)); return s; }
   function filteredWorks() {
     let list = activeWorks().slice();
     if (filterState.type !== "all") list = list.filter(w => w.type === filterState.type);
     list = statusFilter(list);
     if (filterState.ratings.size) list = list.filter(w => filterState.ratings.has(w.rating));
-    if (filterState.tagsInc.size) list = list.filter(w => Array.from(filterState.tagsInc).every(t => w.tags.includes(t)));
-    if (filterState.tagsExc.size) list = list.filter(w => !w.tags.some(t => filterState.tagsExc.has(t)));
+    if (filterState.tagsInc.size) list = list.filter(w => { const L = workLabelSet(w); return Array.from(filterState.tagsInc).every(t => L.has(t)); });
+    if (filterState.tagsExc.size) list = list.filter(w => { const L = workLabelSet(w); return !Array.from(filterState.tagsExc).some(t => L.has(t)); });
     if (userState.mutedTags.size) list = list.filter(w => !userState.mutedTags.has(w.source) && !(w.tags || []).some(t => userState.mutedTags.has(t)));
     if (userState.blockedUsers.size) list = list.filter(w => !userState.blockedUsers.has(w.author));
     if (filterState.q) {
@@ -2213,8 +2221,8 @@
     if (!isLive()) return filteredWorks();
     let list = (LIVE.works || []).slice();
     list = statusFilter(list);
-    if (filterState.tagsInc.size) list = list.filter(w => Array.from(filterState.tagsInc).every(t => w.tags.includes(t)));
-    if (filterState.tagsExc.size) list = list.filter(w => !w.tags.some(t => filterState.tagsExc.has(t)));
+    if (filterState.tagsInc.size) list = list.filter(w => { const L = workLabelSet(w); return Array.from(filterState.tagsInc).every(t => L.has(t)); });
+    if (filterState.tagsExc.size) list = list.filter(w => { const L = workLabelSet(w); return !Array.from(filterState.tagsExc).some(t => L.has(t)); });
     if (userState.mutedTags.size) list = list.filter(w => !userState.mutedTags.has(w.source) && !(w.tags || []).some(t => userState.mutedTags.has(t)));
     if (userState.blockedUsers.size) list = list.filter(w => !userState.blockedUsers.has(w.author));
     return list;
@@ -2381,6 +2389,70 @@
     }
   }
 
+  /* ---- Book ratings (readers rate a work 1..5 on its synopsis page) ------ */
+  function starSVG(on, size) {
+    size = size || 22;
+    return `<svg class="rate-star${on ? " is-on" : ""}" width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>`;
+  }
+  function ratingStatic(avg, size) {
+    const r = Math.round(avg || 0); let out = "";
+    for (let i = 1; i <= 5; i++) out += starSVG(i <= r, size || 16);
+    return out;
+  }
+  function ratingBlockHTML(w) {
+    const avg = w.ratingAvg || 0, n = w.ratingsN || 0;
+    const signedIn = !!(window.WispDB && WispDB.signedIn && WispDB.user);
+    const isAuthor = !!(w._db && signedIn && w.authorId && w.authorId === WispDB.user.id);
+    const canRate = !!(w._db && signedIn && !isAuthor);
+    const avgLine = n
+      ? `<span class="rate-avg__num">${avg.toFixed(1)}</span><span class="rate-avg__stars">${ratingStatic(avg, 16)}</span><span class="rate-avg__count">${n} rating${n === 1 ? "" : "s"}</span>`
+      : `<span class="rate-avg__count">No ratings yet${canRate ? ". Be the first to rate it." : ""}</span>`;
+    let mine = "";
+    if (canRate) {
+      mine = `<div class="rate-mine" data-rate-for="${esc(w.id)}">
+          <span class="rate-mine__label">Your rating</span>
+          <div class="rate-stars">${[1, 2, 3, 4, 5].map(i => `<button type="button" class="rate-star-btn" data-rate="${i}" aria-label="${i} star${i === 1 ? "" : "s"}">${starSVG(false, 26)}</button>`).join("")}</div>
+        </div>`;
+    } else if (isAuthor) {
+      mine = `<span class="rate-note muted">This is your book. Readers rate it here.</span>`;
+    } else if (!signedIn && w._db) {
+      mine = `<button class="btn--link rate-signin" data-auth="in">Sign in to rate</button>`;
+    }
+    return `<div class="work-rating"><div class="rate-avg">${avgLine}</div>${mine}</div>`;
+  }
+  async function mountRating(w) {
+    const wrap = document.querySelector(`.rate-mine[data-rate-for="${w.id}"]`);
+    if (!wrap || !(window.WispDB && WispDB.signedIn)) return;
+    let mine = await WispDB.getMyRating(w.id).catch(() => 0);
+    const btns = Array.from(wrap.querySelectorAll("[data-rate]"));
+    const paint = (val) => btns.forEach(b => b.classList.toggle("is-on", +b.dataset.rate <= val));
+    paint(mine);
+    const refreshAvg = () => {
+      const cw = LIVE.byId[w.id] || w;
+      const block = document.querySelector(".work-rating .rate-avg");
+      if (!block) return;
+      const tmp = document.createElement("div"); tmp.innerHTML = ratingBlockHTML(cw);
+      const fresh = tmp.querySelector(".rate-avg"); if (fresh) block.innerHTML = fresh.innerHTML;
+    };
+    btns.forEach(b => {
+      b.addEventListener("mouseenter", () => paint(+b.dataset.rate));
+      b.addEventListener("click", async () => {
+        const val = +b.dataset.rate, prev = mine;
+        try {
+          const ok = await WispDB.rateWork(w.id, val);
+          if (ok === false) { toast("Ratings need migration 026 on your Supabase."); return; }
+          const cw = LIVE.byId[w.id] || w;
+          if (!prev) { cw.ratingsN = (cw.ratingsN || 0) + 1; cw.ratingsSum = (cw.ratingsSum || 0) + val; }
+          else { cw.ratingsSum = (cw.ratingsSum || 0) - prev + val; }
+          cw.ratingAvg = cw.ratingsN ? cw.ratingsSum / cw.ratingsN : 0;
+          mine = val; paint(mine); refreshAvg();
+          toast(prev ? "Rating updated." : "Thanks for rating.");
+        } catch (e) { toast((e && e.message) || "Could not save your rating."); }
+      });
+    });
+    wrap.addEventListener("mouseleave", () => paint(mine));
+  }
+
   /* ======================================================================= */
   /*  SCREEN: WORK DETAIL                                                     */
   /* ======================================================================= */
@@ -2455,6 +2527,7 @@
               <span class="stat">${icon("comment",15)}<span data-comment-total="${w.id}">${w.comments}</span></span>
               <span class="stat">${icon("eye",15)}${w.reads}</span>
             </div>`}
+            ${ratingBlockHTML(w)}
           </div>
         </div>
 
@@ -2462,6 +2535,7 @@
         <div class="chapter-list">${rows}</div>
       </div>`;
     startCountdowns();
+    mountRating(w);
   }
 
   /* ---- Eastern Time (ET) anchoring ---------------------------------------
@@ -5673,9 +5747,12 @@
     const handle = p.handle ? "@" + p.handle : "";
     const published = (works || []).filter(w => w.status === "ongoing" || w.status === "complete");
     const hearts = (works || []).reduce((n, w) => n + (+w.hearts_count || 0), 0);
+    const rSum = (works || []).reduce((n, w) => n + (+w.ratings_sum || 0), 0);
+    const rCnt = (works || []).reduce((n, w) => n + (+w.ratings_count || 0), 0);
+    const avgRating = rCnt ? rSum / rCnt : 0;
     const uid = WispDB.user && WispDB.user.id;
     const storedB = storedBadgesFor(p, uid);
-    const earned = earnedBadgeIds(storedB, badgeStats({ works: published.length, hearts: hearts, words: p.words || 0 }));
+    const earned = earnedBadgeIds(storedB, badgeStats({ works: published.length, hearts: hearts, words: p.words || 0, avgRating: avgRating, ratingsCount: rCnt }));
     persistNewAutoBadges(storedB, earned, uid);
     lastBadgeCase = { ids: earned, name: name };
     const pinnedCards = published.length
@@ -5769,7 +5846,10 @@
   function renderUserProfile(p, works, counts, following) {
     const name = p.display_name || "Reader";
     const hearts = (works || []).reduce((n, w) => n + (+((w.hearts_count != null) ? w.hearts_count : w.hearts) || 0), 0);
-    const earned = earnedBadgeIds(storedBadgesFor(p, p.id), { works: works.length, hearts: hearts, words: p.words || 0 });
+    const rSum = (works || []).reduce((n, w) => n + (+((w.ratings_sum != null) ? w.ratings_sum : w.ratingsSum) || 0), 0);
+    const rCnt = (works || []).reduce((n, w) => n + (+((w.ratings_count != null) ? w.ratings_count : w.ratingsN) || 0), 0);
+    const avgRating = rCnt ? rSum / rCnt : 0;
+    const earned = earnedBadgeIds(storedBadgesFor(p, p.id), { works: works.length, hearts: hearts, words: p.words || 0, avgRating: avgRating, ratingsCount: rCnt });
     lastBadgeCase = { ids: earned, name: name };
     const worksHTML = works.length
       ? `<div class="work-grid">${works.map(cardGallery).join("")}</div>`

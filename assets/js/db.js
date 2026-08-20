@@ -55,6 +55,9 @@ window.WispDB = (function () {
       heartsN: +row.hearts_count || 0,
       commentsN: +row.comments_count || 0,
       readsN: +row.reads_count || 0,
+      ratingsN: +row.ratings_count || 0,
+      ratingsSum: +row.ratings_sum || 0,
+      ratingAvg: (+row.ratings_count > 0) ? (+row.ratings_sum / +row.ratings_count) : 0,
       complete: row.status === "complete",
       status: row.status === "complete" ? "sage" : "amber",
       statusText: row.status === "complete" ? "Complete" : "Updated " + relTime(row.updated_at),
@@ -561,6 +564,36 @@ window.WispDB = (function () {
     if (!user) throw new Error("Sign in first.");
     const { error } = await client.from("comments").delete().eq("id", id).eq("user_id", user.id);
     if (error) throw error;
+  }
+
+  /* ---- ratings (1..5 stars, one per reader per work) -------------------- */
+  // Resilient: returns false when the ratings table has not been migrated yet
+  // (migration 026), so the app can fall back gracefully.
+  async function rateWork(workId, stars) {
+    if (!user) throw new Error("Sign in to rate.");
+    var s = Math.max(1, Math.min(5, Math.round(+stars || 0)));
+    try {
+      const { error } = await client.from("ratings")
+        .upsert({ work_id: workId, user_id: user.id, stars: s, updated_at: new Date().toISOString() }, { onConflict: "work_id,user_id" });
+      if (error) { if (missingTable(error)) return false; throw error; }
+      return s;
+    } catch (e) { if (missingTable(e)) return false; throw e; }
+  }
+  async function getMyRating(workId) {
+    if (!user || !client || !workId) return 0;
+    try {
+      const { data, error } = await client.from("ratings").select("stars").eq("work_id", workId).eq("user_id", user.id).maybeSingle();
+      if (error) { if (missingTable(error)) return 0; throw error; }
+      return data ? (+data.stars || 0) : 0;
+    } catch (e) { return 0; }
+  }
+  async function myRatings(workIds) {
+    if (!user || !client || !workIds || !workIds.length) return {};
+    try {
+      const { data, error } = await client.from("ratings").select("work_id, stars").eq("user_id", user.id).in("work_id", workIds);
+      if (error) { if (missingTable(error)) return {}; throw error; }
+      const m = {}; (data || []).forEach(r => { m[r.work_id] = +r.stars || 0; }); return m;
+    } catch (e) { return {}; }
   }
 
   /* ---- profiles --------------------------------------------------------- */
@@ -1435,7 +1468,7 @@ window.WispDB = (function () {
     listWorks, getWork, getChapters, myWorks, listFeatured, isFeatured, setFeatured, unsetFeatured,
     createWork, updateWork, deleteWork, setWorkStatus, firstChapter, saveChapter, deleteChapter, setChapterNumber, swapChapterNumbers, listTags, listFandoms, getUpcoming, setTags,
     mySeries, getSeries, worksInSeries, findOrCreateSeries, updateSeries, deleteSeries, countInSeries,
-    toggle, myRelations, getComments, postComment, editComment, deleteComment, getReactions, toggleReaction, uploadCover,
+    toggle, myRelations, getComments, postComment, editComment, deleteComment, rateWork, getMyRating, myRatings, getReactions, toggleReaction, uploadCover,
     toggleFollow, amFollowing, followCounts, myFollowingIds, getNotifications,
     updateProfile, getProfile, getWidgets, saveWidgets, saveMyBadges, grantBadges, worksByAuthor,
     listProfilePosts, postProfilePost, deleteProfilePost, setProfilePostPinned,

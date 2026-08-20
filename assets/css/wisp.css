@@ -988,6 +988,24 @@ mark.hl--purple { background: rgba(190, 130, 255, 0.42); }
 .toolbar .hl-chip--none { background: var(--card); color: var(--ink3); font-size: 13px; line-height: 1;
   display: grid; place-items: center; box-shadow: none; }
 .toolbar .hl-chip--none:hover { color: var(--ink); border-color: var(--ink3); }
+
+/* Book ratings: the average line and the reader's own star input. */
+.work-rating { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 22px; margin-top: 16px; }
+.rate-avg { display: inline-flex; align-items: center; gap: 8px; }
+.rate-avg__num { font: 700 20px var(--font-display); color: var(--ink); }
+.rate-avg__stars { display: inline-flex; line-height: 0; }
+.rate-avg__count { font-size: 13px; color: var(--ink3); }
+.rate-star { fill: color-mix(in srgb, var(--ink) 16%, transparent); }
+.rate-star.is-on { fill: #f5b301; }
+.rate-mine { display: inline-flex; align-items: center; gap: 10px; }
+.rate-mine__label { font-size: 13px; color: var(--ink3); }
+.rate-stars { display: inline-flex; }
+.rate-star-btn { background: none; border: 0; padding: 0 1px; cursor: pointer; line-height: 0; border-radius: 4px; }
+.rate-star-btn .rate-star { fill: color-mix(in srgb, var(--ink) 18%, transparent); transition: fill .1s, transform .1s; }
+.rate-star-btn.is-on .rate-star, .rate-star-btn:hover .rate-star { fill: #f5b301; }
+.rate-star-btn:hover .rate-star { transform: scale(1.08); }
+.rate-star-btn:focus-visible { outline: 2px solid var(--rose); outline-offset: 1px; }
+.rate-note, .rate-signin { font-size: 13px; }
 /* Per-word font sizing, shared by the editor and the reader. */
 .fs-lg { font-size: 1.35em; }
 .fs-sm { font-size: 0.82em; }
