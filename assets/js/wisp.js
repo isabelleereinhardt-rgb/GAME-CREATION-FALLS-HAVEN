@@ -6838,20 +6838,23 @@
     setTimeout(close, 1900);
     el.addEventListener("click", close);
   }
-  // A big heart that pops in the center and fades, the way a double-tap does.
-  function bigHeart() {
-    if (reducedMotion()) return;
-    const h = document.createElement("div"); h.className = "mw-bigheart"; h.textContent = "❤";
-    document.body.appendChild(h);
-    setTimeout(() => h.remove(), 820);
+  // A brief, gentle scale pulse on the button the reader just pressed. This is a
+  // deliberate confirmation of their own tap, so it is allowed to play even under
+  // reduced motion (the CSS re-asserts it there); it never loops and stays small.
+  function pingBtn(el) {
+    if (!el) return;
+    el.classList.remove("is-pinged"); void el.offsetWidth; el.classList.add("is-pinged");
+    setTimeout(() => el.classList.remove("is-pinged"), 440);
   }
-  // A small shower of hearts floating up from a button, for hearting a work.
-  function heartBurst(el) {
-    if (!el || !el.getBoundingClientRect) return;
+  // A small shower of glyphs floating up from a button (hearts for a heart, a
+  // bell note for a subscribe). Skipped under reduced motion, where the button
+  // pulse and the toast are the confirmation instead.
+  function glyphBurst(el, glyph, extraClass) {
+    if (!el || !el.getBoundingClientRect || reducedMotion()) return;
     const r = el.getBoundingClientRect();
-    const box = document.createElement("div"); box.className = "mw-hearts";
-    for (let i = 0; i < 8; i++) {
-      const h = document.createElement("i"); h.textContent = "❤";
+    const box = document.createElement("div"); box.className = "mw-hearts" + (extraClass ? " " + extraClass : "");
+    for (let i = 0; i < 7; i++) {
+      const h = document.createElement("i"); h.textContent = glyph;
       h.style.left = (r.left + r.width / 2) + "px"; h.style.top = (r.top + r.height / 2) + "px";
       h.style.setProperty("--dx", (Math.random() * 70 - 35).toFixed(0) + "px");
       h.style.setProperty("--dy", (-40 - Math.random() * 50).toFixed(0) + "px");
@@ -6861,6 +6864,7 @@
     document.body.appendChild(box);
     setTimeout(() => box.remove(), 1100);
   }
+  function heartBurst(el) { glyphBurst(el, "❤"); }
   let petalTimer = null;
   function togglePetals(on) {
     let layer = $("#mwPetals");
@@ -7925,11 +7929,12 @@
         tog.classList.toggle("btn--primary", on);
         tog.classList.toggle("btn--ghost", !on);
         if (label) label.textContent = on ? "Hearted" : "Heart";
-        if (on) { tog.classList.remove("heart-pop"); void tog.offsetWidth; tog.classList.add("heart-pop"); bigHeart(); heartBurst(tog); }
+        if (on) { pingBtn(tog); heartBurst(tog); }
         toast(on ? "This work has been hearted." : "Heart removed.");
       } else if (kind === "subscribe") {
         tog.classList.toggle("is-on-quiet", on);
         if (label) label.textContent = on ? "Subscribed" : "Subscribe";
+        if (on) { pingBtn(tog); glyphBurst(tog, "🔔", "mw-hearts--amber"); }
         toast(on ? "Subscribed. You'll see new chapters in your activity." : "Unsubscribed. You won't get chapter alerts.");
       } else {
         tog.classList.toggle("is-on-quiet", on);

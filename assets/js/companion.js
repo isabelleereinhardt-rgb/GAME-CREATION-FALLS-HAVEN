@@ -77,38 +77,38 @@
     sweet: { name: "Sweetheart", glyph: "❀", mood: "Content",
       moodLine: "He curls a little closer every day you write.",
       treat: "A treat! For me?", thanks: "He purrs so hard he has to sit down.",
-      tips: ["Read the chapter you've been saving. It's still there.", "A comment can make a writer's whole week. Leave one.",
-        "Bookmark it now; find it later. That's the whole trick.", "Take a sip of something warm. The next chapter can wait five minutes.",
-        "Every work here was written by a real person. Be kind in the margins.", "Follow a tag you love and your home fills up with it."] },
-    grumpy: { name: "Grumpy", glyph: "✦", mood: "Unimpressed",
+      tips: ["Read the chapter you've been saving. It's still there.", "Finished a chapter? The author would love to hear one thing you liked.",
+        "Bookmark it now, find it later. That's the whole trick.", "Tea first. The chapter will keep.",
+        "Every work here was written by a real person. Be kind in the margins.", "Follow a tag you love, and your home fills up with it."] },
+    grumpy: { name: "Grumpy", glyph: "✗", mood: "Unimpressed",
       moodLine: "He will deny enjoying any of this. He is lying.",
       treat: "Finally. Put it down there.", thanks: "He is purring. He would like that stricken from the record.",
       tips: ["Still reading. Good. Don't make it weird.", "You have a bookmark button and you're still scrolling. Astonishing.",
         "That work was better than you'll admit. Heart it.", "Back to the draft. It won't finish itself.",
         "Fine. Leave a comment. The author will pretend not to care, like me."] },
-    regal: { name: "Regal", glyph: "✧", mood: "Gracious",
+    regal: { name: "Regal", glyph: "♛", mood: "Gracious",
       moodLine: "He considers your desk a throne and you its steward.",
       treat: "Tribute. Acceptable.", thanks: "The court is satisfied. You may rise.",
-      tips: ["The court awaits your next chapter. Do not keep it waiting.", "A wise reader hearts what they finish. Reward good work.",
-        "Sit up. Posture is half of prose.", "Name a fandom and follow its hub; let the realm come to you.",
+      tips: ["The court awaits your next chapter. Do not keep it waiting.", "Finished a work? Heart it. That is the whole fee the author asks.",
+        "Sit up. Posture is half of prose.", "Name a fandom, follow its hub, and let the realm come to you.",
         "Your library is a collection worth curating. Tend it."] },
     sleepy: { name: "Sleepy", glyph: "☾", mood: "Drowsy",
       moodLine: "He is mostly asleep, but he is asleep near you.",
       treat: "Mmh. Treat. Thank you.", thanks: "He carries it off to the warm spot and forgets about it.",
       tips: ["There is no hurry. The story keeps perfectly well overnight.", "One chapter counts. Rest is part of it.",
         "Everything saves itself. Close the tab whenever you like.", "A short read before bed is still a read."] },
-    gremlin: { name: "Gremlin", glyph: "✸", mood: "Feral",
+    gremlin: { name: "Gremlin", glyph: "☓", mood: "Feral",
       moodLine: "Something was knocked off the desk. No witnesses. No suspects.",
       treat: "MINE. I am taking this under the sofa.", thanks: "Gone. Under the sofa. It lives there now.",
       tips: ["I walked across your keyboard and invented a new character. You're welcome.", "Write the unhinged version first. Be respectable in the second draft.",
         "Heart it. Heart it again. It is very satisfying.", "Comment something feral and supportive. Those are the best kind.",
         "Delete nothing in anger. I've seen you. Sleep on it."] },
-    scholar: { name: "Scholar", glyph: "✜", mood: "Studious",
+    scholar: { name: "Scholar", glyph: "✎", mood: "Studious",
       moodLine: "He has read your canon twice and has notes.",
       treat: "Thank you. I shall record this in the ledger.", thanks: "Duly noted, dated, and filed under Provisions.",
-      tips: ["Tag your work well; a reader two years from now will thank you.", "Consistency isn't the same as quality, but it's cheaper to fix.",
-        "Leave a real comment — the specific kind, about one line.", "Regularity beats inspiration. The record shows it.",
-        "Read outside your fandom once a week. It sharpens the pen."] }
+      tips: ["Tag your work well. A reader two years from now will thank you.", "Consistency isn't the same as quality, but it's cheaper to fix.",
+        "Leave a real comment: the specific kind, about one line.", "Regularity beats inspiration. The record shows it.",
+        "Read something outside your fandom now and then. It shows in your own writing."] }
   };
   function persona() { return PERSONAS[state.personality] || PERSONAS.sweet; }
 
@@ -395,12 +395,46 @@
     walk.onclick = function () { pet(walk); };
     walk.addEventListener("animationiteration", function (e) { if (e.animationName === "lucky-walk") { tipIdx++; var t = stageEl.querySelector(".lucky-tip-text"); if (t) { var p = persona(); var tips = p.tips || []; t.textContent = tips.length ? tips[tipIdx % tips.length] : p.moodLine; } } });
   }
+  // A soft, happy little sound for when Lucky earns his treat: a two-note chirp
+  // over a brief low purr, built with the Web Audio API (no sound files). It
+  // respects the site's sound preference and only starts from the reader's own
+  // tap (a user gesture), so browsers allow it.
+  var luckyAC = null;
+  function soundOn() { try { return localStorage.getItem("wisp.sound") !== "off"; } catch (e) { return true; } }
+  function luckySound() {
+    if (!soundOn()) return;
+    var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    try {
+      luckyAC = luckyAC || new AC();
+      if (luckyAC.state === "suspended") luckyAC.resume();
+      var now = luckyAC.currentTime;
+      [[659.25, 0], [880, 0.13]].forEach(function (pair) {
+        var o = luckyAC.createOscillator(), g = luckyAC.createGain();
+        o.type = "triangle"; o.frequency.value = pair[0];
+        var t = now + pair[1];
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.09, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0006, t + 0.26);
+        o.connect(g); g.connect(luckyAC.destination);
+        o.start(t); o.stop(t + 0.28);
+      });
+      // a short, low purr underneath
+      var po = luckyAC.createOscillator(), pg = luckyAC.createGain();
+      po.type = "sine"; po.frequency.value = 92;
+      pg.gain.setValueAtTime(0.0001, now);
+      pg.gain.linearRampToValueAtTime(0.05, now + 0.05);
+      pg.gain.exponentialRampToValueAtTime(0.0004, now + 0.5);
+      po.connect(pg); pg.connect(luckyAC.destination);
+      po.start(now); po.stop(now + 0.52);
+    } catch (e) {}
+  }
   function pet(walk) {
     var n = (state.pets || 0) + 1;
     if (!state.treatsOn) { state.pets = n % 5; save(); paintPets(); return; }
     if (n < 5) { state.pets = n; save(); paintPets(); return; }
-    // fifth pet: a treat, a little dance, and off he trots
+    // fifth pet: a treat, a little dance, a happy sound, and off he trots
     state.pets = 0; state.treatsGiven = (state.treatsGiven || 0) + 1; save();
+    luckySound();
     var box = walk.getBoundingClientRect();
     walk.style.left = Math.round(box.left) + "px";
     walk.style.setProperty("--exit", Math.round(box.left + box.width + 40) + "px");
