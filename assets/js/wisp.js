@@ -2934,10 +2934,23 @@
     // Anything else https: show the page itself in a live site frame.
     return { kind: "site", src: u.href };
   }
+  // A figure's width. Named presets map to percentages so the older
+  // small/medium/full tokens still work, and a dragged size rides as "NN%".
+  // Returns the stored token and the inline style (centered when under full).
+  function figSize(size) {
+    let pct = 100;
+    if (size === "small") pct = 45;
+    else if (size === "medium") pct = 68;
+    else if (size === "full") pct = 100;
+    else if (typeof size === "string" && /^\d{1,3}%$/.test(size)) pct = Math.max(20, Math.min(100, parseInt(size, 10)));
+    const token = pct >= 100 ? "full" : (pct + "%");
+    const style = pct >= 100 ? "" : ` style="width:${pct}%;margin-left:auto;margin-right:auto"`;
+    return { pct: pct, token: token, style: style };
+  }
   function imageEmbedHTML(url, alt, size) {
     if (!/^https:\/\//i.test(url)) return `<p>${mdInline("![" + alt + "](" + url + ")")}</p>`;
-    const sz = (size === "small" || size === "medium") ? size : "full";
-    return `<figure class="embed embed--img is-${sz}" data-size="${sz}"><img src="${esc(url)}" alt="${esc(alt || "")}" loading="lazy" decoding="async">${alt ? `<figcaption>${esc(alt)}</figcaption>` : ""}</figure>`;
+    const z = figSize(size);
+    return `<figure class="embed embed--img" data-size="${z.token}"${z.style}><img src="${esc(url)}" alt="${esc(alt || "")}" loading="lazy" decoding="async">${alt ? `<figcaption>${esc(alt)}</figcaption>` : ""}</figure>`;
   }
   function linkCardHTML(url, label) {
     let host = ""; try { host = new URL(url).hostname.replace(/^www\./, ""); } catch (e) {}
@@ -2956,10 +2969,10 @@
   function richEmbedHTML(url, label, size) {
     const info = embedInfo(url);
     if (!info) return linkCardHTML(url, label);
-    // A writer-chosen width (small / medium / full), shared with the reader so
-    // what they resize an embed to is what everyone sees.
-    const sz = (size === "small" || size === "medium") ? size : "full";
-    const szClass = ` is-${sz}" data-size="${sz}`;
+    // A writer-chosen width, shared with the reader so what they resize an embed
+    // to is what everyone sees. Named presets or a dragged "NN%" both work.
+    const z = figSize(size);
+    const szClass = `" data-size="${z.token}"${z.style}`;
     // clipboard-write lets the player's own "copy link" (chain) button reach the
     // clipboard; without it that button silently does nothing inside the frame.
     const allow = info.kind === "video" ? 'allow="fullscreen; picture-in-picture; encrypted-media; clipboard-write"'
@@ -2995,9 +3008,9 @@
     const sa = align ? ` style="text-align:${align}"` : "";
     const lines = raw.split(/\n/);
     const first = lines[0].trim();
-    const img = lines.length === 1 && first.match(/^!\[([^\]]*)\]\((https?:\/\/[^)\s]+?)(?:\s+"(small|medium|full)")?\)$/);
+    const img = lines.length === 1 && first.match(/^!\[([^\]]*)\]\((https?:\/\/[^)\s]+?)(?:\s+"(small|medium|full|\d{1,3}%)")?\)$/);
     if (img) return imageEmbedHTML(img[2], img[1], img[3]);
-    const emb = lines.length === 1 && first.match(/^@\[([^\]]*)\]\((https?:\/\/[^)\s]+?)(?:\s+"(small|medium|full)")?\)$/);
+    const emb = lines.length === 1 && first.match(/^@\[([^\]]*)\]\((https?:\/\/[^)\s]+?)(?:\s+"(small|medium|full|\d{1,3}%)")?\)$/);
     if (emb) return richEmbedHTML(emb[2], emb[1], emb[3]);
     if (lines.length === 1 && /^(-{3,}|\*{3,}|_{3,})$/.test(first)) return "<hr>";
     const h = lines.length === 1 && first.match(/^(#{1,3})\s+(.*)$/);
@@ -3078,6 +3091,17 @@
     return alignPrefix(node) + inlineToMd(node).replace(/\n{2,}/g, "\n").replace(/^\n+|\n+$/g, "");
   }
 
+  // The stored width token for a figure: an inline width % (set by dragging the
+  // handle) wins, then the data-size attribute, then the legacy is-* classes.
+  function figSizeToken(node) {
+    if (!node || !node.getAttribute) return "full";
+    const m = (node.getAttribute("style") || "").match(/width:\s*(\d{1,3})%/);
+    if (m) { const p = Math.max(20, Math.min(100, +m[1])); return p >= 100 ? "full" : p + "%"; }
+    const ds = node.getAttribute("data-size") || "";
+    if (/^\d{1,3}%$/.test(ds) || ds === "small" || ds === "medium") return ds;
+    if (node.classList) { if (node.classList.contains("is-small")) return "small"; if (node.classList.contains("is-medium")) return "medium"; }
+    return "full";
+  }
   // An inserted image or an embed lives in the editor as a <figure> (or a bare
   // <img>). Serialize it back to its Markdown line so it round-trips exactly:
   // the URL rides in an attribute, never as fragile editable text.
@@ -3087,11 +3111,9 @@
     if (img) {
       const src = img.getAttribute("src") || "", alt = img.getAttribute("alt") || "";
       if (!src) return "";
-      // The chosen scale rides in the Markdown "title" slot: ![alt](url "small").
-      let size = "";
-      if (node.getAttribute) size = node.getAttribute("data-size") || "";
-      if (!size && node.classList) size = node.classList.contains("is-small") ? "small" : node.classList.contains("is-medium") ? "medium" : "";
-      return (size === "small" || size === "medium") ? `![${alt}](${src} "${size}")` : `![${alt}](${src})`;
+      // The chosen width rides in the Markdown "title" slot: ![alt](url "60%").
+      const size = figSizeToken(node);
+      return size !== "full" ? `![${alt}](${src} "${size}")` : `![${alt}](${src})`;
     }
     // A link-card embed is a bare <a class="embed embed--link"> (no figure): the
     // label rides in its own span, so read that rather than the whole textContent
@@ -3110,9 +3132,9 @@
     // in the "Open" link. Read those directly so it round-trips as @[label](url)
     // rather than picking up the "Open host" button text as the label.
     // A resizable embed keeps its chosen width in the Markdown title slot, exactly
-    // like an image: @[label](url "small").
-    const embSize = (node.getAttribute && node.getAttribute("data-size")) || "";
-    const embSuffix = (embSize === "small" || embSize === "medium") ? ` "${embSize}"` : "";
+    // like an image: @[label](url "60%").
+    const embSize = figSizeToken(node);
+    const embSuffix = embSize !== "full" ? ` "${embSize}"` : "";
     const openA = node.querySelector ? node.querySelector(".embed-frame__open[href]") : null;
     if (openA) {
       const href = openA.getAttribute("href") || "";
@@ -3144,7 +3166,7 @@
     if (!node || node.nodeType !== 1 || !node.cloneNode) return "";
     const clone = node.cloneNode(true);
     clone.querySelectorAll(
-      "iframe, img, figcaption, .embed__source, .embed-frame__bar, .img-tools, .embed-tools, .embed-link__main, .embed-link__side, .embed-link__label, .embed-link__host, [class*='embed--']"
+      "iframe, img, figcaption, .embed__source, .embed-frame__bar, .img-tools, .embed-tools, .fig-resize, .embed-link__main, .embed-link__side, .embed-link__label, .embed-link__host, [class*='embed--']"
     ).forEach(n => n.remove());
     return (clone.textContent || "")
       .replace(new RegExp(String.fromCharCode(0xA0), "g"), " ")
@@ -4799,20 +4821,21 @@
     if (bodyEd) {
       ["input", "keyup", "paste", "cut", "focus", "blur"].forEach(ev =>
         bodyEd.addEventListener(ev, () => setTimeout(updateEditorEmpty, 0)));
-      // Images carry their own controls: scale (small/medium/full) and remove.
+      // Images carry their own controls: scale presets, drag-to-resize, remove.
       decorateEditorImages();
       // Video/map/audio embeds become non-editable, each with a paragraph after.
       decorateEditorEmbeds();
+      wireFigResize(bodyEd);
       bodyEd.addEventListener("click", (e) => {
         const gm = e.target.closest(".gc-mark");
         if (gm) { e.preventDefault(); openGrammarPop(gm); return; }
         const sz = e.target.closest("[data-img-size]");
-        if (sz) { const fig = sz.closest("figure.embed--img"); if (fig) { const v = sz.dataset.imgSize; fig.setAttribute("data-size", v); fig.classList.remove("is-small", "is-medium", "is-full"); fig.classList.add("is-" + v); markEditorDirty(); } e.preventDefault(); return; }
+        if (sz) { applyFigWidth(sz.closest("figure.embed--img"), sz.dataset.imgSize); markEditorDirty(); e.preventDefault(); return; }
         const del = e.target.closest("[data-img-del]");
         if (del) { const fig = del.closest("figure.embed--img"); if (fig) fig.remove(); updateEditorEmpty(); markEditorDirty(); e.preventDefault(); return; }
         // The same width and remove controls for rich embeds (video, doc, site, ...).
         const esz = e.target.closest("[data-embed-size]");
-        if (esz) { const fig = esz.closest("figure.embed--rich"); if (fig) { const v = esz.dataset.embedSize; fig.setAttribute("data-size", v); fig.classList.remove("is-small", "is-medium", "is-full"); fig.classList.add("is-" + v); markEditorDirty(); } e.preventDefault(); return; }
+        if (esz) { applyFigWidth(esz.closest("figure.embed--rich"), esz.dataset.embedSize); markEditorDirty(); e.preventDefault(); return; }
         const edel = e.target.closest("[data-embed-del]");
         if (edel) { const fig = edel.closest("figure.embed--rich"); if (fig) fig.remove(); updateEditorEmpty(); markEditorDirty(); e.preventDefault(); return; }
         const fig = e.target.closest("figure.embed--img");
@@ -9924,6 +9947,12 @@
     gcWord("questionaire", "questionnaire"), gcWord("refered", "referred"), gcWord("relevent", "relevant"),
     gcWord("resturant", "restaurant"), gcWord("tounge", "tongue"), gcWord("vaccum", "vacuum"),
     gcWord("wether", "whether"), gcWord("writen", "written"), gcWord("alote", "a lot"),
+    // Run-together words that are almost always meant as two.
+    gcWord("thankyou", "thank you"), gcWord("infact", "in fact"), gcWord("atleast", "at least"),
+    gcWord("incase", "in case"), gcWord("eachother", "each other"), gcWord("aslong", "as long"),
+    gcWord("abit", "a bit"), gcWord("inspite", "in spite"), gcWord("eventhough", "even though"),
+    gcWord("aslo", "also"), gcWord("becuse", "because"), gcWord("beacuse", "because"),
+    gcWord("suddently", "suddenly"),
     // ---- Punctuation and spacing (no dictionary needed) -------------------
     // Missing space between two sentences: "good.The" -> "good. The".
     { re: /([a-z0-9])([.!?])([A-Z])/g, fix: (m) => m[1] + m[2] + " " + m[3] },
@@ -10355,12 +10384,62 @@
   // Give every image in the editor its hover controls (scale small/medium/full,
   // and remove). Runs after insert and after a saved chapter loads, so images
   // that came back from Markdown get the same controls a freshly added one has.
+  // Drag-to-resize handles on a figure's left and right edges, the way Notion
+  // lets you grab an edge and stretch. Both edges move symmetrically since the
+  // figure stays centered.
+  function addFigHandles(fig) {
+    if (fig.querySelector(".fig-resize")) return;
+    fig.insertAdjacentHTML("beforeend",
+      '<span class="fig-resize fig-resize--l" contenteditable="false" aria-hidden="true"></span>' +
+      '<span class="fig-resize fig-resize--r" contenteditable="false" aria-hidden="true"></span>');
+  }
+  // Set a figure's width from a preset token or a percentage, writing the same
+  // inline width a drag would, so presets and dragging stay in sync.
+  function applyFigWidth(fig, token) {
+    if (!fig) return;
+    const z = figSize(token);
+    fig.setAttribute("data-size", z.token);
+    if (z.pct >= 100) { fig.style.removeProperty("width"); fig.style.removeProperty("margin-left"); fig.style.removeProperty("margin-right"); }
+    else { fig.style.width = z.pct + "%"; fig.style.marginLeft = "auto"; fig.style.marginRight = "auto"; }
+  }
+  // Grab-and-stretch: dragging a figure's edge handle sets its width live, as a
+  // percentage of the writing column. The figure is centered, so width tracks
+  // twice the distance from the column's centre to the pointer. Wired once per
+  // editor via pointer capture on the body.
+  function wireFigResize(ed) {
+    if (!ed || ed.__figResize) return; ed.__figResize = true;   // once per editor element
+    ed.addEventListener("pointerdown", (e) => {
+      const h = e.target.closest(".fig-resize"); if (!h) return;
+      const fig = h.closest("figure.embed--img, figure.embed--rich"); if (!fig) return;
+      const container = fig.parentElement; if (!container) return;
+      e.preventDefault(); e.stopPropagation();
+      const crect = container.getBoundingClientRect();
+      const cw = crect.width || 1;
+      const centerX = crect.left + cw / 2;
+      fig.classList.add("is-resizing");
+      const move = (ev) => {
+        const half = Math.abs(ev.clientX - centerX);
+        let pct = Math.round(Math.max(20, Math.min(100, (half * 2 / cw) * 100)));
+        if (pct >= 100) { fig.style.removeProperty("width"); fig.style.removeProperty("margin-left"); fig.style.removeProperty("margin-right"); fig.setAttribute("data-size", "full"); }
+        else { fig.style.width = pct + "%"; fig.style.marginLeft = "auto"; fig.style.marginRight = "auto"; fig.setAttribute("data-size", pct + "%"); }
+      };
+      const up = () => {
+        document.removeEventListener("pointermove", move);
+        document.removeEventListener("pointerup", up);
+        document.removeEventListener("pointercancel", up);
+        fig.classList.remove("is-resizing");
+        markEditorDirty();
+      };
+      document.addEventListener("pointermove", move);
+      document.addEventListener("pointerup", up);
+      document.addEventListener("pointercancel", up);
+    });
+  }
   function decorateEditorImages() {
     const ed = $("#we-body"); if (!ed) return;
     ed.querySelectorAll("figure.embed--img").forEach(fig => {
       fig.setAttribute("contenteditable", "false");
-      if (!fig.getAttribute("data-size")) fig.setAttribute("data-size", fig.classList.contains("is-small") ? "small" : fig.classList.contains("is-medium") ? "medium" : "full");
-      if (!/\bis-(small|medium|full)\b/.test(fig.className)) fig.classList.add("is-" + (fig.getAttribute("data-size") || "full"));
+      if (!fig.getAttribute("data-size")) fig.setAttribute("data-size", "full");
       if (!fig.querySelector(".img-tools")) {
         const tools = document.createElement("div");
         tools.className = "img-tools"; tools.setAttribute("contenteditable", "false");
@@ -10371,6 +10450,7 @@
           `<button type="button" class="img-tool img-tool--del" data-img-del title="Remove image">${icon("trash", 13)}</button>`;
         fig.appendChild(tools);
       }
+      addFigHandles(fig);
     });
   }
 
@@ -10388,8 +10468,7 @@
     // one out without editing Markdown by hand.
     ed.querySelectorAll("figure.embed--rich").forEach(fig => {
       fig.setAttribute("contenteditable", "false");
-      if (!fig.getAttribute("data-size")) fig.setAttribute("data-size", fig.classList.contains("is-small") ? "small" : fig.classList.contains("is-medium") ? "medium" : "full");
-      if (!/\bis-(small|medium|full)\b/.test(fig.className)) fig.classList.add("is-" + (fig.getAttribute("data-size") || "full"));
+      if (!fig.getAttribute("data-size")) fig.setAttribute("data-size", "full");
       if (!fig.querySelector(".embed-tools")) {
         const tools = document.createElement("div");
         tools.className = "embed-tools"; tools.setAttribute("contenteditable", "false");
@@ -10400,6 +10479,7 @@
           `<button type="button" class="img-tool img-tool--del" data-embed-del title="Remove embed">${icon("trash", 13)}</button>`;
         fig.appendChild(tools);
       }
+      addFigHandles(fig);
     });
     ed.querySelectorAll("figure.embed, a.embed--link").forEach(el => {
       const nx = el.nextElementSibling;

@@ -2277,6 +2277,18 @@ button.pill--link:hover { border-color: var(--rose); color: var(--rose-ink); bac
 /* Keep the frame header clear of the floating tools so its "Open" link never
    slides underneath them. */
 .editor figure.embed--frame .embed-frame__bar { padding-right: 130px; }
+/* Notion-style grab handles on the left and right edge of an image or embed in
+   the editor: drag one to stretch the figure's width. */
+.editor .fig-resize { position: absolute; top: 0; bottom: 0; width: 16px; display: flex;
+  align-items: center; justify-content: center; cursor: ew-resize; z-index: 6; touch-action: none; }
+.editor .fig-resize--l { left: -8px; }
+.editor .fig-resize--r { right: -8px; }
+.editor .fig-resize::before { content: ""; width: 6px; height: 46px; max-height: 55%; border-radius: 6px;
+  background: var(--rose); border: 1.5px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,.35); opacity: .9;
+  transition: transform .1s ease, opacity .1s ease; }
+.editor .fig-resize:hover::before, .editor figure.is-resizing .fig-resize::before { transform: scaleY(1.14); opacity: 1; }
+.editor figure.is-resizing { user-select: none; }
+.editor figure.is-resizing iframe { pointer-events: none; }
 .embed__source a { color: var(--link); text-decoration: none; }
 .embed__source a:hover { text-decoration: underline; }
 
