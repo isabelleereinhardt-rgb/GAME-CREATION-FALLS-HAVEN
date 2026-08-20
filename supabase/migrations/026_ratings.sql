@@ -53,9 +53,16 @@ drop trigger if exists ratings_agg_trg on public.ratings;
 create trigger ratings_agg_trg after insert or update or delete on public.ratings
   for each row execute function public.bump_ratings();
 
--- The works_with_author view expands w.* at creation time, so re-create it to
--- expose the two new columns.
-create or replace view public.works_with_author with (security_invoker = true) as
+-- The works_with_author view expands w.* to the columns that existed when it was
+-- created, so it must be refreshed to expose ratings_count and ratings_sum.
+-- `create or replace view` cannot be used: the new columns land in the middle of
+-- the w.* expansion, which shifts author_name and Postgres refuses to rename a
+-- view column (error 42P16). So drop and recreate, exactly as migration 009 did.
+-- Nothing else in the database depends on this view (only the front-end reads
+-- it), so the drop is safe and needs no CASCADE.
+drop view if exists public.works_with_author;
+
+create view public.works_with_author with (security_invoker = true) as
   select w.*,
     p.display_name as author_name,
     p.handle as author_handle,

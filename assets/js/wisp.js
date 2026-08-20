@@ -3341,6 +3341,34 @@
     setMode(settings.comicMode || "strip");
   }
 
+  // Wrap a reader's text selection in a highlight mark, but ONLY when it is safe:
+  // the selection sits inside a single block and contains no block-level or
+  // embedded content. Wrapping a range that crosses paragraphs or swallows an
+  // embed in a <mark> (an inline element) mangles the DOM: it leaves a thin
+  // colored sliver and can break an embed sitting just below. When it is not
+  // safe we skip the visual mark; the highlight text is still saved to Things.
+  function safeHighlightRange(range) {
+    if (!range) return false;
+    try {
+      var blockOf = function (node) {
+        var n = node && node.nodeType === 3 ? node.parentNode : node;
+        while (n && n.id !== "prose") {
+          if (n.nodeType === 1 && /^(P|LI|BLOCKQUOTE|H[1-6]|PRE|FIGURE|DIV)$/.test(n.nodeName)) return n;
+          n = n.parentNode;
+        }
+        return n;
+      };
+      if (blockOf(range.startContainer) !== blockOf(range.endContainer)) return false;
+      var frag = range.cloneContents();
+      if (frag.querySelector && frag.querySelector(
+        "p,div,figure,img,iframe,video,audio,blockquote,pre,h1,h2,h3,h4,h5,h6,hr,ul,ol,li,table,button,.para__marker,.thread-slot,.embed,.embed-block")) return false;
+      if (!(frag.textContent || "").trim()) return false;   // nothing but whitespace: no sliver
+      var mk = document.createElement("mark"); mk.className = "hl";
+      mk.appendChild(range.extractContents()); range.insertNode(mk);
+      return true;
+    } catch (e) { return false; }
+  }
+
   // Text-selection highlight popover for real works: saves to the highlights
   // table so it appears in Library > Things.
   function wireLiveHighlights(w, ch) {
@@ -3364,7 +3392,7 @@
       if (kind === "copy") { navigator.clipboard && navigator.clipboard.writeText(text); toast("Copied."); hide(); window.getSelection().removeAllRanges(); return; }
       if (!WispDB.signedIn) { openAuth("in"); hide(); return; }
       if (!text) { hide(); return; }
-      try { const mk = document.createElement("mark"); mk.className = "hl"; mk.appendChild(lastRange.extractContents()); lastRange.insertNode(mk); } catch (e) {}
+      safeHighlightRange(lastRange);
       hide(); window.getSelection().removeAllRanges();
       if (kind === "note") { openNoteDialog(w, ch, text); return; }
       try { await WispDB.saveHighlight({ work_id: w.id, chapter_id: ch.id, text }); toast("Highlighted. Find it in Library, under Things."); }
@@ -3774,11 +3802,8 @@
       const kind = b.dataset.hl;
       if (kind === "copy") { navigator.clipboard && navigator.clipboard.writeText(String(window.getSelection())); toast("Copied."); }
       else if (lastRange) {
-        try {
-          const mark = document.createElement("mark"); mark.className = "hl";
-          mark.appendChild(lastRange.extractContents()); lastRange.insertNode(mark);
-          toast(kind === "note" ? "Saved to your highlights. Add a note in Library." : "Highlighted. Find it in Library, under Things.");
-        } catch (e) { toast("Select text within one paragraph."); }
+        safeHighlightRange(lastRange);
+        toast(kind === "note" ? "Saved to your highlights. Add a note in Library." : "Highlighted. Find it in Library, under Things.");
       }
       pop.style.display = "none"; window.getSelection().removeAllRanges();
     }));
