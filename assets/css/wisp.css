@@ -1339,6 +1339,15 @@ mark.hl--purple { background: rgba(190, 130, 255, 0.42); }
   background: var(--card); padding: 30px 34px; font: var(--read-size, 18px)/1.7 var(--font-read); color: var(--ink);
   outline: none; position: relative;
 }
+/* On laptops and desktops the writing station uses far more of the screen: the
+   page widens, the editor column grows with it, and the writing surface fills
+   most of the viewport height so there is much less scrolling. Phones keep the
+   compact single-column layout (the writer grid already collapses under 1100px). */
+@media (min-width: 1100px) {
+  .page--editor { max-width: 1360px; }
+  .page--editor .writer { grid-template-columns: minmax(0, 1fr) 320px; gap: 34px; }
+  .page--editor .editor { min-height: max(480px, calc(100vh - 300px)); }
+}
 .editor:focus { border-color: var(--rose); }
 /* Placeholder guidance: an overlay, never real text, so it can't be saved. */
 .editor.is-empty::before {
@@ -2248,7 +2257,26 @@ button.pill--link:hover { border-color: var(--rose); color: var(--rose-ink); bac
 
 /* Rich embed: the frame plus a caption link to the source. */
 .embed--rich { margin: 20px 0; }
+/* Writer-chosen width, shared with the reader (full is the default). */
+.embed--rich.is-small { max-width: 55%; margin-left: auto; margin-right: auto; }
+.embed--rich.is-medium { max-width: 78%; margin-left: auto; margin-right: auto; }
 .embed__source { margin-top: 7px; font-size: 13px; text-align: right; }
+/* Editor-only resize/remove controls on a rich embed, mirroring the image ones.
+   Always visible (an iframe swallows hover, so hover-to-reveal would not work). */
+.editor figure.embed--rich { position: relative; }
+.editor .embed-tools {
+  position: absolute; top: 6px; right: 6px; display: flex; gap: 4px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 9px;
+  padding: 4px; box-shadow: 0 2px 10px rgba(0,0,0,.16); z-index: 4;
+}
+.editor figure.embed--rich[data-size="small"] .img-tool[data-embed-size="small"],
+.editor figure.embed--rich[data-size="medium"] .img-tool[data-embed-size="medium"],
+.editor figure.embed--rich[data-size="full"] .img-tool[data-embed-size="full"] {
+  background: var(--rose-wash); border-color: var(--rose); color: var(--rose-ink);
+}
+/* Keep the frame header clear of the floating tools so its "Open" link never
+   slides underneath them. */
+.editor figure.embed--frame .embed-frame__bar { padding-right: 130px; }
 .embed__source a { color: var(--link); text-decoration: none; }
 .embed__source a:hover { text-decoration: underline; }
 

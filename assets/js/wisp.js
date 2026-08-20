@@ -2953,9 +2953,13 @@
       `<span class="embed-link__side">${sub}<span class="embed-link__arrow" aria-hidden="true">&#8599;</span></span>` +
       `</a>`;
   }
-  function richEmbedHTML(url, label) {
+  function richEmbedHTML(url, label, size) {
     const info = embedInfo(url);
     if (!info) return linkCardHTML(url, label);
+    // A writer-chosen width (small / medium / full), shared with the reader so
+    // what they resize an embed to is what everyone sees.
+    const sz = (size === "small" || size === "medium") ? size : "full";
+    const szClass = ` is-${sz}" data-size="${sz}`;
     // clipboard-write lets the player's own "copy link" (chain) button reach the
     // clipboard; without it that button silently does nothing inside the frame.
     const allow = info.kind === "video" ? 'allow="fullscreen; picture-in-picture; encrypted-media; clipboard-write"'
@@ -2976,11 +2980,11 @@
         `<span class="embed-frame__site">${icon("external", 14)}<span class="embed-frame__name">${esc(nm)}</span></span>` +
         `<a class="embed-frame__open" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Open ${esc(host)} <span aria-hidden="true">&#8599;</span></a>` +
         `</div>`;
-      return `<figure class="embed embed--rich embed--frame">${bar}${frame}</figure>`;
+      return `<figure class="embed embed--rich embed--frame${szClass}">${bar}${frame}</figure>`;
     }
     // A caption link so readers can jump straight to the source (like the sample).
     const src = `<figcaption class="embed__source"><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc((label && label.trim()) || ("Open on " + host))} <span aria-hidden="true">&#8599;</span></a></figcaption>`;
-    return `<figure class="embed embed--rich">${frame}${src}</figure>`;
+    return `<figure class="embed embed--rich${szClass}">${frame}${src}</figure>`;
   }
 
   function renderBlock(block) {
@@ -2993,8 +2997,8 @@
     const first = lines[0].trim();
     const img = lines.length === 1 && first.match(/^!\[([^\]]*)\]\((https?:\/\/[^)\s]+?)(?:\s+"(small|medium|full)")?\)$/);
     if (img) return imageEmbedHTML(img[2], img[1], img[3]);
-    const emb = lines.length === 1 && first.match(/^@\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)$/);
-    if (emb) return richEmbedHTML(emb[2], emb[1]);
+    const emb = lines.length === 1 && first.match(/^@\[([^\]]*)\]\((https?:\/\/[^)\s]+?)(?:\s+"(small|medium|full)")?\)$/);
+    if (emb) return richEmbedHTML(emb[2], emb[1], emb[3]);
     if (lines.length === 1 && /^(-{3,}|\*{3,}|_{3,})$/.test(first)) return "<hr>";
     const h = lines.length === 1 && first.match(/^(#{1,3})\s+(.*)$/);
     if (h) { const tag = ["h2", "h3", "h4"][h[1].length - 1]; return `<${tag}${sa}>${mdInline(h[2])}</${tag}>`; }
@@ -3105,6 +3109,10 @@
     // A framed doc/site embed keeps its label in the header name span and its URL
     // in the "Open" link. Read those directly so it round-trips as @[label](url)
     // rather than picking up the "Open host" button text as the label.
+    // A resizable embed keeps its chosen width in the Markdown title slot, exactly
+    // like an image: @[label](url "small").
+    const embSize = (node.getAttribute && node.getAttribute("data-size")) || "";
+    const embSuffix = (embSize === "small" || embSize === "medium") ? ` "${embSize}"` : "";
     const openA = node.querySelector ? node.querySelector(".embed-frame__open[href]") : null;
     if (openA) {
       const href = openA.getAttribute("href") || "";
@@ -3113,7 +3121,7 @@
       let label = nameEl ? (nameEl.textContent || "").trim() : "";
       let fhost = ""; try { fhost = new URL(href).hostname.replace(/^www\./, ""); } catch (e) {}
       if (label === fhost) label = "";
-      return `@[${label}](${href})`;
+      return `@[${label}](${href}${embSuffix})`;
     }
     const a = node.querySelector ? node.querySelector(".embed__source a[href], a[href]") : null;
     if (a) {
@@ -3121,7 +3129,7 @@
       if (!/^https?:\/\//i.test(href)) return "";
       let label = (a.textContent || "").replace(/↗/g, "").trim();
       if (/^Open on /.test(label)) label = "";
-      return `@[${label}](${href})`;
+      return `@[${label}](${href}${embSuffix})`;
     }
     return "";
   }
@@ -3136,7 +3144,7 @@
     if (!node || node.nodeType !== 1 || !node.cloneNode) return "";
     const clone = node.cloneNode(true);
     clone.querySelectorAll(
-      "iframe, img, figcaption, .embed__source, .embed-frame__bar, .img-tools, .embed-link__main, .embed-link__side, .embed-link__label, .embed-link__host, [class*='embed--']"
+      "iframe, img, figcaption, .embed__source, .embed-frame__bar, .img-tools, .embed-tools, .embed-link__main, .embed-link__side, .embed-link__label, .embed-link__host, [class*='embed--']"
     ).forEach(n => n.remove());
     return (clone.textContent || "")
       .replace(new RegExp(String.fromCharCode(0xA0), "g"), " ")
@@ -4584,7 +4592,7 @@
       : `<div class="field"><label>Setting or genre</label><input type="text" id="we-source" value="${esc(source)}"></div>`;
 
     $("#screen-write").innerHTML = `
-      <div class="page page--wide">
+      <div class="page page--wide page--editor">
         <div class="write-head">
           <div>
             <button class="btn--link" data-nav="write" style="margin-bottom:8px">&lsaquo; All works</button>
@@ -4799,9 +4807,14 @@
         const gm = e.target.closest(".gc-mark");
         if (gm) { e.preventDefault(); openGrammarPop(gm); return; }
         const sz = e.target.closest("[data-img-size]");
-        if (sz) { const fig = sz.closest("figure.embed--img"); if (fig) { const v = sz.dataset.imgSize; fig.setAttribute("data-size", v); fig.classList.remove("is-small", "is-medium", "is-full"); fig.classList.add("is-" + v); } e.preventDefault(); return; }
+        if (sz) { const fig = sz.closest("figure.embed--img"); if (fig) { const v = sz.dataset.imgSize; fig.setAttribute("data-size", v); fig.classList.remove("is-small", "is-medium", "is-full"); fig.classList.add("is-" + v); markEditorDirty(); } e.preventDefault(); return; }
         const del = e.target.closest("[data-img-del]");
-        if (del) { const fig = del.closest("figure.embed--img"); if (fig) fig.remove(); updateEditorEmpty(); e.preventDefault(); return; }
+        if (del) { const fig = del.closest("figure.embed--img"); if (fig) fig.remove(); updateEditorEmpty(); markEditorDirty(); e.preventDefault(); return; }
+        // The same width and remove controls for rich embeds (video, doc, site, ...).
+        const esz = e.target.closest("[data-embed-size]");
+        if (esz) { const fig = esz.closest("figure.embed--rich"); if (fig) { const v = esz.dataset.embedSize; fig.setAttribute("data-size", v); fig.classList.remove("is-small", "is-medium", "is-full"); fig.classList.add("is-" + v); markEditorDirty(); } e.preventDefault(); return; }
+        const edel = e.target.closest("[data-embed-del]");
+        if (edel) { const fig = edel.closest("figure.embed--rich"); if (fig) fig.remove(); updateEditorEmpty(); markEditorDirty(); e.preventDefault(); return; }
         const fig = e.target.closest("figure.embed--img");
         if (fig) { fig.classList.toggle("is-active"); }
       });
@@ -9890,7 +9903,39 @@
     gcPhrase("i seen", "I saw"), gcPhrase("less people", "fewer people"),
     gcPhrase("supposably", "supposedly"), gcPhrase("irregardless", "regardless"),
     gcPhrase("for all intensive purposes", "for all intents and purposes"),
-    gcPhrase("nip it in the butt", "nip it in the bud"), gcPhrase("case and point", "case in point")
+    gcPhrase("nip it in the butt", "nip it in the bud"), gcPhrase("case and point", "case in point"),
+    // A few more common misspellings.
+    gcWord("greatful", "grateful"), gcWord("comming", "coming"),
+    gcWord("runing", "running"), gcWord("writting", "writing"), gcWord("begining", "beginning"),
+    gcWord("finaly", "finally"), gcWord("reccommend", "recommend"), gcWord("recomend", "recommend"),
+    gcWord("succesful", "successful"), gcWord("succesfully", "successfully"),
+    gcWord("whould", "would"), gcWord("shoudl", "should"), gcWord("coudl", "could"), gcWord("aparently", "apparently"),
+    gcWord("basicly", "basically"), gcWord("completly", "completely"), gcWord("definetly", "definitely"),
+    gcWord("differnt", "different"), gcWord("diffrent", "different"), gcWord("probaly", "probably"),
+    gcWord("probally", "probably"), gcWord("realy", "really"), gcWord("reallly", "really"),
+    gcWord("usualy", "usually"), gcWord("acheive", "achieve"), gcWord("beautifull", "beautiful"),
+    gcWord("carefull", "careful"), gcWord("wonderfull", "wonderful"), gcWord("greif", "grief"),
+    gcWord("peice", "piece"), gcWord("cheif", "chief"), gcWord("releif", "relief"), gcWord("percieve", "perceive"),
+    gcWord("concious", "conscious"), gcWord("curiousity", "curiosity"), gcWord("desicion", "decision"),
+    gcWord("dissapoint", "disappoint"), gcWord("dissapear", "disappear"), gcWord("familar", "familiar"),
+    gcWord("foriegn", "foreign"), gcWord("independant", "independent"), gcWord("liesure", "leisure"),
+    gcWord("maintainance", "maintenance"), gcWord("mispell", "misspell"), gcWord("noticable", "noticeable"),
+    gcWord("occurance", "occurrence"), gcWord("posession", "possession"), gcWord("prefered", "preferred"),
+    gcWord("questionaire", "questionnaire"), gcWord("refered", "referred"), gcWord("relevent", "relevant"),
+    gcWord("resturant", "restaurant"), gcWord("tounge", "tongue"), gcWord("vaccum", "vacuum"),
+    gcWord("wether", "whether"), gcWord("writen", "written"), gcWord("alote", "a lot"),
+    // ---- Punctuation and spacing (no dictionary needed) -------------------
+    // Missing space between two sentences: "good.The" -> "good. The".
+    { re: /([a-z0-9])([.!?])([A-Z])/g, fix: (m) => m[1] + m[2] + " " + m[3] },
+    // Missing space after a comma or semicolon: "red,white" -> "red, white".
+    { re: /([a-z0-9])([,;])([A-Za-z])/g, fix: (m) => m[1] + m[2] + " " + m[3] },
+    // A stray space before punctuation: "word ," -> "word,".
+    { re: /([A-Za-z0-9])[  ]+([,;:!?])/g, fix: (m) => m[1] + m[2] },
+    // Two or more spaces collapse to one (the visible char before them is kept so
+    // there is something to click).
+    { re: /(\S)[  ]{2,}/g, fix: (m) => m[1] + " " },
+    // Repeated commas: ",," -> ",".
+    { re: /,{2,}/g, fix: () => "," }
   ];
   // A doubled word ("the the") collapses to one — but plenty of repeats are
   // deliberate in prose and dialogue, so those are left alone.
@@ -9963,7 +10008,7 @@
       node.parentNode.replaceChild(frag, node);
     });
     if (count) toast(count + (count === 1 ? " suggestion. Tap the green word to fix it." : " suggestions. Tap a green word to fix it."));
-    else toast("No grammar issues found. Looks clean.");
+    else toast("No grammar, spacing, or punctuation issues found. Words your browser marks with a red underline are spelling it flags as you type.");
   }
 
   // A small popover offering the fix for one flagged word.
@@ -10337,8 +10382,24 @@
   function decorateEditorEmbeds() {
     const ed = $("#we-body"); if (!ed) return;
     const BLK = /^(p|div|h[1-6]|ul|ol|blockquote|pre)$/;
-    ed.querySelectorAll("figure.embed--rich, a.embed--link").forEach(el => {
-      el.setAttribute("contenteditable", "false");
+    ed.querySelectorAll("a.embed--link").forEach(el => el.setAttribute("contenteditable", "false"));
+    // Every rich embed (video, map, audio, document, site) gets the same width
+    // and remove controls an inserted image has, so the writer can resize or take
+    // one out without editing Markdown by hand.
+    ed.querySelectorAll("figure.embed--rich").forEach(fig => {
+      fig.setAttribute("contenteditable", "false");
+      if (!fig.getAttribute("data-size")) fig.setAttribute("data-size", fig.classList.contains("is-small") ? "small" : fig.classList.contains("is-medium") ? "medium" : "full");
+      if (!/\bis-(small|medium|full)\b/.test(fig.className)) fig.classList.add("is-" + (fig.getAttribute("data-size") || "full"));
+      if (!fig.querySelector(".embed-tools")) {
+        const tools = document.createElement("div");
+        tools.className = "embed-tools"; tools.setAttribute("contenteditable", "false");
+        tools.innerHTML =
+          `<button type="button" class="img-tool" data-embed-size="small" title="Small">S</button>` +
+          `<button type="button" class="img-tool" data-embed-size="medium" title="Medium">M</button>` +
+          `<button type="button" class="img-tool" data-embed-size="full" title="Full width">L</button>` +
+          `<button type="button" class="img-tool img-tool--del" data-embed-del title="Remove embed">${icon("trash", 13)}</button>`;
+        fig.appendChild(tools);
+      }
     });
     ed.querySelectorAll("figure.embed, a.embed--link").forEach(el => {
       const nx = el.nextElementSibling;
