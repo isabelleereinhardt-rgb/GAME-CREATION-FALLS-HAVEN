@@ -113,45 +113,95 @@
   function persona() { return PERSONAS[state.personality] || PERSONAS.sweet; }
 
   /* ---------- coat palettes ---------- */
+  // --paw / --paw-line: the cream tips of his tail and paws get their own
+  // slightly warmer tone plus a soft outline, so they read against any theme
+  // (a near-white paw on a light page used to disappear).
   var SKIN_CSS =
-    '[data-skin="tabby"]{--fur:#e8963f;--fur2:#cf7f2e;--fur3:#c9741f;--head:#eda256;--belly:#f8e6d2;--ear:#eeb0ae;--nose:#e08b96;--eye:#3a2a22}' +
-    '[data-skin="calico"]{--fur:#f3e7d8;--fur2:#dcc6ae;--fur3:#c98a4a;--head:#f7efe4;--belly:#fffaf3;--ear:#eeb0ae;--nose:#e08b96;--eye:#3a2a22}' +
-    '[data-skin="grey"]{--fur:#9aa3ad;--fur2:#7c858f;--fur3:#68717c;--head:#a7b0b9;--belly:#e9edf1;--ear:#e0aeb6;--nose:#d8929c;--eye:#2c3238}' +
-    '[data-skin="tux"]{--fur:#2f2b30;--fur2:#221f24;--fur3:#4a444c;--head:#35313a;--belly:#f6f2ee;--ear:#c98f9a;--nose:#dba0aa;--eye:#f0d98a}' +
-    '[data-skin="cream"]{--fur:#f2ded0;--fur2:#e2c9b6;--fur3:#cbab93;--head:#f6e6da;--belly:#fffaf5;--ear:#eeb0ae;--nose:#dd97a3;--eye:#6f7f9c}' +
-    '[data-skin="siamese"]{--fur:#e6dcd0;--fur2:#c3b3a4;--fur3:#6b5648;--head:#efe7dd;--belly:#fdf8f3;--ear:#8a6a5c;--nose:#d79aa2;--eye:#5f8fc4}';
+    '[data-skin="tabby"]{--fur:#e8963f;--fur2:#cf7f2e;--fur3:#c9741f;--head:#eda256;--belly:#f8e6d2;--ear:#eeb0ae;--nose:#e08b96;--eye:#3a2a22;--paw:#fbecd8;--paw-line:#d8a874}' +
+    '[data-skin="calico"]{--fur:#f3e7d8;--fur2:#dcc6ae;--fur3:#c98a4a;--head:#f7efe4;--belly:#fffaf3;--ear:#eeb0ae;--nose:#e08b96;--eye:#3a2a22;--paw:#fbf1e6;--paw-line:#d3b78f}' +
+    '[data-skin="grey"]{--fur:#9aa3ad;--fur2:#7c858f;--fur3:#68717c;--head:#a7b0b9;--belly:#e9edf1;--ear:#e0aeb6;--nose:#d8929c;--eye:#2c3238;--paw:#eef2f6;--paw-line:#b3bcc5}' +
+    '[data-skin="tux"]{--fur:#2f2b30;--fur2:#221f24;--fur3:#4a444c;--head:#35313a;--belly:#f6f2ee;--ear:#c98f9a;--nose:#dba0aa;--eye:#f0d98a;--paw:#f4efe8;--paw-line:#b7afa4}' +
+    '[data-skin="cream"]{--fur:#f2ded0;--fur2:#e2c9b6;--fur3:#cbab93;--head:#f6e6da;--belly:#fffaf5;--ear:#eeb0ae;--nose:#dd97a3;--eye:#6f7f9c;--paw:#fdf3e9;--paw-line:#d8bfa4}' +
+    '[data-skin="siamese"]{--fur:#e6dcd0;--fur2:#c3b3a4;--fur3:#6b5648;--head:#efe7dd;--belly:#fdf8f3;--ear:#8a6a5c;--nose:#d79aa2;--eye:#5f8fc4;--paw:#f6efe6;--paw-line:#c6b6a4}';
 
-  /* ---------- drawings (author's own art, ported verbatim) ---------- */
-  function accessorySvg(acc) {
-    return ({
-      bell: '<path d="M28.9 23.2A9.6 9.6 0 0 1 22.6 29.3" stroke="#b0567a" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M26.2 27.6v1.2" stroke="#7d5a20" stroke-width=".8" stroke-linecap="round"/><circle cx="26.2" cy="30.4" r="2.2" fill="#e6b95e" stroke="#7d5a20" stroke-width=".8"/><path d="M25.3 30.1h1.8" stroke="#7d5a20" stroke-width=".7" stroke-linecap="round"/>',
-      bow: '<path d="M28.9 23.2A9.6 9.6 0 0 1 22.6 29.3" stroke="#e8799c" stroke-width="2.2" fill="none" stroke-linecap="round"/><path d="M26.4 27.4l-4-2.4.7 5z" fill="#e8799c" stroke="#93304f" stroke-width=".6"/><path d="M27.6 27.2l4.3-1.5-1.2 4.8z" fill="#e8799c" stroke="#93304f" stroke-width=".6"/><circle cx="27" cy="27.8" r="1.4" fill="#f7b3c7" stroke="#93304f" stroke-width=".5"/>',
-      crown: '<path d="M14.8 12.2l1-6 2.9 2.9 1.8-3.8 1.8 3.8 2.9-2.9 1 6z" fill="#e6b95e" stroke="#7d5a20" stroke-width=".9"/><circle cx="17.4" cy="10.4" r=".85" fill="#b0567a"/><circle cx="20.5" cy="9.7" r=".95" fill="#b0567a"/><circle cx="23.6" cy="10.4" r=".85" fill="#b0567a"/>',
-      flowers: '<path d="M13.4 13q3.2-4.4 6.8-4.4T27 13" stroke="#6f8f5f" stroke-width="1.4" fill="none" stroke-linecap="round"/><circle cx="14.6" cy="11.8" r="2" fill="#fdf2f5" stroke="#b0567a" stroke-width=".7"/><circle cx="20.2" cy="8.8" r="2.3" fill="#fdf2f5" stroke="#b0567a" stroke-width=".7"/><circle cx="25.8" cy="11.8" r="2" fill="#fdf2f5" stroke="#b0567a" stroke-width=".7"/><circle cx="14.6" cy="11.8" r=".8" fill="#e6b95e"/><circle cx="20.2" cy="8.8" r=".9" fill="#e6b95e"/><circle cx="25.8" cy="11.8" r=".8" fill="#e6b95e"/>',
-      pearls: '<circle cx="28.6" cy="24" r="1.5" fill="#fbf7f2" stroke="#8f7f78" stroke-width=".6"/><circle cx="27.3" cy="26.3" r="1.5" fill="#fbf7f2" stroke="#8f7f78" stroke-width=".6"/><circle cx="25.5" cy="28.1" r="1.5" fill="#fbf7f2" stroke="#8f7f78" stroke-width=".6"/><circle cx="23.2" cy="29.3" r="1.5" fill="#fbf7f2" stroke="#8f7f78" stroke-width=".6"/>',
-      scarf: '<path d="M29.4 22.6A10.2 10.2 0 0 1 22.4 30" stroke="#b0567a" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M23.8 30l-2 6.6 4.4-1.4z" fill="#95496a" stroke="#7c3350" stroke-width=".6"/><path d="M28.4 24.4A8.4 8.4 0 0 1 23.4 29.2" stroke="#f7c8d8" stroke-width=".9" fill="none"/>',
-      pendant: '<path d="M28.9 23.2A9.6 9.6 0 0 1 22.6 29.3" stroke="#c9a15c" stroke-width="1.3" fill="none" stroke-linecap="round"/><path d="M26.2 28.6l.9 1.9 2 .2-1.5 1.4.5 2-1.9-1.1-1.9 1.1.5-2-1.5-1.4 2-.2z" fill="#e6b95e" stroke="#7d5a20" stroke-width=".6"/>',
-      kerchief: '<path d="M28.9 23.2A9.6 9.6 0 0 1 22.6 29.3l7 6.2z" fill="#8c3b57" stroke="#571f34" stroke-width=".8"/><circle cx="26.4" cy="27.6" r=".7" fill="#f7c8d8"/><circle cx="27.8" cy="30.4" r=".7" fill="#f7c8d8"/><circle cx="24.8" cy="29.6" r=".7" fill="#f7c8d8"/>'
-    })[acc] || "";
-  }
+  /* ---------- drawings (author's own art) ----------
+     Accessories are drawn in two layers so they sit like something he is
+     wearing rather than a sticker on his cheek: a short piece of the collar
+     (accBack) tucks behind his head, coming round from the neck; the collar
+     band and its charm (accFront) cross the front of his throat, centred
+     under his chin. Head-top pieces (crown, flower crown) are front-only. */
+  var ACC_ART = {
+    // collar band under the chin + a gold bell hanging at the centre
+    bell: {
+      back: '<path d="M31.4 23.8Q31 26.4 28.6 28.8" stroke="#a4506f" stroke-width="2" fill="none" stroke-linecap="round"/>',
+      front: '<path d="M11 26.6Q20 32.8 29 26.6" stroke="#b0567a" stroke-width="2.4" fill="none" stroke-linecap="round"/>' +
+        '<path d="M20 31.6v1.5" stroke="#7d5a20" stroke-width=".9" stroke-linecap="round"/>' +
+        '<circle cx="20" cy="34.9" r="2.3" fill="#e6b95e" stroke="#7d5a20" stroke-width=".8"/>' +
+        '<path d="M19 34.5h2" stroke="#7d5a20" stroke-width=".7" stroke-linecap="round"/><circle cx="19.4" cy="34.1" r=".5" fill="#f6dca0"/>'
+    },
+    // collar band + a ribbon bow knotted at the centre
+    bow: {
+      back: '<path d="M31.4 23.8Q31 26.4 28.6 28.8" stroke="#d76e90" stroke-width="1.9" fill="none" stroke-linecap="round"/>',
+      front: '<path d="M11 26.6Q20 32.4 29 26.6" stroke="#e8799c" stroke-width="2.2" fill="none" stroke-linecap="round"/>' +
+        '<path d="M20 31.9 14.6 29.9 15.5 34.6Z" fill="#e8799c" stroke="#93304f" stroke-width=".6" stroke-linejoin="round"/>' +
+        '<path d="M20 31.9 25.4 29.9 24.5 34.6Z" fill="#e8799c" stroke="#93304f" stroke-width=".6" stroke-linejoin="round"/>' +
+        '<circle cx="20" cy="32" r="1.5" fill="#f7b3c7" stroke="#93304f" stroke-width=".5"/>'
+    },
+    // a thin cord + a little gold star pendant
+    pendant: {
+      back: '<path d="M31.4 24Q31 26.4 28.8 28.6" stroke="#bd9550" stroke-width="1.2" fill="none" stroke-linecap="round"/>',
+      front: '<path d="M11 26.8Q20 32.4 29 26.8" stroke="#c9a15c" stroke-width="1.3" fill="none" stroke-linecap="round"/>' +
+        '<path d="M20 31.9l.95 1.95 2.15.2-1.6 1.45.5 2.1-2-1.15-2 1.15.5-2.1-1.6-1.45 2.15-.2z" fill="#e6b95e" stroke="#7d5a20" stroke-width=".6" stroke-linejoin="round"/>'
+    },
+    // a strand of pearls following the collar line
+    pearls: {
+      back: '<circle cx="30.8" cy="25.2" r="1.3" fill="#efe7dd" stroke="#a89a90" stroke-width=".55"/><circle cx="29.8" cy="27.6" r="1.3" fill="#efe7dd" stroke="#a89a90" stroke-width=".55"/>',
+      front: '<circle cx="11.8" cy="27.2" r="1.4" fill="#fbf7f2" stroke="#8f7f78" stroke-width=".6"/><circle cx="14.4" cy="29.4" r="1.4" fill="#fbf7f2" stroke="#8f7f78" stroke-width=".6"/><circle cx="17.4" cy="30.9" r="1.4" fill="#fbf7f2" stroke="#8f7f78" stroke-width=".6"/><circle cx="20.6" cy="31.3" r="1.4" fill="#fbf7f2" stroke="#8f7f78" stroke-width=".6"/><circle cx="23.6" cy="30.6" r="1.4" fill="#fbf7f2" stroke="#8f7f78" stroke-width=".6"/><circle cx="26.4" cy="29" r="1.4" fill="#fbf7f2" stroke="#8f7f78" stroke-width=".6"/>'
+    },
+    // a soft winter scarf wrapping the throat, with a hanging end
+    scarf: {
+      back: '<path d="M31.6 23.4Q31.2 26.4 28.4 29.2" stroke="#9c4a68" stroke-width="3.6" fill="none" stroke-linecap="round"/>',
+      front: '<path d="M11 26.4Q20 33.2 29 26.4" stroke="#b0567a" stroke-width="4.6" fill="none" stroke-linecap="round"/>' +
+        '<path d="M16.6 31.8l-2.2 6.8 4.8-1.3z" fill="#95496a" stroke="#7c3350" stroke-width=".6" stroke-linejoin="round"/>' +
+        '<path d="M13 28.4Q20 33 27 28.4" stroke="#f7c8d8" stroke-width=".9" fill="none"/>'
+    },
+    // a triangle kerchief knotted at the throat
+    kerchief: {
+      back: '<path d="M31.4 23.8Q31 26.4 28.6 28.8" stroke="#7a3149" stroke-width="2" fill="none" stroke-linecap="round"/>',
+      front: '<path d="M13.8 30.4 26.2 30.4 20 39Z" fill="#8c3b57" stroke="#571f34" stroke-width=".8" stroke-linejoin="round"/>' +
+        '<circle cx="20" cy="30.4" r="1.7" fill="#8c3b57" stroke="#571f34" stroke-width=".7"/>' +
+        '<circle cx="18.8" cy="32.6" r=".7" fill="#f7c8d8"/><circle cx="21.4" cy="32.4" r=".7" fill="#f7c8d8"/><circle cx="20" cy="35" r=".7" fill="#f7c8d8"/>'
+    },
+    // head-top pieces: no collar, just the crown / flowers resting on his head
+    crown: {
+      back: '', front: '<path d="M14.8 12.2l1-6 2.9 2.9 1.8-3.8 1.8 3.8 2.9-2.9 1 6z" fill="#e6b95e" stroke="#7d5a20" stroke-width=".9" stroke-linejoin="round"/><circle cx="17.4" cy="10.4" r=".85" fill="#b0567a"/><circle cx="20.5" cy="9.7" r=".95" fill="#b0567a"/><circle cx="23.6" cy="10.4" r=".85" fill="#b0567a"/>'
+    },
+    flowers: {
+      back: '', front: '<path d="M13.4 13q3.2-4.4 6.8-4.4T27 13" stroke="#6f8f5f" stroke-width="1.4" fill="none" stroke-linecap="round"/><circle cx="14.6" cy="11.8" r="2" fill="#fdf2f5" stroke="#b0567a" stroke-width=".7"/><circle cx="20.2" cy="8.8" r="2.3" fill="#fdf2f5" stroke="#b0567a" stroke-width=".7"/><circle cx="25.8" cy="11.8" r="2" fill="#fdf2f5" stroke="#b0567a" stroke-width=".7"/><circle cx="14.6" cy="11.8" r=".8" fill="#e6b95e"/><circle cx="20.2" cy="8.8" r=".9" fill="#e6b95e"/><circle cx="25.8" cy="11.8" r=".8" fill="#e6b95e"/>'
+    }
+  };
+  function accBack(acc) { var a = ACC_ART[acc]; return a ? a.back : ""; }
+  function accFront(acc) { var a = ACC_ART[acc]; return a ? a.front : ""; }
   function walkerSvg() {
     return '<svg width="86" height="52" viewBox="0 0 72 48" fill="none" aria-hidden="true">' +
       // tail (behind the body), with a lighter tip; rotates as one group
-      '<g class="lucky-tail"><path d="M57 27q11 -1 8.6 -15.4" stroke="var(--fur)" stroke-width="5.4" fill="none" stroke-linecap="round"/><circle cx="65.4" cy="11.8" r="3" fill="var(--belly)"/></g>' +
+      '<g class="lucky-tail"><path d="M57 27q11 -1 8.6 -15.4" stroke="var(--fur)" stroke-width="5.4" fill="none" stroke-linecap="round"/><circle cx="65.4" cy="11.8" r="3" fill="var(--paw)" stroke="var(--paw-line)" stroke-width=".7"/></g>' +
       // back legs (darker for depth), with pale paw tips
-      '<g class="lucky-leg" style="animation-delay:-.31s"><rect x="47" y="30.5" width="6" height="13.5" rx="3" fill="var(--fur2)"/><ellipse cx="50" cy="44.2" rx="3.4" ry="2" fill="var(--belly)"/></g>' +
-      '<g class="lucky-leg"><rect x="28.5" y="30.5" width="6" height="13.5" rx="3" fill="var(--fur2)"/><ellipse cx="31.5" cy="44.2" rx="3.4" ry="2" fill="var(--belly)"/></g>' +
+      '<g class="lucky-leg" style="animation-delay:-.31s"><rect x="47" y="30.5" width="6" height="13.5" rx="3" fill="var(--fur2)"/><ellipse cx="50" cy="44" rx="3.4" ry="2.1" fill="var(--paw)" stroke="var(--paw-line)" stroke-width=".7"/></g>' +
+      '<g class="lucky-leg"><rect x="28.5" y="30.5" width="6" height="13.5" rx="3" fill="var(--fur2)"/><ellipse cx="31.5" cy="44" rx="3.4" ry="2.1" fill="var(--paw)" stroke="var(--paw-line)" stroke-width=".7"/></g>' +
       // body: one smooth oval, with a soft white belly
       '<ellipse cx="42" cy="26" rx="20" ry="11.6" fill="var(--fur)"/>' +
       '<ellipse cx="39" cy="32" rx="14" ry="5.2" fill="var(--belly)"/>' +
       // front legs (coat colour), with pale paw tips
-      '<g class="lucky-leg"><rect x="52.5" y="30.5" width="6" height="13.5" rx="3" fill="var(--fur)"/><ellipse cx="55.5" cy="44.2" rx="3.4" ry="2" fill="var(--belly)"/></g>' +
-      '<g class="lucky-leg" style="animation-delay:-.31s"><rect x="33.5" y="30.5" width="6" height="13.5" rx="3" fill="var(--fur)"/><ellipse cx="36.5" cy="44.2" rx="3.4" ry="2" fill="var(--belly)"/></g>' +
+      '<g class="lucky-leg"><rect x="52.5" y="30.5" width="6" height="13.5" rx="3" fill="var(--fur)"/><ellipse cx="55.5" cy="44" rx="3.4" ry="2.1" fill="var(--paw)" stroke="var(--paw-line)" stroke-width=".7"/></g>' +
+      '<g class="lucky-leg" style="animation-delay:-.31s"><rect x="33.5" y="30.5" width="6" height="13.5" rx="3" fill="var(--fur)"/><ellipse cx="36.5" cy="44" rx="3.4" ry="2.1" fill="var(--paw)" stroke="var(--paw-line)" stroke-width=".7"/></g>' +
       // ears: clean triangles with a pink inner
       '<path d="M9.4 12.6 12.4 2.3 19.4 9.1Z" fill="var(--fur)"/>' +
       '<path d="M21.4 9 28.6 2.5 30.6 12.7Z" fill="var(--fur)"/>' +
       '<path d="M12 10.7 13.4 5.1 17.1 8.7Z" fill="var(--ear)"/>' +
       '<path d="M23.4 8.9 27.1 5.5 28.4 10.9Z" fill="var(--ear)"/>' +
+      // the collar comes round from behind the neck (tucks under the head)
+      accBack(state.acc) +
       // head
       '<circle cx="20" cy="19.2" r="12.4" fill="var(--head)"/>' +
       // cheeks
@@ -166,14 +216,62 @@
       '<path d="M20 25.5c-1 1.3-3 1.3-3.8.1M20 25.5c1 1.3 3 1.3 3.8.1" stroke="var(--fur3)" stroke-width="1.1" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' +
       // whiskers, both sides of the muzzle (mirrored around the head centre, x=20)
       '<path d="M3.4 20.6 11 21.6M3 23.5 11 23.3M3.4 26.4 11 25 M36.6 20.6 29 21.6M37 23.5 29 23.3M36.6 26.4 29 25" stroke="var(--fur3)" stroke-width=".8" opacity=".5" stroke-linecap="round"/>' +
-      accessorySvg(state.acc) + '</svg>';
+      // the collar band + charm, across the front of his throat
+      accFront(state.acc) + '</svg>';
   }
   var COMPANION_SVG = {
-    mouse: '<svg width="36" height="24" viewBox="0 0 36 24" fill="none"><path d="M23 16c7 .8 10-1.4 9.4-4.4" stroke="#a99e98" stroke-width="1.5" fill="none" stroke-linecap="round"></path><ellipse cx="15" cy="15" rx="9.6" ry="6.4" fill="#a9a29d"></ellipse><circle cx="9.6" cy="8.8" r="3.7" fill="#c0b9b4"></circle><circle cx="16.4" cy="7.6" r="3.5" fill="#c0b9b4"></circle><circle cx="9.6" cy="8.8" r="2.1" fill="#e0b4bd"></circle><circle cx="16.4" cy="7.6" r="2" fill="#e0b4bd"></circle><circle cx="6.6" cy="14.4" r="4.8" fill="#b8b1ac"></circle><circle cx="4" cy="13.6" r="1" fill="#33272a"></circle><circle cx="2.2" cy="15.8" r="1" fill="#d98c9a"></circle><circle cx="12" cy="21" r="1.5" fill="#e0b4bd"></circle><circle cx="18.4" cy="21.2" r="1.5" fill="#e0b4bd"></circle></svg>',
-    duckling: '<svg width="32" height="30" viewBox="0 0 32 30" fill="none"><ellipse cx="18" cy="18.6" rx="9.6" ry="7.4" fill="#f0cb63"></ellipse><path d="M19.4 15.4c4.2 1.6 4.8 5.2 1.6 7-2.6-.8-3.4-4.2-1.6-7z" fill="#e0b247"></path><circle cx="10.4" cy="10" r="5.6" fill="#f6dd8f"></circle><path d="M5.4 9.4l-4.2 1 4 2.4z" fill="#e08a3c" stroke="#b8681f" stroke-width=".6"></path><circle cx="8.8" cy="8.8" r="1.1" fill="#33272a"></circle><path d="M15 25.6l-1 3.4M21 25.6l1 3.4" stroke="#e08a3c" stroke-width="1.6" stroke-linecap="round"></path></svg>',
-    bee: '<svg width="32" height="26" viewBox="0 0 32 26" fill="none"><ellipse cx="17" cy="15" rx="8.6" ry="6" fill="#f0c65c" stroke="#a97f24" stroke-width=".6"></ellipse><path d="M14 9.6v10.8M18 9.6v10.6M22 11.4v7" stroke="#3a2f22" stroke-width="2.2" stroke-linecap="round"></path><path d="M25.4 15l3.4-1.6v3.2z" fill="#3a2f22"></path><ellipse cx="15" cy="7.4" rx="5.4" ry="3.1" fill="#eaf3fa" stroke="#bcd2e2" stroke-width=".7" opacity=".9"></ellipse><circle cx="8" cy="14.4" r="4.6" fill="#3a2f22"></circle><circle cx="6.2" cy="13.4" r="1.1" fill="#fdf7ef"></circle></svg>',
-    snail: '<svg width="36" height="26" viewBox="0 0 36 26" fill="none"><path d="M4 21.4h17" stroke="#cbb69c" stroke-width="4.4" stroke-linecap="round"></path><path d="M6 19.6q1.4-6 7-6" stroke="#cbb69c" stroke-width="4" fill="none" stroke-linecap="round"></path><circle cx="21.6" cy="12.6" r="8.4" fill="#d9a768" stroke="#a97b45" stroke-width="1"></circle><path d="M21.6 12.6a3.2 3.2 0 0 1 3.2 3.2 6.4 6.4 0 0 1-9.6-1.6 9 9 0 0 1 12.8 1" fill="none" stroke="#a97b45" stroke-width="1.2"></path><circle cx="7" cy="16.4" r="3.4" fill="#d6c2a8"></circle><circle cx="4" cy="8.4" r="1.1" fill="#33272a"></circle><circle cx="10" cy="8.2" r="1.1" fill="#33272a"></circle></svg>',
-    kitten: '<svg width="40" height="28" viewBox="0 0 40 28" fill="none"><path class="lucky-tail" d="M28 16.4c5.6-.2 5.2-5 3.6-8" stroke="var(--fur)" stroke-width="3.2" stroke-linecap="round"></path><rect class="lucky-leg" x="15" y="18.6" width="3.2" height="7.4" rx="1.6" fill="var(--fur2)"></rect><rect class="lucky-leg" x="22.4" y="18.6" width="3.2" height="7.4" rx="1.6" fill="var(--fur2)" style="animation-delay:-.31s"></rect><rect x="11.6" y="11.6" width="17" height="10" rx="5" fill="var(--fur)"></rect><ellipse cx="20.6" cy="20" rx="6.6" ry="2.4" fill="var(--belly)"></ellipse><rect class="lucky-leg" x="18.6" y="18.6" width="3.2" height="7.4" rx="1.6" fill="var(--fur)" style="animation-delay:-.16s"></rect><rect class="lucky-leg" x="25.4" y="18.6" width="3.2" height="7.4" rx="1.6" fill="var(--fur)"></rect><path d="M6 8.6l.9-5 3.9 3.7z" fill="var(--fur)"></path><path d="M12.6 7.6l4.1-3.5.3 4.9z" fill="var(--fur)"></path><circle cx="11" cy="12.6" r="6.4" fill="var(--head)"></circle><circle cx="8.6" cy="12.4" r="1.3" fill="var(--eye)"></circle><circle cx="13.4" cy="12.4" r="1.3" fill="var(--eye)"></circle><path d="M10 15h2l-1 1.2z" fill="var(--nose)"></path></svg>'
+    // all face left, the way they walk. Clean single-body shapes with soft
+    // outlines so they read on their own rather than as overlapping blobs.
+    mouse: '<svg width="38" height="24" viewBox="0 0 38 24" fill="none">' +
+      '<path d="M26 16q8 2 9-5" stroke="#b7aca6" stroke-width="1.6" fill="none" stroke-linecap="round"/>' +
+      '<ellipse cx="18" cy="15" rx="10" ry="6.6" fill="#b0a8a3" stroke="#94897f" stroke-width=".8"/>' +
+      '<circle cx="9.6" cy="8.2" r="4.3" fill="#b8b0ab" stroke="#94897f" stroke-width=".8"/>' +
+      '<circle cx="9.6" cy="8.2" r="2.4" fill="#e3b9c1"/>' +
+      '<circle cx="8.6" cy="14.4" r="5.5" fill="#bcb4af" stroke="#94897f" stroke-width=".8"/>' +
+      '<circle cx="6.2" cy="13.6" r="1" fill="#33272a"/>' +
+      '<ellipse cx="3.2" cy="15.4" rx="1.4" ry="1" fill="#d98c9a"/>' +
+      '<path d="M3.2 15 .6 13.9M3.2 15.9 .6 16.8" stroke="#a99a92" stroke-width=".5" stroke-linecap="round"/>' +
+      '<ellipse cx="14.4" cy="21" rx="1.8" ry="1.1" fill="#e3b9c1"/>' +
+      '<ellipse cx="20.8" cy="21.2" rx="1.8" ry="1.1" fill="#e3b9c1"/></svg>',
+    duckling: '<svg width="34" height="30" viewBox="0 0 34 30" fill="none">' +
+      '<ellipse cx="19" cy="18.6" rx="9.8" ry="7.6" fill="#f4d06a" stroke="#d9a94a" stroke-width=".9"/>' +
+      '<path d="M20 15.4q5 1 4.6 6.2-3.4.4-4.6-6.2z" fill="#e6bd52" stroke="#d1a244" stroke-width=".7"/>' +
+      '<circle cx="10.4" cy="9.6" r="6" fill="#f6dd8f" stroke="#e2c56a" stroke-width=".8"/>' +
+      '<path d="M9.4 3.8q.9-1.7 2.2-.4" stroke="#e2c56a" stroke-width="1.2" fill="none" stroke-linecap="round"/>' +
+      '<path d="M4.6 8.9 .5 10.4 4.6 12z" fill="#ef9a3c" stroke="#c9761c" stroke-width=".6" stroke-linejoin="round"/>' +
+      '<circle cx="8.4" cy="8.4" r="1.2" fill="#33272a"/>' +
+      '<path d="M16 25.8l-1.2 3.4M22 25.8l1.2 3.4" stroke="#ef9a3c" stroke-width="1.8" stroke-linecap="round"/></svg>',
+    bee: '<svg width="34" height="26" viewBox="0 0 34 26" fill="none">' +
+      '<path d="M28.4 15l4.2-1.5-.2 3.4z" fill="#3a2f22"/>' +
+      '<ellipse cx="17" cy="15" rx="9.4" ry="6.4" fill="#f0c65c" stroke="#a97f24" stroke-width=".9"/>' +
+      '<path d="M15.2 9.4v11.2M19.4 9.8v10.4M23 11.6v6.8" stroke="#3a2f22" stroke-width="2.2" stroke-linecap="round"/>' +
+      '<ellipse cx="15" cy="7.6" rx="4.6" ry="2.8" fill="#eaf3fa" stroke="#bcd2e2" stroke-width=".8" opacity=".92" transform="rotate(-16 15 7.6)"/>' +
+      '<ellipse cx="20.4" cy="8.2" rx="3.8" ry="2.4" fill="#eaf3fa" stroke="#bcd2e2" stroke-width=".8" opacity=".92" transform="rotate(-4 20.4 8.2)"/>' +
+      '<circle cx="8.6" cy="14.6" r="4.5" fill="#3a2f22"/>' +
+      '<circle cx="6.8" cy="13.4" r="1.1" fill="#fdf7ef"/>' +
+      '<path d="M7 10.7 5.5 7.2M10 10.7 11.3 7.2" stroke="#3a2f22" stroke-width="1" stroke-linecap="round"/>' +
+      '<circle cx="5.3" cy="6.5" r=".9" fill="#3a2f22"/><circle cx="11.5" cy="6.5" r=".9" fill="#3a2f22"/></svg>',
+    snail: '<svg width="38" height="26" viewBox="0 0 38 26" fill="none">' +
+      '<path d="M5 22.6q-3 0-3-2.4 0-2.6 3-2.6h15q3 0 3 2.6 0 2.4-3 2.4z" fill="#e9d6ba" stroke="#c8ad86" stroke-width=".9"/>' +
+      '<circle cx="7.5" cy="16.8" r="3.7" fill="#ecdac0" stroke="#c8ad86" stroke-width=".9"/>' +
+      '<path d="M5.8 13.7 4.6 9.2M9.2 13.5 10.3 9" stroke="#c8ad86" stroke-width="1.2" stroke-linecap="round"/>' +
+      '<circle cx="4.4" cy="8.4" r="1.2" fill="#4a3b2f"/><circle cx="10.5" cy="8.2" r="1.2" fill="#4a3b2f"/>' +
+      '<circle cx="23.5" cy="12.6" r="8.2" fill="#d9a768" stroke="#a97b45" stroke-width="1.1"/>' +
+      '<path d="M23.5 12.6a3.5 3.5 0 0 1 3.5 3.5 7 7 0 0 1-10.2-1.4 9.6 9.6 0 0 1 13.2 1" fill="none" stroke="#b98a52" stroke-width="1.2" stroke-linecap="round"/></svg>',
+    // Pip copies Lucky, so he wears Lucky's coat and shares his little gait.
+    kitten: '<svg width="40" height="28" viewBox="0 0 40 28" fill="none">' +
+      '<g class="lucky-tail"><path d="M30 17q6 0 5-6.4" stroke="var(--fur)" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="35" cy="10.6" r="1.8" fill="var(--paw)" stroke="var(--paw-line)" stroke-width=".5"/></g>' +
+      '<g class="lucky-leg"><rect x="24.5" y="18.4" width="3.6" height="7.8" rx="1.8" fill="var(--fur2)"/><ellipse cx="26.3" cy="26.2" rx="2" ry="1.2" fill="var(--paw)" stroke="var(--paw-line)" stroke-width=".5"/></g>' +
+      '<ellipse cx="21" cy="16.4" rx="10.4" ry="6.2" fill="var(--fur)"/>' +
+      '<ellipse cx="19.4" cy="19.4" rx="7" ry="3" fill="var(--belly)"/>' +
+      '<g class="lucky-leg" style="animation-delay:-.31s"><rect x="27" y="18.4" width="3.6" height="7.8" rx="1.8" fill="var(--fur)"/><ellipse cx="28.8" cy="26.2" rx="2" ry="1.2" fill="var(--paw)" stroke="var(--paw-line)" stroke-width=".5"/></g>' +
+      '<path d="M5 8.6 6.4 3.2 10.6 6.8Z" fill="var(--fur)"/><path d="M12.4 6.6 16.7 3.4 17.6 8.9Z" fill="var(--fur)"/>' +
+      '<path d="M6.6 7.7 7.4 4.7 9.7 6.6Z" fill="var(--ear)"/><path d="M13.6 6.5 15.9 4.9 16.5 8Z" fill="var(--ear)"/>' +
+      '<circle cx="11.2" cy="12" r="6.6" fill="var(--head)"/>' +
+      '<ellipse class="lucky-eye" cx="8.7" cy="12" rx="1.3" ry="1.6" fill="var(--eye)"/>' +
+      '<ellipse class="lucky-eye" cx="13.7" cy="12" rx="1.3" ry="1.6" fill="var(--eye)"/>' +
+      '<circle cx="9.2" cy="11.2" r=".5" fill="#fff"/><circle cx="14.2" cy="11.2" r=".5" fill="#fff"/>' +
+      '<path d="M10 15h2.4l-1.2 1.3z" fill="var(--nose)"/></svg>'
   };
   function companionSvg() {
     var id = state.companion;
@@ -267,7 +365,7 @@
     '@keyframes lucky-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.5px)}}' +
     '@keyframes lucky-leg{0%,100%{transform:rotate(15deg)}50%{transform:rotate(-15deg)}}' +
     '@keyframes lucky-tail{0%,100%{transform:rotate(-8deg)}50%{transform:rotate(10deg)}}' +
-    '@keyframes lucky-blink{0%,92%,100%{transform:scaleY(1)}96%{transform:scaleY(.1)}}' +
+    '@keyframes lucky-blink{0%,88%,100%{transform:scaleY(1)}91.5%{transform:scaleY(.08)}93.5%{transform:scaleY(.08)}97%{transform:scaleY(1)}}' +
     '@keyframes lucky-hop{0%,100%{transform:translateY(0) scaleY(1)}18%{transform:translateY(0) scaleY(.9)}50%{transform:translateY(-13px) scaleY(1.04)}82%{transform:translateY(0) scaleY(.94)}}' +
     '@keyframes lucky-hopaway{0%,58%{transform:translateX(0)}100%{transform:translateX(calc(-1 * var(--exit,92vw)))}}' +
     '.lucky-walk.treating{animation:lucky-hopaway 4.6s ease-in forwards}' +
