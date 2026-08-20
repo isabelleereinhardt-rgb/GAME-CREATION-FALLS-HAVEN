@@ -1273,6 +1273,14 @@ mark.hl--purple { background: rgba(190, 130, 255, 0.42); }
   font: 600 30px var(--font-display); color: var(--ink); padding: 4px 2px 12px; margin-bottom: 18px;
 }
 .title-input::placeholder { color: var(--ink3); }
+/* The chapter/part title sits under the work title, smaller: this is the name
+   the writer gives just this chapter (Wattpad-style). Optional to fill in. */
+.chtitle-input {
+  width: 100%; border: 0; border-bottom: 1px dashed var(--line); background: none; outline: none;
+  font: 600 18px var(--font-display); color: var(--ink2); padding: 2px 2px 9px; margin: -6px 0 18px;
+}
+.chtitle-input::placeholder { color: var(--ink3); font-weight: 500; font-size: 15px; }
+.chtitle-input:focus { border-bottom-color: var(--rose); }
 
 .save-flag { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink3); white-space: nowrap; }
 .save-flag.is-saved { color: var(--rose-ink); }
@@ -1363,25 +1371,31 @@ mark.hl--purple { background: rgba(190, 130, 255, 0.42); }
 /* Parts list inside the editor (chapters of the current work). */
 .parts { display: flex; flex-direction: column; gap: 2px; }
 .part-row {
-  display: flex; align-items: center; gap: 4px; width: 100%; border-radius: 8px; transition: background .14s;
+  display: flex; align-items: center; gap: 2px; width: 100%; border-radius: 8px; transition: background .14s;
 }
 .part-row:hover { background: var(--surface); }
 .part-row.is-current { background: var(--surface2); }
 .part-row.is-current .part-title { color: var(--rose-ink); }
+.part-row.is-dragging { background: var(--rose-wash); box-shadow: 0 6px 18px var(--shadow-lg); opacity: .96; }
+/* the drag handle: grab it to reorder chapters (works with mouse and touch) */
+.part-grip {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 34px;
+  color: var(--ink3); cursor: grab; border-radius: 6px; touch-action: none; opacity: 0; transition: opacity .14s;
+}
+.part-grip:active { cursor: grabbing; }
+.part-grip:hover { color: var(--rose-ink); background: var(--rose-wash); }
+.part-row:hover .part-grip, .part-row.is-current .part-grip, .part-row.is-dragging .part-grip { opacity: 1; }
 .part-open {
   flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer;
   background: none; border: 0; border-radius: 8px; padding: 8px 9px;
 }
 .part-n { flex: none; width: 22px; color: var(--ink3); font-size: 13px; font-variant-numeric: tabular-nums; }
 .part-title { flex: 1; color: var(--ink); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.part-move { flex: none; display: flex; gap: 1px; padding-right: 4px; opacity: 0; transition: opacity .14s; }
-.part-row:hover .part-move, .part-row.is-current .part-move { opacity: 1; }
-.part-mv { border: 0; background: none; color: var(--ink3); cursor: pointer; padding: 4px; border-radius: 6px; display: inline-flex; }
+.part-mv { flex: none; border: 0; background: none; color: var(--ink3); cursor: pointer; padding: 6px; border-radius: 6px; display: inline-flex; opacity: 0; transition: opacity .14s; }
+.part-row:hover .part-mv, .part-row.is-current .part-mv { opacity: 1; }
 .part-mv:hover:not(:disabled) { background: var(--rose-wash); color: var(--rose-ink); }
 .part-mv:disabled { opacity: .3; cursor: default; }
-.part-mv svg { transform: rotate(-90deg); }
-.part-mv--down svg { transform: rotate(90deg); }
-@media (hover: none) { .part-move { opacity: 1; } }
+@media (hover: none) { .part-grip, .part-mv { opacity: 1; } }
 
 /* Serialization picker + work-page schedule line. */
 .sched-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }

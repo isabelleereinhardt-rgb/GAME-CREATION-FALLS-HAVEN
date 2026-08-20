@@ -396,6 +396,35 @@ window.WispDB = (function () {
     r = await client.from("chapters").update({ number: b }).eq("work_id", workId).eq("number", tmp);
     if (r.error) throw r.error;
   }
+  // Renumber a work's chapters to an explicit order (an array of chapter ids,
+  // first = chapter 1). Two-phase so the unique (work_id, number) constraint
+  // never trips mid-move: park every row at a distinct negative number, then lay
+  // them down 1..n in the requested order. Author-scoped by the chapters RLS.
+  async function reorderChapters(workId, orderedIds) {
+    if (!user) throw new Error("Sign in first.");
+    const ids = (orderedIds || []).filter(Boolean);
+    if (!ids.length) return;
+    for (let i = 0; i < ids.length; i++) {
+      const r = await client.from("chapters").update({ number: -(i + 1) }).eq("id", ids[i]).eq("work_id", workId);
+      if (r.error) throw r.error;
+    }
+    for (let i = 0; i < ids.length; i++) {
+      const r = await client.from("chapters").update({ number: i + 1 }).eq("id", ids[i]).eq("work_id", workId);
+      if (r.error) throw r.error;
+    }
+  }
+  // The true number of comments on a work, counted from the rows themselves
+  // rather than the maintained comments_count column, so a total that has drifted
+  // (comments made before the trigger existed, or an odd cascade) still shows the
+  // real figure on the work page. Returns null if it can't be read.
+  async function countComments(workId) {
+    if (!client) return null;
+    try {
+      const { count, error } = await client.from("comments").select("id", { count: "exact", head: true }).eq("work_id", workId);
+      if (error) { if (missingTable(error)) return null; throw error; }
+      return count == null ? null : count;
+    } catch (e) { return null; }
+  }
   // Tag names already in the system, for the editor's autocomplete.
   async function listTags(limit) {
     if (!client) return [];
@@ -1532,7 +1561,7 @@ window.WispDB = (function () {
     onRecovery(fn) { recoveryListeners.add(fn); return () => recoveryListeners.delete(fn); },
     init, signUp, signIn, signOut, resetPassword, updatePassword,
     listWorks, getWork, getChapters, myWorks, listFeatured, isFeatured, setFeatured, unsetFeatured,
-    createWork, updateWork, deleteWork, setWorkStatus, firstChapter, saveChapter, deleteChapter, setChapterNumber, swapChapterNumbers, listTags, searchTags, listFandoms, getUpcoming, setTags,
+    createWork, updateWork, deleteWork, setWorkStatus, firstChapter, saveChapter, deleteChapter, setChapterNumber, swapChapterNumbers, reorderChapters, countComments, listTags, searchTags, listFandoms, getUpcoming, setTags,
     mySeries, getSeries, worksInSeries, findOrCreateSeries, updateSeries, deleteSeries, countInSeries,
     toggle, myRelations, getComments, postComment, editComment, deleteComment, recordRead, rateWork, getMyRating, myRatings, getReactions, toggleReaction, uploadCover,
     toggleFollow, amFollowing, followCounts, myFollowingIds, getNotifications,

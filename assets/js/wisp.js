@@ -2575,6 +2575,21 @@
       </div>`;
     startCountdowns();
     mountRating(w);
+    reconcileCommentTotal(w);
+  }
+
+  // The stat pill shows the maintained comments_count by default; confirm it
+  // against the real row count so a drifted total is corrected on the page the
+  // reader actually looks at. Silent no-op in demo mode or if the read fails.
+  async function reconcileCommentTotal(w) {
+    if (!w || !window.WispDB || !WispDB.enabled || !WispDB.countComments) return;
+    try {
+      const n = await WispDB.countComments(w.id);
+      if (n == null) return;
+      const el = document.querySelector(`[data-comment-total="${w.id}"]`);
+      if (el) el.textContent = WispDB.fmtCount(n);
+      if (LIVE.byId[w.id]) { LIVE.byId[w.id].commentsN = n; LIVE.byId[w.id].comments = WispDB.fmtCount(n); }
+    } catch (e) {}
   }
 
   /* ---- Eastern Time (ET) anchoring ---------------------------------------
@@ -4300,6 +4315,122 @@
     $$("#we-body-zone [data-page-down]").forEach(b => b.addEventListener("click", () => { const i = +b.dataset.pageDown; if (i < editorPages.length - 1) { [editorPages[i + 1], editorPages[i]] = [editorPages[i], editorPages[i + 1]]; refreshBodyZone(); } }));
   }
 
+  /* Wattpad-style chapter reordering: drag a row by its grip. Pointer events so
+     it works with a mouse and with touch alike. On drop the new order is
+     renumbered on the server and the panel refreshes in place — no full reload,
+     so the open chapter's unsaved text is never lost. */
+  function partsContainer() { return $("#screen-write .parts"); }
+  function rowAfterPointer(container, y) {
+    const rows = Array.prototype.slice.call(container.querySelectorAll(".part-row:not(.is-dragging)"));
+    let best = { off: -Infinity, el: null };
+    rows.forEach(el => {
+      const box = el.getBoundingClientRect();
+      const off = y - box.top - box.height / 2;
+      if (off < 0 && off > best.off) best = { off: off, el: el };
+    });
+    return best.el;
+  }
+  async function commitChapterOrder() {
+    const container = partsContainer();
+    if (!container || !liveEditor || !liveEditor.work) return;
+    const ids = Array.prototype.slice.call(container.querySelectorAll(".part-row")).map(r => r.getAttribute("data-part-id"));
+    const chs = liveEditor.allChapters || [];
+    const currentIds = chs.map(c => String(c.id));
+    // Order unchanged: just repaint (numbers/labels) and stop.
+    if (ids.length !== currentIds.length || ids.every((id, i) => id === currentIds[i])) { refreshChaptersPanel(); return; }
+    const wid = liveEditor.work.id;
+    try {
+      if (WispDB.reorderChapters) await WispDB.reorderChapters(wid, ids);
+      else {
+        // Fallback for older db.js: bubble each id into place with adjacent swaps.
+        for (let target = 0; target < ids.length; target++) {
+          let live = (await WispDB.getChapters(wid).catch(() => [])).slice().sort((a, b) => a.number - b.number);
+          const cur = live.findIndex(c => String(c.id) === ids[target]);
+          for (let j = cur; j > target; j--) { await WispDB.swapChapterNumbers(wid, live[j].number, live[j - 1].number); live = (await WispDB.getChapters(wid).catch(() => [])).slice().sort((a, b) => a.number - b.number); }
+        }
+      }
+      // Renumber the in-memory list to match the new order.
+      const byId = {}; chs.forEach(c => { byId[String(c.id)] = c; });
+      liveEditor.allChapters = ids.map((id, i) => { const c = byId[id]; if (c) c.number = i + 1; return c; }).filter(Boolean);
+      if (liveEditor.chapter) {
+        const me = byId[String(liveEditor.chapter.id)];
+        if (me) { liveEditor.chapter.number = me.number; try { history.replaceState(null, "", "#/write/" + wid + "/" + me.number); } catch (e) {} }
+      }
+      toast("Chapters reordered.");
+    } catch (e) { toast((e && e.message) || "Could not reorder."); }
+    refreshChaptersPanel();
+  }
+  function refreshChaptersPanel() {
+    const container = partsContainer(); if (!container) return;
+    container.innerHTML = livePartsHTML();
+    wireChapterPanel();
+  }
+  function wireChapterPanel() {
+    const container = partsContainer(); if (!container) return;
+    container.querySelectorAll("[data-part-grip]").forEach(grip => {
+      grip.addEventListener("pointerdown", (e) => {
+        if (!isLive() || !liveEditor || !liveEditor.work) return;
+        if ((liveEditor.allChapters || []).length < 2) return;
+        const row = grip.closest(".part-row"); if (!row) return;
+        e.preventDefault();
+        row.classList.add("is-dragging");
+        const move = (ev) => {
+          const after = rowAfterPointer(container, ev.clientY);
+          if (after == null) container.appendChild(row);
+          else if (after !== row) container.insertBefore(row, after);
+        };
+        const up = () => {
+          document.removeEventListener("pointermove", move);
+          document.removeEventListener("pointerup", up);
+          document.removeEventListener("pointercancel", up);
+          row.classList.remove("is-dragging");
+          commitChapterOrder();
+        };
+        document.addEventListener("pointermove", move);
+        document.addEventListener("pointerup", up);
+        document.addEventListener("pointercancel", up);
+      });
+    });
+    container.querySelectorAll("[data-ch-del]").forEach(b => b.addEventListener("click", () => {
+      if (!isLive() || !liveEditor || !liveEditor.work) { toast("Deleting chapters needs the connected site."); return; }
+      const num = +b.dataset.chDel;
+      const chs = liveEditor.allChapters || [];
+      if (chs.length <= 1) { toast("A work needs at least one chapter. Delete the work instead."); return; }
+      const ch = chs.find(c => c.number === num); if (!ch) return;
+      const wid = liveEditor.work.id;
+      const openId = liveEditor.chapter ? liveEditor.chapter.id : null;
+      confirmDialog({ title: "Delete this chapter?", body: `${ch.title ? esc(ch.title) : "Chapter " + num} will be removed. This can't be undone.`, confirmText: "Delete chapter", danger: true },
+        async () => {
+          try {
+            await WispDB.deleteChapter(ch.id);
+            // Close the gap: renumber remaining chapters to 1..n (ascending is safe).
+            const fresh = (await WispDB.getChapters(wid).catch(() => [])).slice().sort((a, b) => a.number - b.number);
+            for (let i = 0; i < fresh.length; i++) { if (fresh[i].number !== i + 1) await WispDB.setChapterNumber(fresh[i].id, i + 1); }
+            const still = (await WispDB.getChapters(wid).catch(() => [])).slice().sort((a, b) => a.number - b.number);
+            const openNum = ((still.find(c => c.id === openId)) || still[0] || { number: 1 }).number;
+            toast("Chapter deleted.");
+            navigate("write/" + wid + "/" + openNum);
+          } catch (e) { toast((e && e.message) || "Could not delete the chapter."); }
+        });
+    }));
+  }
+
+  // The editor's Chapters panel, Wattpad-style: each chapter is a row you can
+  // drag by its grip to reorder, showing the chapter's own title (whatever the
+  // writer named it) and falling back to "Chapter N" only when it's untitled.
+  function livePartsHTML() {
+    const liveChs = (liveEditor && liveEditor.allChapters) ? liveEditor.allChapters : [];
+    const curId = liveEditor && liveEditor.chapter ? liveEditor.chapter.id : null;
+    return liveChs.map((c) => `
+          <div class="part-row ${c.id === curId ? "is-current" : ""}" data-part-id="${esc(c.id)}" data-part-num="${c.number}">
+            <span class="part-grip" data-part-grip title="Drag to reorder" aria-label="Drag to reorder">${icon("grip", 15)}</span>
+            <button class="part-open" data-edit-chapter="${c.number}">
+              <span class="part-n">${c.number}</span><span class="part-title">${c.title ? esc(c.title) : "Chapter " + c.number}${c.published ? "" : " &middot; draft"}</span>
+            </button>
+            <button class="part-mv part-mv--del" data-ch-del="${c.number}" ${liveChs.length <= 1 ? "disabled" : ""} aria-label="Delete chapter">${icon("trash", 13)}</button>
+          </div>`).join("");
+  }
+
   function renderWriteEditor(work) {
     const isNew = !work;
     const editingLive = !!(work && work._db);
@@ -4336,18 +4467,9 @@
 
     const schedPairs = parseScheduleMulti(work && work.schedule);
     const liveChs = editingLive && liveEditor && liveEditor.allChapters ? liveEditor.allChapters : null;
+    const chTitle = editingLive && liveEditor && liveEditor.chapter ? (liveEditor.chapter.title || "") : "";
     const partsHTML = liveChs
-      ? liveChs.map((c, i) => `
-          <div class="part-row ${liveEditor.chapter && c.id === liveEditor.chapter.id ? "is-current" : ""}">
-            <button class="part-open" data-edit-chapter="${c.number}">
-              <span class="part-n">${c.number}</span><span class="part-title">${c.title ? esc(c.title) : "Chapter " + c.number}${c.published ? "" : " &middot; draft"}</span>
-            </button>
-            <span class="part-move">
-              <button class="part-mv" data-ch-move="${c.number}:up" ${i === 0 ? "disabled" : ""} aria-label="Move chapter up">${icon("chev", 13)}</button>
-              <button class="part-mv part-mv--down" data-ch-move="${c.number}:down" ${i === liveChs.length - 1 ? "disabled" : ""} aria-label="Move chapter down">${icon("chev", 13)}</button>
-              <button class="part-mv part-mv--del" data-ch-del="${c.number}" ${liveChs.length <= 1 ? "disabled" : ""} aria-label="Delete chapter">${icon("trash", 13)}</button>
-            </span>
-          </div>`).join("")
+      ? livePartsHTML()
       : (chapters > 0
         ? Array.from({ length: chapters }, (_, i) => `
             <button class="part-row ${i === chapters - 1 ? "is-current" : ""}" data-toast="Open this chapter in the editor.">
@@ -4376,6 +4498,7 @@
         <div class="writer">
           <div>
             <input class="title-input" id="we-title" placeholder="Title your work" value="${esc(title)}">
+            <input class="chtitle-input" id="we-chtitle" placeholder="Chapter title (optional) — name this part anything, like Wattpad" value="${esc(chTitle)}" maxlength="120" aria-label="Chapter title">
             <div id="we-body-zone">${bodyZoneHTML(bodyHTML)}</div>
             <div class="write-actions" style="margin-top:16px">
               ${(editingLive && liveEditor && liveEditor.chapter && liveEditor.chapter.published)
@@ -4589,6 +4712,16 @@
       writerRoot.addEventListener("input", markEditorDirty);
       writerRoot.addEventListener("change", markEditorDirty);
     }
+    // Live-mirror the chapter title into the Chapters panel row as it's typed.
+    const chTitleEl = $("#we-chtitle");
+    if (chTitleEl) chTitleEl.addEventListener("input", () => {
+      const row = $("#screen-write .parts .part-row.is-current .part-title");
+      if (!row || !liveEditor || !liveEditor.chapter) return;
+      const num = liveEditor.chapter.number || 1;
+      const v = chTitleEl.value.trim();
+      const draftTag = liveEditor.chapter.published ? "" : " &middot; draft";
+      row.innerHTML = (v ? esc(v) : "Chapter " + num) + draftTag;
+    });
     // Set the initial flag honestly: a loaded work is saved; a new one is not yet.
     setSaveFlag((liveEditor && liveEditor.work) ? "saved" : "idle");
     // Line spacing while writing (a comfort setting; readers keep their own).
@@ -4609,48 +4742,8 @@
     // nudge can act on it even after a toolbar tap blurs the field (mobile).
     document.addEventListener("selectionchange", rememberEditorSelection);
 
-    // Reorder chapters up or down (live works only).
-    $$("#screen-write [data-ch-move]").forEach(b => b.addEventListener("click", async () => {
-      if (!isLive() || !liveEditor || !liveEditor.work) { toast("Reordering needs the connected site."); return; }
-      const parts = b.dataset.chMove.split(":"), num = +parts[0], dir = parts[1];
-      const chs = liveEditor.allChapters || [];
-      const idx = chs.findIndex(c => c.number === num); if (idx < 0) return;
-      const j = dir === "up" ? idx - 1 : idx + 1; if (j < 0 || j >= chs.length) return;
-      const other = chs[j].number, wid = liveEditor.work.id;
-      const openId = liveEditor.chapter ? liveEditor.chapter.id : null;
-      $$("#screen-write [data-ch-move]").forEach(x => x.disabled = true);
-      try {
-        await WispDB.swapChapterNumbers(wid, num, other);
-        const fresh = await WispDB.getChapters(wid).catch(() => []);
-        const openNum = ((fresh.find(c => c.id === openId)) || {}).number || 1;
-        toast("Chapter moved.");
-        navigate("write/" + wid + "/" + openNum);
-      } catch (e) { toast((e && e.message) || "Could not reorder."); $$("#screen-write [data-ch-move]").forEach(x => x.disabled = false); }
-    }));
-
-    // Delete a single chapter, then renumber the rest so there are no gaps.
-    $$("#screen-write [data-ch-del]").forEach(b => b.addEventListener("click", () => {
-      if (!isLive() || !liveEditor || !liveEditor.work) { toast("Deleting chapters needs the connected site."); return; }
-      const num = +b.dataset.chDel;
-      const chs = liveEditor.allChapters || [];
-      if (chs.length <= 1) { toast("A work needs at least one chapter. Delete the work instead."); return; }
-      const ch = chs.find(c => c.number === num); if (!ch) return;
-      const wid = liveEditor.work.id;
-      const openId = liveEditor.chapter ? liveEditor.chapter.id : null;
-      confirmDialog({ title: "Delete this chapter?", body: `Chapter ${num}${ch.title ? " (" + esc(ch.title) + ")" : ""} will be removed. This can't be undone.`, confirmText: "Delete chapter", danger: true },
-        async () => {
-          try {
-            await WispDB.deleteChapter(ch.id);
-            // Close the gap: renumber remaining chapters to 1..n (ascending is safe).
-            const fresh = (await WispDB.getChapters(wid).catch(() => [])).slice().sort((a, b) => a.number - b.number);
-            for (let i = 0; i < fresh.length; i++) { if (fresh[i].number !== i + 1) await WispDB.setChapterNumber(fresh[i].id, i + 1); }
-            const still = (await WispDB.getChapters(wid).catch(() => [])).slice().sort((a, b) => a.number - b.number);
-            const openNum = ((still.find(c => c.id === openId)) || still[0] || { number: 1 }).number;
-            toast("Chapter deleted.");
-            navigate("write/" + wid + "/" + openNum);
-          } catch (e) { toast((e && e.message) || "Could not delete the chapter."); }
-        });
-    }));
+    // Chapters panel: drag-to-reorder (by the grip) and delete. Wattpad-style.
+    wireChapterPanel();
   }
 
   /* ======================================================================= */
@@ -9916,6 +10009,9 @@
     const val = (id) => { const e = $(id); return e ? e.value.trim() : ""; };
     const rawTitle = val("#we-title");
     const title = rawTitle || "Untitled";
+    // The chapter's own title (Wattpad-style: writers can name a part anything).
+    // Empty is fine; readers see "Chapter N" when a part is left untitled.
+    const chapterTitle = val("#we-chtitle");
     const format = editorFormat === "comic" ? "comic" : "prose";
     let body;
     const publishing = kind === "publish" || kind === "update";   // both keep the chapter live
@@ -9976,11 +10072,18 @@
         await WispDB.saveChapter(id, {
           id: liveEditor.chapter ? liveEditor.chapter.id : null,
           number: liveEditor.chapter ? liveEditor.chapter.number : 1,
-          title: liveEditor.chapter ? liveEditor.chapter.title : "",
+          title: chapterTitle,
           body, published: chapterPublished, scheduled_for, priorPublished
         });
         await WispDB.setTags(id, tags);
-        if (liveEditor.chapter) liveEditor.chapter.published = chapterPublished;
+        if (liveEditor.chapter) {
+          liveEditor.chapter.title = chapterTitle;
+          liveEditor.chapter.published = chapterPublished;
+          // keep the record in allChapters in step so the panel shows the new title
+          const inList = (liveEditor.allChapters || []).find(c => c.id === liveEditor.chapter.id);
+          if (inList) { inList.title = chapterTitle; inList.published = chapterPublished; }
+          if (!silent) refreshChaptersPanel();
+        }
         if (!silent) toast(kind === "schedule" ? "Scheduled. It releases " + fmtEasternStamp(scheduled_for) + "."
           : kind === "update" ? "Changes saved. Readers were not notified."
           : kind === "draft" ? (priorPublished ? "Chapter unpublished." : wasPublished ? "Changes saved." : "Draft saved.")
@@ -9988,7 +10091,7 @@
       } else {
         let book_number;
         if (series_id) book_number = (await WispDB.countInSeries(series_id).catch(() => 0)) + 1;
-        const created = await WispDB.createWork({ title, type, source, rating, tags, warnings, chapterBody: body, status, format, schedule,
+        const created = await WispDB.createWork({ title, type, source, rating, tags, warnings, chapterBody: body, chapterTitle, status, format, schedule,
           cover_image_url: editorCover, series_id, book_number, scheduled_for,
           comments_enabled: controls.comments_enabled, logged_in_only: controls.logged_in_only, hide_stats: controls.hide_stats });
         if (silent && created && created.id) {
