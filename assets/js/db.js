@@ -566,6 +566,20 @@ window.WispDB = (function () {
     if (error) throw error;
   }
 
+  /* ---- reads (one per signed-in reader per work; bumps reads_count) ------ */
+  // Resilient: no-ops (returns false) until the reads table exists (migration
+  // 028). The unique constraint plus ignoreDuplicates means re-reading a work
+  // never double-counts, so reads_count is the number of distinct readers.
+  async function recordRead(workId) {
+    if (!user || !client || !workId) return false;
+    try {
+      const { error } = await client.from("reads")
+        .upsert({ work_id: workId, user_id: user.id }, { onConflict: "work_id,user_id", ignoreDuplicates: true });
+      if (error) { if (missingTable(error)) return false; throw error; }
+      return true;
+    } catch (e) { return false; }
+  }
+
   /* ---- ratings (1..5 stars, one per reader per work) -------------------- */
   // Resilient: returns false when the ratings table has not been migrated yet
   // (migration 026), so the app can fall back gracefully.
@@ -602,9 +616,16 @@ window.WispDB = (function () {
     if (!user) throw new Error("Sign in first.");
     const patch = {};
     ["display_name", "bio", "handle", "accent"].forEach(k => { if (fields[k] !== undefined) patch[k] = fields[k]; });
+    const oldHandle = profile && profile.handle;   // remember the handle before the change
     const { data, error } = await client.from("profiles").update(patch).eq("id", user.id).select().single();
     if (error) throw error;
     profile = data || profile;
+    // If the handle actually changed, record the old one so links to it still
+    // resolve. Best-effort: fails soft if migration 029 has not been applied.
+    const newHandle = data && data.handle;
+    if (oldHandle && newHandle && oldHandle !== newHandle) {
+      try { await client.from("handle_history").upsert({ old_handle: oldHandle, profile_id: user.id, changed_at: new Date().toISOString() }, { onConflict: "old_handle" }); } catch (e) {}
+    }
     emit();
     return data;
   }
@@ -706,7 +727,19 @@ window.WispDB = (function () {
     let q = client.from("profiles").select("*");
     q = looksUuid(idOrHandle) ? q.eq("id", idOrHandle) : q.eq("handle", idOrHandle);
     const { data } = await q.maybeSingle();
-    return data || null;
+    if (data) return data;
+    // Not found by current handle: it may be an old handle someone changed away
+    // from. Resolve it through the handle history so old links still work.
+    if (!looksUuid(idOrHandle)) {
+      try {
+        const { data: h } = await client.from("handle_history").select("profile_id").eq("old_handle", idOrHandle).maybeSingle();
+        if (h && h.profile_id) {
+          const { data: p } = await client.from("profiles").select("*").eq("id", h.profile_id).maybeSingle();
+          return p || null;
+        }
+      } catch (e) {}
+    }
+    return null;
   }
   async function worksByAuthor(authorId) {
     if (!authorId) return [];
@@ -1468,7 +1501,7 @@ window.WispDB = (function () {
     listWorks, getWork, getChapters, myWorks, listFeatured, isFeatured, setFeatured, unsetFeatured,
     createWork, updateWork, deleteWork, setWorkStatus, firstChapter, saveChapter, deleteChapter, setChapterNumber, swapChapterNumbers, listTags, listFandoms, getUpcoming, setTags,
     mySeries, getSeries, worksInSeries, findOrCreateSeries, updateSeries, deleteSeries, countInSeries,
-    toggle, myRelations, getComments, postComment, editComment, deleteComment, rateWork, getMyRating, myRatings, getReactions, toggleReaction, uploadCover,
+    toggle, myRelations, getComments, postComment, editComment, deleteComment, recordRead, rateWork, getMyRating, myRatings, getReactions, toggleReaction, uploadCover,
     toggleFollow, amFollowing, followCounts, myFollowingIds, getNotifications,
     updateProfile, getProfile, getWidgets, saveWidgets, saveMyBadges, grantBadges, worksByAuthor,
     listProfilePosts, postProfilePost, deleteProfilePost, setProfilePostPinned,

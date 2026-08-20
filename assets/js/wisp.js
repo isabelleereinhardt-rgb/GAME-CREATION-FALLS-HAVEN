@@ -6820,30 +6820,51 @@
     });
     setTimeout(() => box.remove(), 2200);
   }
-  // A brief, gentle chime built with the Web Audio API (no sound files). Muted
-  // by the sound preference or reduced-motion; needs a user gesture to start.
+  // Sound effects, built with the Web Audio API (no files). Gated ONLY by the
+  // reader's sound preference, not by reduced motion: sound and motion are
+  // separate choices (a reader on reduced motion may still want sound). Browsers
+  // need a user gesture before audio can start, so the context is unlocked on the
+  // first interaction and reused afterwards.
   let audioCtx = null;
   function soundOn() { try { return localStorage.getItem("wisp.sound") !== "off"; } catch (e) { return true; } }
   function reducedMotion() { return !!(settings && settings.motion) || !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); }
-  function playChime() {
-    if (!soundOn() || reducedMotion()) return;
-    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  function ensureAudio() {
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
+    try { audioCtx = audioCtx || new AC(); if (audioCtx.state === "suspended") audioCtx.resume(); } catch (e) { return null; }
+    return audioCtx;
+  }
+  // Play a short sequence of soft tones. Each note: {f, t, d, g, type}.
+  function playTones(notes) {
+    if (!soundOn()) return;
+    const ac = ensureAudio(); if (!ac) return;
     try {
-      audioCtx = audioCtx || new AC();
-      if (audioCtx.state === "suspended") audioCtx.resume();
-      const now = audioCtx.currentTime;
-      [523.25, 659.25, 783.99].forEach((f, i) => {
-        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-        o.type = "sine"; o.frequency.value = f;
-        const t = now + i * 0.1;
+      const now = ac.currentTime;
+      notes.forEach(n => {
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.type = n.type || "sine"; o.frequency.value = n.f;
+        const t = now + (n.t || 0), d = n.d || 0.28;
         g.gain.setValueAtTime(0, t);
-        g.gain.linearRampToValueAtTime(0.12, t + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.0008, t + 0.3);
-        o.connect(g); g.connect(audioCtx.destination);
-        o.start(t); o.stop(t + 0.32);
+        g.gain.linearRampToValueAtTime(n.g || 0.1, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0005, t + d);
+        o.connect(g); g.connect(ac.destination);
+        o.start(t); o.stop(t + d + 0.02);
       });
     } catch (e) {}
   }
+  function playChime() { playTones([{ f: 523.25, g: 0.12, d: 0.3 }, { f: 659.25, t: 0.1, g: 0.12, d: 0.3 }, { f: 783.99, t: 0.2, g: 0.12, d: 0.3 }]); }
+  // A shared handle so the companion (Lucky) and any module can play the same
+  // sounds, and so the first user gesture anywhere unlocks audio.
+  window.WispSound = {
+    on: soundOn,
+    unlock: ensureAudio,
+    chime: playChime,
+    heart: function () { playTones([{ f: 587.33, d: 0.16, g: 0.11, type: "triangle" }, { f: 880, t: 0.08, d: 0.22, g: 0.09, type: "triangle" }]); },
+    follow: function () { playTones([{ f: 523.25, d: 0.16, g: 0.09 }, { f: 698.46, t: 0.09, d: 0.24, g: 0.09 }]); },
+    treat: function () { playTones([{ f: 659.25, d: 0.24, g: 0.09, type: "triangle" }, { f: 880, t: 0.13, d: 0.24, g: 0.08, type: "triangle" }, { f: 92, d: 0.5, g: 0.05 }]); }
+  };
+  ["pointerdown", "touchstart", "keydown"].forEach(function (ev) {
+    window.addEventListener(ev, function once() { ensureAudio(); window.removeEventListener(ev, once); }, { once: true, passive: true });
+  });
   // A small, brief celebration: a pop-in card, confetti, and the chime. It does
   // not take over the screen and fades on its own.
   function celebrate(title, sub, emoji) {
@@ -6858,33 +6879,14 @@
     setTimeout(close, 1900);
     el.addEventListener("click", close);
   }
-  // A brief, gentle scale pulse on the button the reader just pressed. This is a
-  // deliberate confirmation of their own tap, so it is allowed to play even under
-  // reduced motion (the CSS re-asserts it there); it never loops and stays small.
-  function pingBtn(el) {
-    if (!el) return;
-    el.classList.remove("is-pinged"); void el.offsetWidth; el.classList.add("is-pinged");
-    setTimeout(() => el.classList.remove("is-pinged"), 440);
+  // Beat the icon INSIDE the button the reader pressed (a heartbeat on the heart,
+  // a ring on the bell), rather than spawning a separate floating heart. It
+  // confirms the reader's own tap, so it is kept playing under reduced motion.
+  function beatIcon(btn, cls) {
+    if (!btn) return; const svg = btn.querySelector("svg"); if (!svg) return;
+    svg.classList.remove(cls); void svg.offsetWidth; svg.classList.add(cls);
+    setTimeout(function () { svg.classList.remove(cls); }, 720);
   }
-  // A small shower of glyphs floating up from a button (hearts for a heart, a
-  // bell note for a subscribe). Skipped under reduced motion, where the button
-  // pulse and the toast are the confirmation instead.
-  function glyphBurst(el, glyph, extraClass) {
-    if (!el || !el.getBoundingClientRect || reducedMotion()) return;
-    const r = el.getBoundingClientRect();
-    const box = document.createElement("div"); box.className = "mw-hearts" + (extraClass ? " " + extraClass : "");
-    for (let i = 0; i < 7; i++) {
-      const h = document.createElement("i"); h.textContent = glyph;
-      h.style.left = (r.left + r.width / 2) + "px"; h.style.top = (r.top + r.height / 2) + "px";
-      h.style.setProperty("--dx", (Math.random() * 70 - 35).toFixed(0) + "px");
-      h.style.setProperty("--dy", (-40 - Math.random() * 50).toFixed(0) + "px");
-      h.style.animationDelay = (Math.random() * 0.1).toFixed(2) + "s";
-      box.appendChild(h);
-    }
-    document.body.appendChild(box);
-    setTimeout(() => box.remove(), 1100);
-  }
-  function heartBurst(el) { glyphBurst(el, "❤"); }
   let petalTimer = null;
   function togglePetals(on) {
     let layer = $("#mwPetals");
@@ -7319,6 +7321,9 @@
       w = await WispDB.getWork(id);
       if (!w) throw new Error("not found");
       LIVE.byId[id] = w;
+      // Count this reader's read once (server-side, so the count syncs across
+      // devices). Duplicate reads are ignored by the unique constraint.
+      if (WispDB.signedIn && WispDB.recordRead) WispDB.recordRead(id).catch(() => {});
       const chs = await WispDB.getChapters(id).catch(() => []);
       LIVE.chapters[id] = chs;
       // Comments grouped per chapter, then per paragraph (chapters must not mix).
@@ -7949,12 +7954,12 @@
         tog.classList.toggle("btn--primary", on);
         tog.classList.toggle("btn--ghost", !on);
         if (label) label.textContent = on ? "Hearted" : "Heart";
-        if (on) { pingBtn(tog); heartBurst(tog); }
+        if (on) { beatIcon(tog, "icon-beat"); WispSound.heart(); }
         toast(on ? "This work has been hearted." : "Heart removed.");
       } else if (kind === "subscribe") {
         tog.classList.toggle("is-on-quiet", on);
         if (label) label.textContent = on ? "Subscribed" : "Subscribe";
-        if (on) { pingBtn(tog); glyphBurst(tog, "🔔", "mw-hearts--amber"); }
+        if (on) { beatIcon(tog, "icon-ring"); WispSound.follow(); }
         toast(on ? "Subscribed. You'll see new chapters in your activity." : "Unsubscribed. You won't get chapter alerts.");
       } else {
         tog.classList.toggle("is-on-quiet", on);

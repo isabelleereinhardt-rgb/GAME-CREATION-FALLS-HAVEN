@@ -2243,13 +2243,19 @@ button.pill--link:active, .tag:active { transform: scale(.95); }
 @keyframes heart-float { 0% { transform: translate(-50%,-50%) scale(.5); opacity: 0; } 20% { opacity: 1; } 100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.1); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .mw-hearts i, .heart-pop { animation-duration: .01ms; } }
 .mw-hearts--amber i { color: var(--amber); }
-/* Gentle confirmation pulse on a Heart or Subscribe button the reader just
-   pressed. It confirms their own tap (never loops, stays small), so it is kept
-   playing even under reduced motion, where the flying-glyph shower is skipped. */
-.btn.is-pinged { animation: btn-ping .34s ease; will-change: transform; }
-@keyframes btn-ping { 0% { transform: scale(1); } 42% { transform: scale(1.14); } 100% { transform: scale(1); } }
-:root[data-motion="reduce"] .btn.is-pinged { animation: btn-ping .34s ease !important; }
-@media (prefers-reduced-motion: reduce) { .btn.is-pinged { animation: btn-ping .34s ease !important; } }
+/* The icon inside a Heart/Subscribe button animates in place when tapped: a
+   heartbeat on the heart, a little ring on the bell. This confirms the reader's
+   own action, so it is kept playing even under reduced motion. */
+.btn svg.icon-beat { animation: icon-beat .7s ease; transform-origin: center; }
+.btn svg.icon-ring { animation: icon-ring .7s ease; transform-origin: 50% 25%; }
+@keyframes icon-beat { 0%, 100% { transform: scale(1); } 14% { transform: scale(1.32); } 28% { transform: scale(1); } 42% { transform: scale(1.22); } 58% { transform: scale(1); } }
+@keyframes icon-ring { 0%, 100% { transform: rotate(0); } 18% { transform: rotate(-18deg); } 38% { transform: rotate(14deg); } 58% { transform: rotate(-8deg); } 78% { transform: rotate(4deg); } }
+:root[data-motion="reduce"] .btn svg.icon-beat { animation: icon-beat .7s ease !important; }
+:root[data-motion="reduce"] .btn svg.icon-ring { animation: icon-ring .7s ease !important; }
+@media (prefers-reduced-motion: reduce) {
+  .btn svg.icon-beat { animation: icon-beat .7s ease !important; }
+  .btn svg.icon-ring { animation: icon-ring .7s ease !important; }
+}
 .empty-note { padding: 30px 10px; text-align: center; }
 .empty-note p { color: var(--ink3); font-size: 14.5px; line-height: 1.5; margin: 0 0 14px; }
 

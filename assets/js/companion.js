@@ -434,7 +434,7 @@
     if (n < 5) { state.pets = n; save(); paintPets(); return; }
     // fifth pet: a treat, a little dance, a happy sound, and off he trots
     state.pets = 0; state.treatsGiven = (state.treatsGiven || 0) + 1; save();
-    luckySound();
+    if (window.WispSound && window.WispSound.treat) window.WispSound.treat(); else luckySound();
     var box = walk.getBoundingClientRect();
     walk.style.left = Math.round(box.left) + "px";
     walk.style.setProperty("--exit", Math.round(box.left + box.width + 40) + "px");
