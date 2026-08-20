@@ -4378,8 +4378,12 @@
             <input class="title-input" id="we-title" placeholder="Title your work" value="${esc(title)}">
             <div id="we-body-zone">${bodyZoneHTML(bodyHTML)}</div>
             <div class="write-actions" style="margin-top:16px">
-              <button class="btn btn--primary" data-publish="publish">Publish chapter</button>
-              <button class="btn btn--quiet" data-publish="draft">Save draft</button>
+              ${(editingLive && liveEditor && liveEditor.chapter && liveEditor.chapter.published)
+                ? `<button class="btn btn--primary" data-publish="update">Save changes</button>
+                   <button class="btn btn--quiet" data-publish="draft">Unpublish</button>
+                   <span class="write-hint">Already published: saving updates it quietly, without alerting readers.</span>`
+                : `<button class="btn btn--primary" data-publish="publish">Publish chapter</button>
+                   <button class="btn btn--quiet" data-publish="draft">Save draft</button>`}
               <button class="btn btn--quiet" data-schedule>Schedule &hellip;</button>
               <button class="btn btn--link" data-preview>Preview</button>
             </div>
@@ -9914,12 +9918,13 @@
     const title = rawTitle || "Untitled";
     const format = editorFormat === "comic" ? "comic" : "prose";
     let body;
+    const publishing = kind === "publish" || kind === "update";   // both keep the chapter live
     if (format === "comic") {
-      if (!silent && kind === "publish" && !editorPages.length) { toast("Add at least one page before you publish."); return; }
+      if (!silent && publishing && !editorPages.length) { toast("Add at least one page before you publish."); return; }
       body = editorPages.join("\n");
     } else {
       const bodyEl = $("#we-body"); body = bodyEl ? editorHtmlToMd(bodyEl) : "";
-      if (!silent && kind === "publish" && !body.trim()) { toast("Write something before you publish this chapter."); return; }
+      if (!silent && publishing && !body.trim()) { toast("Write something before you save this chapter."); return; }
     }
     // Nothing worth an autosave yet: a brand-new, still-empty work. Don't spawn a
     // phantom "Untitled" with no words.
@@ -9948,11 +9953,12 @@
     const wStatusBtn = $("#screen-write [data-wstatus].is-on");
     const wStatusSel = wStatusBtn ? wStatusBtn.dataset.wstatus : "ongoing";
     if (status === "ongoing" || status === "complete") status = wStatusSel === "complete" ? "complete" : "ongoing";
+    // Whether the open chapter was already live before this save. Used to keep
+    // "Save changes" (kind "update") from re-notifying subscribers.
+    const priorPublished = !!(liveEditor && liveEditor.chapter && liveEditor.chapter.published);
     // A silent autosave never changes whether the chapter is published; a manual
-    // publish does. Preserve the loaded chapter's published state during autosave.
-    const chapterPublished = silent
-      ? !!(liveEditor && liveEditor.chapter && liveEditor.chapter.published)
-      : (kind === "publish");
+    // publish or "Save changes" keeps it live; "Save draft" pulls it back.
+    const chapterPublished = silent ? priorPublished : publishing;
     try {
       let series_id = null;
       if (seriesName) {
@@ -9971,12 +9977,14 @@
           id: liveEditor.chapter ? liveEditor.chapter.id : null,
           number: liveEditor.chapter ? liveEditor.chapter.number : 1,
           title: liveEditor.chapter ? liveEditor.chapter.title : "",
-          body, published: chapterPublished, scheduled_for
+          body, published: chapterPublished, scheduled_for, priorPublished
         });
         await WispDB.setTags(id, tags);
         if (liveEditor.chapter) liveEditor.chapter.published = chapterPublished;
         if (!silent) toast(kind === "schedule" ? "Scheduled. It releases " + fmtEasternStamp(scheduled_for) + "."
-          : kind === "draft" ? (wasPublished ? "Changes saved." : "Draft saved.") : "Changes published.");
+          : kind === "update" ? "Changes saved. Readers were not notified."
+          : kind === "draft" ? (priorPublished ? "Chapter unpublished." : wasPublished ? "Changes saved." : "Draft saved.")
+          : "Changes published.");
       } else {
         let book_number;
         if (series_id) book_number = (await WispDB.countInSeries(series_id).catch(() => 0)) + 1;

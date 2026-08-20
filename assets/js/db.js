@@ -356,7 +356,11 @@ window.WispDB = (function () {
     if (f.id) {
       const patch = { title: f.title || "", body: f.body || "", updated_at: new Date().toISOString(),
                       published, scheduled_for: scheduled ? f.scheduled_for : null };
-      if (published) patch.published_at = new Date().toISOString();
+      // published_at is the moment a chapter first went live, and it drives the
+      // "new chapter" activity feed. Stamp it ONLY when the chapter is newly
+      // becoming published, so editing (or autosaving) an already-published
+      // chapter saves the changes without re-notifying subscribers.
+      if (published && !f.priorPublished) patch.published_at = new Date().toISOString();
       await mutateResilient((p) => client.from("chapters").update(p).eq("id", f.id), patch);
       return f.id;
     }
