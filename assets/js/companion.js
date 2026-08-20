@@ -184,14 +184,22 @@
   function accFront(acc) { var a = ACC_ART[acc]; return a ? a.front : ""; }
   function walkerSvg() {
     return '<svg width="86" height="52" viewBox="0 0 72 48" fill="none" aria-hidden="true">' +
+      // clip the tuxedo markings + shading to the body so nothing spills past it
+      '<defs><clipPath id="luckyBodyClip"><ellipse cx="42" cy="26" rx="20" ry="11.6"/></clipPath></defs>' +
       // tail (behind the body), with a lighter tip; rotates as one group
       '<g class="lucky-tail"><path d="M57 27q11 -1 8.6 -15.4" stroke="var(--fur)" stroke-width="5.4" fill="none" stroke-linecap="round"/><circle cx="65.4" cy="11.8" r="3" fill="var(--paw)" stroke="var(--paw-line)" stroke-width=".7"/></g>' +
       // back legs (darker for depth), with pale paw tips
       '<g class="lucky-leg" style="animation-delay:-.31s"><rect x="47" y="30.5" width="6" height="13.5" rx="3" fill="var(--fur2)"/><ellipse cx="50" cy="44" rx="3.4" ry="2.1" fill="var(--paw)" stroke="var(--paw-line)" stroke-width=".7"/></g>' +
       '<g class="lucky-leg"><rect x="28.5" y="30.5" width="6" height="13.5" rx="3" fill="var(--fur2)"/><ellipse cx="31.5" cy="44" rx="3.4" ry="2.1" fill="var(--paw)" stroke="var(--paw-line)" stroke-width=".7"/></g>' +
-      // body: one smooth oval, with a soft white belly
+      // body: one form. The tuxedo white is a chest+belly marking clipped INSIDE
+      // the silhouette (so it reads as fur, never a pasted-on oval), plus soft
+      // shading top and bottom for roundness.
       '<ellipse cx="42" cy="26" rx="20" ry="11.6" fill="var(--fur)"/>' +
-      '<ellipse cx="39" cy="32" rx="14" ry="5.2" fill="var(--belly)"/>' +
+      '<g clip-path="url(#luckyBodyClip)">' +
+        '<path d="M12 24 Q10 33 22 35 L46 35 Q54 34 53 28 Q42 31 31 30 Q20 29 14 22 Z" fill="var(--belly)"/>' +
+        '<ellipse cx="40" cy="38.4" rx="19" ry="4.6" fill="#000" opacity=".10"/>' +
+        '<ellipse cx="46" cy="17.4" rx="15" ry="4.2" fill="#fff" opacity=".05"/>' +
+      '</g>' +
       // front legs (coat colour), with pale paw tips
       '<g class="lucky-leg"><rect x="52.5" y="30.5" width="6" height="13.5" rx="3" fill="var(--fur)"/><ellipse cx="55.5" cy="44" rx="3.4" ry="2.1" fill="var(--paw)" stroke="var(--paw-line)" stroke-width=".7"/></g>' +
       '<g class="lucky-leg" style="animation-delay:-.31s"><rect x="33.5" y="30.5" width="6" height="13.5" rx="3" fill="var(--fur)"/><ellipse cx="36.5" cy="44" rx="3.4" ry="2.1" fill="var(--paw)" stroke="var(--paw-line)" stroke-width=".7"/></g>' +
