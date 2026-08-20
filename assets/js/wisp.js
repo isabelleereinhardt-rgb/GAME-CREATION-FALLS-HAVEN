@@ -2712,8 +2712,14 @@
       /^(https?:|mailto:)/i.test(u) ? `<a href="${esc(u)}" target="_blank" rel="noopener nofollow">${t}</a>` : m);
     s = s.replace(/\*\*([^*]+?)\*\*/g, "<strong>$1</strong>")
          .replace(/__([^_]+?)__/g, "<strong>$1</strong>");
-    // Highlight (==text==) and underline (++text++), before single * / _ italics.
-    s = s.replace(/==([^=]+?)==/g, '<mark class="hl">$1</mark>');
+    // Highlight (==text== yellow, or ==green|text== for a colour), before single
+    // * / _ italics. A whitespace-only highlight renders nothing, so an old
+    // stray "== ==" can't leave a thin coloured sliver on the page.
+    s = s.replace(/==([^=]+?)==/g, (m, inner) => {
+      const cm = inner.match(/^(yellow|green|pink|blue|orange|purple)\|([\s\S]+)$/);
+      if (cm) return cm[2].trim() ? `<mark class="hl hl--${cm[1]}">${cm[2]}</mark>` : cm[2];
+      return inner.trim() ? `<mark class="hl">${inner}</mark>` : inner;
+    });
     s = s.replace(/\+\+([^+]+?)\+\+/g, "<u>$1</u>");
     // Per-word font size: {{18|exact point size}}, plus older {+bigger+}/{-smaller-}.
     s = s.replace(/\{\{(\d{1,3}(?:\.\d)?)\|([^{}]+?)\}\}/g, (m, n, t) => `<span style="font-size:${Math.max(8, Math.min(96, Math.round(+n)))}px">${t}</span>`);
@@ -2830,7 +2836,7 @@
       if (tag === "strong" || tag === "b") out += inner.trim() ? `**${inner}**` : inner;
       else if (tag === "em" || tag === "i") out += inner.trim() ? `*${inner}*` : inner;
       else if (tag === "u" || tag === "ins") out += inner.trim() ? `++${inner}++` : inner;
-      else if (tag === "mark") out += inner.trim() ? `==${inner}==` : inner;
+      else if (tag === "mark") { if (inner.trim()) { const cm = (n.className || "").toString().match(/hl--(yellow|green|pink|blue|orange|purple)/); out += cm ? `==${cm[1]}|${inner}==` : `==${inner}==`; } else out += inner; }
       else if (tag === "span" && n.style && n.style.fontSize) { const px = Math.round(parseFloat(n.style.fontSize)); out += (inner.trim() && px) ? `{{${px}|${inner}}}` : inner; }
       else if (tag === "span" && n.classList && n.classList.contains("fs-lg")) out += inner.trim() ? `{+${inner}+}` : inner;
       else if (tag === "span" && n.classList && n.classList.contains("fs-sm")) out += inner.trim() ? `{-${inner}-}` : inner;
@@ -4044,7 +4050,15 @@
         <button type="button" title="Bold" data-fmt="bold"><b>B</b></button>
         <button type="button" title="Italic" data-fmt="italic"><i>I</i></button>
         <button type="button" title="Underline" data-fmt="underline"><u>U</u></button>
-        <button type="button" title="Highlight" data-fmt="highlight"><span style="background:color-mix(in srgb,var(--amber) 55%,transparent);border-radius:3px;padding:0 4px">H</span></button>
+        <span class="hl-tool" title="Highlighter">
+          <button type="button" class="hl-chip hl-chip--yellow" data-fmt="hl-yellow" aria-label="Highlight yellow"></button>
+          <button type="button" class="hl-chip hl-chip--green" data-fmt="hl-green" aria-label="Highlight neon green"></button>
+          <button type="button" class="hl-chip hl-chip--pink" data-fmt="hl-pink" aria-label="Highlight neon pink"></button>
+          <button type="button" class="hl-chip hl-chip--blue" data-fmt="hl-blue" aria-label="Highlight blue"></button>
+          <button type="button" class="hl-chip hl-chip--orange" data-fmt="hl-orange" aria-label="Highlight orange"></button>
+          <button type="button" class="hl-chip hl-chip--purple" data-fmt="hl-purple" aria-label="Highlight purple"></button>
+          <button type="button" class="hl-chip hl-chip--none" data-fmt="hl-none" aria-label="Remove highlight">&times;</button>
+        </span>
         <span class="fs-ctrl" title="Font size of the selected text">
           <button type="button" data-fmt="fs-dec" aria-label="Smaller">&minus;</button>
           <input type="number" id="we-fontsize" min="8" max="96" step="1" value="18" aria-label="Font size">
@@ -6055,6 +6069,22 @@
       wireMiniWidgets(sheetBody);
     }
   }
+  // Refresh a SINGLE widget's card in place, instead of rebuilding the whole
+  // panel. Rebuilding re-ran every widget's render(), which re-randomised every
+  // spinner (a new quote, prompt, fortune) and made the whole station visibly
+  // "reconfigure" whenever a reader toggled petals or logged a streak. This
+  // updates only the card that changed, across both the desktop rail and an open
+  // mobile sheet. Widgets that own an interval (pomodoro, word sprint) keep using
+  // renderWidgets(), which clears and re-arms timers wholesale.
+  function mwRefresh(id) {
+    const def = MINI_WIDGETS.find(w => w.id === id); if (!def) return;
+    const sel = '.mini-widget[data-mw="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]';
+    document.querySelectorAll(sel).forEach(card => {
+      const body = card.querySelector(".mw-body"); if (!body) return;
+      body.innerHTML = def.render();
+      if (def.wire) { try { def.wire(body); } catch (e) {} }
+    });
+  }
 
   /* ---- Installable mini-widgets: quality-of-life, synced to your account ---- */
   // A shelf of small widgets a reader can add to their widget station: timers,
@@ -6205,7 +6235,7 @@
         mwSetState("streak", { count: nc, last: today }); changed = true;
       }
     }
-    if (changed) renderWidgets();
+    if (changed) { mwRefresh("streak"); mwRefresh("chapters-today"); }
   }
 
   // Reading pace, learned quietly. A read session opens when a chapter opens and
@@ -6230,27 +6260,31 @@
     const n = Math.min(s.n || 0, 19);                    // rolling window of the last ~20 reads
     const avg = s.avg ? Math.round((s.avg * n + wpm) / (n + 1)) : wpm;
     mwSetState("wpm", { avg: avg, n: (s.n || 0) + 1 });
-    renderWidgets();
+    mwRefresh("wpm");
   }
   const todayKey = () => { const d = new Date(); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); };
   const rand = (arr) => arr[Math.floor(Math.random() * arr.length)];
   const fmtDur = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
 
-  const MW_QUOTES = [
+  // The content widgets draw from the large banks in widget-content.js when it
+  // has loaded, so a reader does not see the same line for months. The short
+  // inline sets below are kept as a fallback if that file is absent.
+  const _WC = (window.WISP_WIDGET_CONTENT && typeof window.WISP_WIDGET_CONTENT === "object") ? window.WISP_WIDGET_CONTENT : {};
+  const MW_QUOTES = (_WC.quotes && _WC.quotes.length) ? _WC.quotes : [
     "Write drunk on the story; edit sober on the page.", "A word after a word after a word is power.",
     "You can always edit a bad page. You can't edit a blank one.", "Start where you are. Use what you have.",
     "The first draft is you telling yourself the story.", "Fill your paper with the breathings of your heart.",
     "There is no greater agony than an untold story inside you.", "Write the book you want to read.",
     "Almost all good writing begins with terrible first efforts.", "Read a thousand books, and your words will flow."
   ];
-  const MW_PROMPTS = [
+  const MW_PROMPTS = (_WC.prompts && _WC.prompts.length) ? _WC.prompts : [
     "Two strangers share the last seat on the last train.", "A letter arrives twenty years late.",
     "The lighthouse keeper writes to no one, every night.", "Your character finds a door that wasn't there yesterday.",
     "A rivalry softens over a shared umbrella.", "The town forgets one person a little more each day.",
     "A god retires and takes a job at a coffee shop.", "The map is accurate, except for one island.",
     "They swap lives for a week and neither wants to swap back.", "The heirloom clock runs backward when someone lies."
   ];
-  const MW_FORTUNES = [
+  const MW_FORTUNES = (_WC.fortunes && _WC.fortunes.length) ? _WC.fortunes : [
     "A plot twist is coming; lean into it.", "The chapter you fear is the one worth writing.",
     "Someone will reread your words tonight.", "A comment will make your whole week.",
     "Rest is part of the craft. Take the afternoon.", "Your next idea is closer than you think.",
@@ -6260,12 +6294,12 @@
     "It is certain.", "Without a doubt.", "Yes, definitely.", "Signs point to yes.", "Ask again later.",
     "Better not tell you now.", "Cannot predict now.", "Don't count on it.", "My reply is no.", "Very doubtful."
   ];
-  const MW_AFFIRM = [
+  const MW_AFFIRM = (_WC.affirmations && _WC.affirmations.length) ? _WC.affirmations : [
     "Your voice is worth hearing.", "You are allowed to write badly today.", "Small progress is still progress.",
     "Your story matters to someone.", "You are a writer because you write.", "Finished beats perfect.",
     "One paragraph is a victory.", "You are exactly the right person to tell this."
   ];
-  const MW_FACTS = [
+  const MW_FACTS = (_WC.facts && _WC.facts.length) ? _WC.facts : [
     "The longest novel ever published runs over 1.2 million words.", "The word 'fangirl' entered dictionaries in 2016.",
     "Fanfiction predates the internet by centuries.", "Reading fiction measurably boosts empathy.",
     "The average adult reads about 240 words a minute.", "'Serendipity' was coined by a novelist in 1754.",
@@ -6338,11 +6372,21 @@
         const stop = el.querySelector("[data-mw-sp-stop]"); stop && stop.addEventListener("click", () => { mwSetState("word-sprint", { endsAt: 0 }); renderWidgets(); });
         const disp = el.querySelector("[data-mw-sp]"); if (mwState("word-sprint").endsAt) miniInterval(setInterval(() => { const s = mwState("word-sprint"); const left = s.endsAt - Date.now(); const d = el.querySelector("[data-mw-sp]"); if (left <= 0) { mwSetState("word-sprint", { endsAt: 0 }); toast("Sprint done. Great work."); renderWidgets(); return; } if (d) d.textContent = fmtDur(left); }, 500)); } },
     { id: "streak", name: "Reading streak", icon: "check", blurb: "Days in a row.",
-      render() { const s = mwState("streak"); return `<div class="mw-big">${s.count || 0} 🔥</div><p class="mw-sub">${s.last === todayKey() ? "Logged for today" : "Not logged today"}</p><button class="btn btn--ghost btn--full btn--sm" data-mw-streak ${s.last === todayKey() ? "disabled" : ""}>I read today</button>`; },
-      wire(el) { const b = el.querySelector("[data-mw-streak]"); b && b.addEventListener("click", () => { const s = mwState("streak"); const y = new Date(Date.now() - 86400000); const yk = y.getFullYear() + "-" + (y.getMonth() + 1) + "-" + y.getDate(); const cont = s.last === yk; const nc = cont ? (s.count || 0) + 1 : 1; mwSetState("streak", { count: nc, last: todayKey() }); if (nc >= 3 && nc % 5 === 0) celebrate(nc + " day streak!", "Keep it going.", "🔥"); else if (!reducedMotion()) confettiBurst(); renderWidgets(); }); } },
+      render() {
+        const s = mwState("streak"); const done = s.last === todayKey();
+        // When today is already logged (you tapped it, or reading logged it for
+        // you), show a plain confirmation instead of a dead, disabled button that
+        // looks broken when tapped. The button only appears when it will do
+        // something.
+        return `<div class="mw-big">${s.count || 0} 🔥</div>` +
+          (done
+            ? `<p class="mw-sub mw-done">${icon("check", 13)} Logged for today</p>`
+            : `<p class="mw-sub">Not logged today</p><button class="btn btn--ghost btn--full btn--sm" data-mw-streak>I read today</button>`);
+      },
+      wire(el) { const b = el.querySelector("[data-mw-streak]"); b && b.addEventListener("click", () => { const s = mwState("streak"); const y = new Date(Date.now() - 86400000); const yk = y.getFullYear() + "-" + (y.getMonth() + 1) + "-" + y.getDate(); const cont = s.last === yk; const nc = cont ? (s.count || 0) + 1 : 1; mwSetState("streak", { count: nc, last: todayKey() }); mwRefresh("streak"); if (nc >= 3 && nc % 5 === 0) celebrate(nc + " day streak!", "Keep it going.", "🔥"); else if (!reducedMotion()) confettiBurst(); }); } },
     { id: "countdown", name: "Countdown", icon: "clock", blurb: "Days until a date.",
       render() { const s = mwState("countdown"); if (!s.target) return `<p class="mw-sub">No date set yet.</p><button class="btn btn--ghost btn--full btn--sm" data-mw-cd-set>Set a date</button>`; const days = Math.ceil((new Date(s.target).getTime() - Date.now()) / 86400000); return `<div class="mw-big">${days >= 0 ? days : 0}</div><p class="mw-sub">${days > 0 ? "days to " : days === 0 ? "today: " : "since "}${esc(s.label || "your date")}</p><button class="btn btn--quiet btn--full btn--sm" data-mw-cd-set>Change</button>`; },
-      wire(el) { const b = el.querySelector("[data-mw-cd-set]"); b && b.addEventListener("click", () => { const t = (window.prompt("Date (YYYY-MM-DD)", mwState("countdown").target || "") || "").trim(); if (!t) return; const label = (window.prompt("What is it? (optional)", mwState("countdown").label || "") || "").trim(); mwSetState("countdown", { target: t, label }); renderWidgets(); }); } },
+      wire(el) { const b = el.querySelector("[data-mw-cd-set]"); b && b.addEventListener("click", () => { const t = (window.prompt("Date (YYYY-MM-DD)", mwState("countdown").target || "") || "").trim(); if (!t) return; const label = (window.prompt("What is it? (optional)", mwState("countdown").label || "") || "").trim(); mwSetState("countdown", { target: t, label }); mwRefresh("countdown"); }); } },
     pickerWidget("quote", "Quote of the day", "quote", "A writing quote.", MW_QUOTES, "New quote"),
     pickerWidget("prompt", "Writing prompt", "edit", "A story prompt.", MW_PROMPTS, "New prompt"),
     pickerWidget("fortune", "Fortune cookie", "quote", "A tiny fortune.", MW_FORTUNES, "Crack it open"),
@@ -6399,7 +6443,7 @@
           const cutoff = Date.now() - 42 * 86400000;
           Object.keys(hist).forEach(k => { const p = k.split("-"); const t = new Date(+p[0], (+p[1]) - 1, +p[2]).getTime(); if (isFinite(t) && t < cutoff) delete hist[k]; });
           mwSetState("mood", { emoji: b.dataset.mwMood, day: today, history: hist });
-          renderWidgets();
+          mwRefresh("mood");
         }));
       } },
     { id: "sticky", name: "Sticky notes", icon: "edit", blurb: "Notes that stick around.",
@@ -6407,17 +6451,17 @@
       wire(el) {
         const notes = () => normalizeStickies(mwState("sticky"));
         el.querySelectorAll("[data-mw-sticky]").forEach(t => { let tm = null; t.addEventListener("input", () => { clearTimeout(tm); tm = setTimeout(() => { const arr = notes(); const i = +t.dataset.mwSticky; if (arr[i]) { arr[i].text = t.value; mwSetState("sticky", { notes: arr }); } }, 300); }); });
-        const add = el.querySelector("[data-mw-sticky-add]"); if (add) add.addEventListener("click", () => { const arr = notes(); arr.push({ text: "" }); mwSetState("sticky", { notes: arr }); renderWidgets(); });
-        el.querySelectorAll("[data-mw-sticky-del]").forEach(b => b.addEventListener("click", () => { const arr = notes(); arr.splice(+b.dataset.mwStickyDel, 1); if (!arr.length) arr.push({ text: "" }); mwSetState("sticky", { notes: arr }); renderWidgets(); }));
+        const add = el.querySelector("[data-mw-sticky-add]"); if (add) add.addEventListener("click", () => { const arr = notes(); arr.push({ text: "" }); mwSetState("sticky", { notes: arr }); mwRefresh("sticky"); });
+        el.querySelectorAll("[data-mw-sticky-del]").forEach(b => b.addEventListener("click", () => { const arr = notes(); arr.splice(+b.dataset.mwStickyDel, 1); if (!arr.length) arr.push({ text: "" }); mwSetState("sticky", { notes: arr }); mwRefresh("sticky"); }));
       } },
     { id: "to-read", name: "To-read list", icon: "bookmark", blurb: "A checkable reading list.",
       render() { const items = normalizeTodo(mwState("to-read").items); return `<ul class="mw-todo">${items.length ? items.map((it, i) => `<li class="${it.done ? "is-done" : ""}"><button class="mw-todo-box" data-mw-tr-toggle="${i}" aria-pressed="${it.done}" aria-label="${it.done ? "Mark not done" : "Mark done"}">${it.done ? icon("check", 12) : ""}</button><span class="mw-todo-txt">${esc(it.text)}</span><button class="mw-li-del" data-mw-tr-del="${i}" aria-label="Remove">&times;</button></li>`).join("") : '<li class="mw-todo-empty">Nothing yet. Add something to read.</li>'}</ul><form class="mw-todo-add" data-mw-tr-form><input type="text" class="mw-todo-in" data-mw-tr-in placeholder="Add a title or note" maxlength="140"><button class="btn btn--ghost btn--sm" type="submit">Add</button></form>`; },
       wire(el) {
         const items = () => normalizeTodo(mwState("to-read").items);
         const form = el.querySelector("[data-mw-tr-form]"), input = el.querySelector("[data-mw-tr-in]");
-        if (form) form.addEventListener("submit", (e) => { e.preventDefault(); const v = (input.value || "").trim(); if (!v) return; const arr = items(); arr.push({ text: v, done: false }); mwSetState("to-read", { items: arr }); renderWidgets(); setTimeout(() => { const box = el.closest(".mini-widget") ? el : document; const nx = (box.querySelector ? box : document).querySelector('[data-mw="to-read"] [data-mw-tr-in]'); if (nx) nx.focus(); }, 0); });
-        el.querySelectorAll("[data-mw-tr-toggle]").forEach(b => b.addEventListener("click", () => { const arr = items(); const i = +b.dataset.mwTrToggle; if (arr[i]) { arr[i].done = !arr[i].done; mwSetState("to-read", { items: arr }); renderWidgets(); } }));
-        el.querySelectorAll("[data-mw-tr-del]").forEach(b => b.addEventListener("click", () => { const arr = items(); arr.splice(+b.dataset.mwTrDel, 1); mwSetState("to-read", { items: arr }); renderWidgets(); }));
+        if (form) form.addEventListener("submit", (e) => { e.preventDefault(); const v = (input.value || "").trim(); if (!v) return; const arr = items(); arr.push({ text: v, done: false }); mwSetState("to-read", { items: arr }); mwRefresh("to-read"); setTimeout(() => { const nx = document.querySelector('[data-mw="to-read"] [data-mw-tr-in]'); if (nx) nx.focus(); }, 0); });
+        el.querySelectorAll("[data-mw-tr-toggle]").forEach(b => b.addEventListener("click", () => { const arr = items(); const i = +b.dataset.mwTrToggle; if (arr[i]) { arr[i].done = !arr[i].done; mwSetState("to-read", { items: arr }); mwRefresh("to-read"); } }));
+        el.querySelectorAll("[data-mw-tr-del]").forEach(b => b.addEventListener("click", () => { const arr = items(); arr.splice(+b.dataset.mwTrDel, 1); mwSetState("to-read", { items: arr }); mwRefresh("to-read"); }));
       } },
     { id: "water", name: "Water nudge", icon: "check", blurb: "Track water, hourly nudges.",
       render() {
@@ -6457,9 +6501,9 @@
           mwSetState("water", { n: nn, day: today, metDay: (justMet || s.metDay === today) ? today : s.metDay });
           if (justMet) {
             celebrate("You hit your water goal", "That's " + goal + " glasses today. Nicely done.", "💧");
-            setTimeout(() => { const s2 = mwState("water"); if (s2.day === todayKey() && (s2.n || 0) >= waterGoal(s2)) { mwSetState("water", { n: 0, day: todayKey() }); renderWidgets(); } }, 2600);
+            setTimeout(() => { const s2 = mwState("water"); if (s2.day === todayKey() && (s2.n || 0) >= waterGoal(s2)) { mwSetState("water", { n: 0, day: todayKey() }); mwRefresh("water"); } }, 2600);
           }
-          renderWidgets();
+          mwRefresh("water");
         };
         el.querySelectorAll("[data-mw-fill]").forEach(b => b.addEventListener("click", () => {
           const s = mwState("water"); const cur = s.day === todayKey() ? (s.n || 0) : 0;
@@ -6471,11 +6515,11 @@
           setTo(cur + (+b.dataset.mwWater));
         }));
         const clr = el.querySelector("[data-mw-water-clear]");
-        if (clr) clr.addEventListener("click", () => { mwSetState("water", { n: 0, day: todayKey() }); renderWidgets(); });
+        if (clr) clr.addEventListener("click", () => { mwSetState("water", { n: 0, day: todayKey() }); mwRefresh("water"); });
         el.querySelectorAll("[data-mw-water-goal]").forEach(b => b.addEventListener("click", () => {
           const s = mwState("water");
           const goal = Math.max(1, Math.min(20, waterGoal(s) + (+b.dataset.mwWaterGoal)));
-          mwSetState("water", { goal }); renderWidgets();
+          mwSetState("water", { goal }); mwRefresh("water");
         }));
         const rb = el.querySelector("[data-mw-water-remind]");
         if (rb) rb.addEventListener("click", () => {
@@ -6486,7 +6530,7 @@
           // toast nudges still work even if the reader declines notifications.
           mwSetState("water", { remind: turningOn, last: turningOn ? Date.now() : (s.last || 0) });
           if (turningOn) { armWaterReminders(); requestNotifyPermission().catch(() => {}); }
-          renderWidgets();
+          mwRefresh("water");
           toast(turningOn ? "I'll nudge you about once an hour until you reach your goal." : "Water reminders off.");
         });
       } },
@@ -6521,13 +6565,13 @@
       wire(el) { el.querySelector("[data-mw-conf]").addEventListener("click", confettiBurst); } },
     { id: "petals", name: "Falling petals", icon: "leaf", blurb: "Petals drifting down.",
       render() { const on = !!mwState("petals").on; return `<p class="mw-sub">A quiet, drifting backdrop.</p><button class="btn ${on ? "btn--primary" : "btn--ghost"} btn--full btn--sm" data-mw-petals>${on ? "Turn off" : "Turn on"}</button>`; },
-      wire(el) { el.querySelector("[data-mw-petals]").addEventListener("click", () => { const on = !mwState("petals").on; mwSetState("petals", { on }); togglePetals(on); renderWidgets(); }); } },
+      wire(el) { el.querySelector("[data-mw-petals]").addEventListener("click", () => { const on = !mwState("petals").on; mwSetState("petals", { on }); togglePetals(on); mwRefresh("petals"); }); } },
     { id: "focus", name: "Focus mode", icon: "book", blurb: "Everything but the page, dimmed.",
       render() { const on = !!mwState("focus").on; return `<p class="mw-sub">Quiets everything but the page.</p><button class="btn ${on ? "btn--primary" : "btn--ghost"} btn--full btn--sm" data-mw-focus>${on ? "Turn off" : "Turn on"}</button>`; },
-      wire(el) { el.querySelector("[data-mw-focus]").addEventListener("click", () => { const on = !mwState("focus").on; mwSetState("focus", { on }); document.body.classList.toggle("focus-mode", on); renderWidgets(); }); } },
+      wire(el) { el.querySelector("[data-mw-focus]").addEventListener("click", () => { const on = !mwState("focus").on; mwSetState("focus", { on }); document.body.classList.toggle("focus-mode", on); mwRefresh("focus"); }); } },
     { id: "accent", name: "Accent shuffler", icon: "palette", blurb: "A new accent color.",
       render() { return `<p class="mw-sub">Current accent: <b>${esc(settings.accent || "default")}</b></p><button class="btn btn--ghost btn--full btn--sm" data-mw-accent>Shuffle</button>`; },
-      wire(el) { el.querySelector("[data-mw-accent]").addEventListener("click", () => { const ids = ACCENTS.map(a => a.id).filter(x => x !== settings.accent); settings.accent = rand(ids); applySettings(); renderWidgets(); }); } },
+      wire(el) { el.querySelector("[data-mw-accent]").addEventListener("click", () => { const ids = ACCENTS.map(a => a.id).filter(x => x !== settings.accent); settings.accent = rand(ids); applySettings(); mwRefresh("accent"); }); } },
     { id: "wpm", name: "Reading pace", icon: "clock", blurb: "Learned as you read.",
       render() { const s = mwState("wpm"); return s.avg ? `<div class="mw-big">${s.avg}</div><p class="mw-sub">words per minute${s.n ? " · from " + s.n + " " + (s.n === 1 ? "read" : "reads") : ""}</p>` : `<p class="mw-sub">Read a chapter or two and I'll learn your pace on my own. No typing.</p>`; },
       wire() {} },
@@ -6542,7 +6586,7 @@
       wire() {} },
     { id: "gratitude", name: "Gratitude line", icon: "heart", blurb: "One good thing today.",
       render() { const s = mwState("gratitude"); return s.day === todayKey() && s.text ? `<p class="mw-out">${esc(s.text)}</p><button class="btn btn--quiet btn--full btn--sm" data-mw-grat>Change</button>` : `<button class="btn btn--ghost btn--full btn--sm" data-mw-grat>Add one good thing</button>`; },
-      wire(el) { el.querySelector("[data-mw-grat]").addEventListener("click", () => { const v = (window.prompt("One good thing today") || "").trim(); if (!v) return; mwSetState("gratitude", { text: v, day: todayKey() }); renderWidgets(); }); } },
+      wire(el) { el.querySelector("[data-mw-grat]").addEventListener("click", () => { const v = (window.prompt("One good thing today") || "").trim(); if (!v) return; mwSetState("gratitude", { text: v, day: todayKey() }); mwRefresh("gratitude"); }); } },
     { id: "spinner", name: "Yes or no", icon: "shuffle", blurb: "Yes, no, or maybe.",
       render() { return `<div class="mw-big" data-mw-out>?</div><button class="btn btn--ghost btn--full btn--sm" data-mw-roll>Decide</button>`; },
       wire(el) { const out = el.querySelector("[data-mw-out]"); el.querySelector("[data-mw-roll]").addEventListener("click", () => { out.textContent = rand(["Yes", "No", "Maybe", "Later", "Go for it", "Not now"]); out.classList.remove("mw-pop"); void out.offsetWidth; out.classList.add("mw-pop"); }); } }
@@ -8527,11 +8571,15 @@
     // author from the database, so it finds works far past any preloaded page.
     const workList = card.querySelector("#admin-work-list");
     const workFilter = card.querySelector("#admin-work-filter");
-    // Staff picks: which works are currently featured (loaded once for the panel).
-    let featuredSet = new Set();
-    WispDB.listFeatured().then(list => { featuredSet = new Set((list || []).map(w => w.id)); }).catch(() => {});
-    const workRowHTML = (w) => { const on = featuredSet.has(w.id); return `<div class="admin-row">
-        <div class="admin-row__main"><b>${esc(w.title || "Untitled")}</b><span class="muted">by ${esc(w.author || "Unknown")}</span></div>
+    // Staff picks: which works are currently featured, and the recommendation
+    // note the admin wrote for each (shown under "Staff picks" on the home page).
+    let featuredSet = new Set(), featuredNotes = {};
+    WispDB.listFeatured().then(list => { (list || []).forEach(w => { featuredSet.add(w.id); featuredNotes[w.id] = w.featuredNote || ""; }); }).catch(() => {});
+    const workRowHTML = (w) => { const on = featuredSet.has(w.id); const note = featuredNotes[w.id] || ""; return `<div class="admin-row admin-row--feature">
+        <div class="admin-row__main">
+          <div><b>${esc(w.title || "Untitled")}</b> <span class="muted">by ${esc(w.author || "Unknown")}</span></div>
+          <input type="text" class="admin-rec" data-admin-note="${esc(w.id)}" maxlength="160" placeholder="Why you recommend this (shown under Staff picks)" value="${esc(note)}">
+        </div>
         <button class="btn btn--sm ${on ? "btn--primary" : "btn--quiet"}" data-admin-feature="${esc(w.id)}" aria-pressed="${on}">${on ? "Featured" : "Feature"}</button>
         <button class="btn btn--danger btn--sm" data-admin-del-work="${esc(w.id)}" data-label="${esc(w.title || "Untitled")}">Delete</button>
       </div>`; };
@@ -8541,19 +8589,34 @@
         confirmDialog({ title: "Delete this work?", body: `&ldquo;${esc(label)}&rdquo; will be removed for everyone. Its chapters go too. This cannot be undone.`, confirmText: "Delete work", danger: true },
           async () => { try { await WispDB.adminDeleteWork(id); toast("Work deleted."); } catch (e) { toast((e && e.message) || "Could not delete."); } renderAdminPanel(); });
       }));
-      // Feature / unfeature a work for the home "Staff picks" section.
+      // Feature / unfeature a work for the home "Staff picks" section, carrying
+      // the admin's recommendation note from the row's input.
       workList && workList.querySelectorAll("[data-admin-feature]").forEach(b => b.addEventListener("click", async () => {
         const id = b.dataset.adminFeature; const on = featuredSet.has(id);
+        const noteEl = workList.querySelector('[data-admin-note="' + id + '"]');
+        const note = noteEl ? noteEl.value.trim() : "";
         b.disabled = true;
         try {
           if (on) { await WispDB.unsetFeatured(id); featuredSet.delete(id); toast("Removed from Staff picks."); }
-          else { const ok = await WispDB.setFeatured(id, ""); if (ok === false) { toast("Staff picks needs migration 023."); b.disabled = false; return; } featuredSet.add(id); toast("Added to Staff picks."); }
+          else { const ok = await WispDB.setFeatured(id, note); if (ok === false) { toast("Staff picks needs migration 023."); b.disabled = false; return; } featuredSet.add(id); featuredNotes[id] = note; toast(note ? "Added to Staff picks with your note." : "Added to Staff picks."); }
           const nowOn = featuredSet.has(id);
           b.classList.toggle("btn--primary", nowOn); b.classList.toggle("btn--quiet", !nowOn);
           b.setAttribute("aria-pressed", String(nowOn)); b.textContent = nowOn ? "Featured" : "Feature";
         } catch (e) { toast((e && e.message) || "Could not update Staff picks."); }
         b.disabled = false;
       }));
+      // Editing the note for an already-featured work saves on blur or Enter,
+      // so an admin can revise the recommendation without unfeaturing first.
+      workList && workList.querySelectorAll("[data-admin-note]").forEach(inp => {
+        const save = async () => {
+          const id = inp.dataset.adminNote; if (!featuredSet.has(id)) return;
+          const note = inp.value.trim(); if (note === (featuredNotes[id] || "")) return;
+          try { const ok = await WispDB.setFeatured(id, note); if (ok !== false) { featuredNotes[id] = note; toast("Recommendation saved."); } }
+          catch (e) { toast((e && e.message) || "Could not save the note."); }
+        };
+        inp.addEventListener("blur", save);
+        inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); inp.blur(); } });
+      });
     };
     const showWorkResults = (rows, q) => {
       if (!workList) return;
@@ -9119,7 +9182,25 @@
     gcPhrase("they was", "they were"), gcPhrase("we was", "we were"), gcPhrase("you was", "you were"),
     gcPhrase("he have", "he has"), gcPhrase("she have", "she has"),
     gcPhrase("could of", "could have"), gcPhrase("would of", "would have"), gcPhrase("should of", "should have"),
-    gcPhrase("must of", "must have"), gcPhrase("your welcome", "you're welcome"), gcPhrase("each and every", "every")
+    gcPhrase("must of", "must have"), gcPhrase("might of", "might have"),
+    gcPhrase("your welcome", "you're welcome"), gcPhrase("each and every", "every"),
+    // ---- High-confidence homophones and contextual slips ------------------
+    // "then" straight after a comparative is almost always "than".
+    { re: /\b(more|less|better|worse|rather|other|bigger|smaller|larger|greater|older|younger|faster|slower|higher|lower|sooner|earlier|cheaper|stronger|weaker|harder|easier|nicer|richer|poorer|closer|deeper|longer|shorter|taller|colder|hotter|warmer|else)\s+then\b/gi,
+      fix: (m) => m[1] + " than" },
+    // "to" before one of these adverbs/adjectives is almost always "too".
+    { re: /\bto\s+(much|many|late|early|soon|often|far|good|easy|hard|expensive|cheap|tired|busy|big|small|old|young|fast|slow|loud|quiet|heavy|cold|hot|weak|strong|difficult)\b/gi,
+      fix: (m) => (/^T/.test(m[0]) ? "Too " : "too ") + m[1] },
+    // "its" before these reads as "it is" / "it has" (needs the apostrophe).
+    { re: /\bits\s+(been|a|an|not|going|gonna|already|still|time|too|so|okay|ok|fine|over)\b/gi,
+      fix: (m) => (/^I/.test(m[0]) ? "It's " : "it's ") + m[1] },
+    // "your" before these reads as "you are".
+    { re: /\byour\s+(welcome|going|gonna|awesome|amazing|kidding|joking|invited|fired|hired|so|too|not|always|never|still)\b/gi,
+      fix: (m) => (/^Y/.test(m[0]) ? "You're " : "you're ") + m[1] },
+    gcPhrase("i seen", "I saw"), gcPhrase("less people", "fewer people"),
+    gcPhrase("supposably", "supposedly"), gcPhrase("irregardless", "regardless"),
+    gcPhrase("for all intensive purposes", "for all intents and purposes"),
+    gcPhrase("nip it in the butt", "nip it in the bud"), gcPhrase("case and point", "case in point")
   ];
   // A doubled word ("the the") collapses to one — but plenty of repeats are
   // deliberate in prose and dialogue, so those are left alone.
@@ -9163,8 +9244,10 @@
         rule.re.lastIndex = 0; let m;
         while ((m = rule.re.exec(text))) {
           const s = m.index, e = s + m[0].length;
-          const fix = rule.caps ? gcApplyCase(m[0], rule.fix) : rule.fix;
-          if (fix !== m[0]) raw.push({ s, e, orig: m[0], fix });
+          // A rule's fix may be a plain replacement or a function of the match
+          // (so a captured word can be kept while one word is corrected).
+          const fix = typeof rule.fix === "function" ? rule.fix(m) : (rule.caps ? gcApplyCase(m[0], rule.fix) : rule.fix);
+          if (fix != null && fix !== m[0]) raw.push({ s, e, orig: m[0], fix });
           if (m.index === rule.re.lastIndex) rule.re.lastIndex++;
         }
       });
@@ -9239,7 +9322,8 @@
     if (kind === "bold") exec("bold");
     else if (kind === "italic") exec("italic");
     else if (kind === "underline") exec("underline");
-    else if (kind === "highlight") applyHighlight();
+    else if (kind === "highlight") applyHighlight("yellow");
+    else if (kind.indexOf("hl-") === 0) applyHighlight(kind.slice(3));
     else if (kind === "fs-inc" || kind === "fs-dec") {
       nudgeFontSize(kind === "fs-inc" ? 1 : -1);
     }
@@ -9295,21 +9379,31 @@
   // Wrap the current selection in an inline tag+class (highlight, font size).
   // Toggles off if the selection already carries it, stays inside one paragraph,
   // and never leaves an empty wrapper behind (those were the stray colored bars).
-  function wrapSelectionInline(tag, cls, sameBlockMsg) {
+  function wrapSelectionInline(tag, cls, sameBlockMsg, opts) {
+    opts = opts || {};
     const ed = $("#we-body"); if (!ed) return;
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || !sel.toString().trim()) { toast("Select some text first."); return; }
     const range = sel.getRangeAt(0);
     if (editorBlockOf(range.startContainer, ed) !== editorBlockOf(range.endContainer, ed)) { toast(sameBlockMsg || "Format one paragraph at a time."); return; }
     let anc = range.commonAncestorContainer; if (anc && anc.nodeType === 3) anc = anc.parentNode;
-    const sel1 = tag + (cls ? "." + cls : "");
+    // Match an existing wrapper by the FIRST class only (so a coloured highlight
+    // "hl hl--pink" is still recognised as an "hl").
+    const firstCls = cls ? cls.split(/\s+/)[0] : "";
+    const sel1 = tag + (firstCls ? "." + firstCls : "");
     const existing = anc && anc.closest ? anc.closest(sel1) : null;
     try {
       if (existing) {
-        const parent = existing.parentNode;
-        while (existing.firstChild) parent.insertBefore(existing.firstChild, existing);
-        parent.removeChild(existing);
-      } else {
+        // Recolour in place when asked (yellow -> pink just restyles the mark);
+        // otherwise, or when removing, unwrap it.
+        if (opts.recolor && !opts.remove && existing.className !== cls) {
+          existing.className = cls;
+        } else {
+          const parent = existing.parentNode;
+          while (existing.firstChild) parent.insertBefore(existing.firstChild, existing);
+          parent.removeChild(existing);
+        }
+      } else if (!opts.remove) {
         const el = document.createElement(tag); if (cls) el.className = cls;
         el.appendChild(range.extractContents()); range.insertNode(el);
       }
@@ -9322,7 +9416,16 @@
     sel.removeAllRanges();
     updateEditorEmpty();
   }
-  function applyHighlight() { wrapSelectionInline("mark", "hl", "Highlight one paragraph at a time."); }
+  // Highlight the selection in one of a few marker colours (yellow is the plain
+  // default), recolour an existing highlight, or remove it. Colours are held as
+  // an hl--<name> class and round-trip through Markdown as ==name|text==.
+  const HL_COLORS = ["yellow", "green", "pink", "blue", "orange", "purple"];
+  function applyHighlight(color) {
+    if (color === "" || color === "none") { wrapSelectionInline("mark", "hl", "Highlight one paragraph at a time.", { remove: true }); return; }
+    color = HL_COLORS.indexOf(color) >= 0 ? color : "yellow";
+    const cls = color === "yellow" ? "hl" : "hl hl--" + color;
+    wrapSelectionInline("mark", cls, "Highlight one paragraph at a time.", { recolor: true });
+  }
 
   // The editor's live selection is easy to lose the moment a toolbar button
   // takes focus (especially on a phone, where tapping a button blurs the field).

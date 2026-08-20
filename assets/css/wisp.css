@@ -961,6 +961,33 @@ mark.hl {
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
+/* Highlighter colours. Kept translucent so the ink stays readable in either
+   theme; the marker tints the page like a real highlighter rather than a solid
+   block. */
+mark.hl--green  { background: rgba(57, 230, 90, 0.40); }
+mark.hl--pink   { background: rgba(255, 74, 170, 0.38); }
+mark.hl--blue   { background: rgba(70, 190, 255, 0.40); }
+mark.hl--orange { background: rgba(255, 150, 46, 0.42); }
+mark.hl--purple { background: rgba(190, 130, 255, 0.42); }
+:root[data-theme="dark"] mark.hl--green  { background: rgba(57, 230, 90, 0.30); }
+:root[data-theme="dark"] mark.hl--pink   { background: rgba(255, 74, 170, 0.30); }
+:root[data-theme="dark"] mark.hl--blue   { background: rgba(70, 190, 255, 0.30); }
+:root[data-theme="dark"] mark.hl--orange { background: rgba(255, 150, 46, 0.32); }
+:root[data-theme="dark"] mark.hl--purple { background: rgba(190, 130, 255, 0.32); }
+/* Editor highlighter swatch strip. */
+.hl-tool { display: inline-flex; align-items: center; gap: 3px; padding: 0 2px; }
+.toolbar .hl-chip { width: 17px; height: 17px; min-width: 0; padding: 0; border-radius: 50%;
+  border: 1px solid var(--line); cursor: pointer; flex: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.4); }
+.toolbar .hl-chip:hover { transform: scale(1.12); }
+.hl-chip--yellow { background: rgba(245, 193, 90, 0.95); }
+.hl-chip--green  { background: rgba(57, 230, 90, 0.9); }
+.hl-chip--pink   { background: rgba(255, 74, 170, 0.9); }
+.hl-chip--blue   { background: rgba(70, 190, 255, 0.9); }
+.hl-chip--orange { background: rgba(255, 150, 46, 0.95); }
+.hl-chip--purple { background: rgba(190, 130, 255, 0.9); }
+.toolbar .hl-chip--none { background: var(--card); color: var(--ink3); font-size: 13px; line-height: 1;
+  display: grid; place-items: center; box-shadow: none; }
+.toolbar .hl-chip--none:hover { color: var(--ink); border-color: var(--ink3); }
 /* Per-word font sizing, shared by the editor and the reader. */
 .fs-lg { font-size: 1.35em; }
 .fs-sm { font-size: 0.82em; }
@@ -1770,6 +1797,10 @@ mark.hl {
 .admin-row__main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .admin-row__main b { font-size: 14px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .admin-row__main .muted { font-size: 12px; }
+.admin-row--feature .admin-row__main { flex: 1; gap: 5px; }
+.admin-rec { width: 100%; border: 1px solid var(--line); border-radius: 7px; padding: 5px 9px;
+  font: 12.5px var(--font-text); color: var(--ink); background: var(--surface); outline: none; }
+.admin-rec:focus { border-color: var(--rose); }
 .admin-empty { font-size: 13px; padding: 8px 2px; }
 .admin-add { display: flex; flex-direction: column; gap: 8px; }
 .admin-add input { width: 100%; padding: 8px 11px; border: 1px solid var(--line); border-radius: 9px;
@@ -2028,6 +2059,8 @@ button.pill--link:hover { border-color: var(--rose); color: var(--rose-ink); bac
 .mw-body { margin-top: 10px; }
 .mw-big { font: 30px/1 var(--font-display); color: var(--ink); font-variant-numeric: tabular-nums; text-align: center; padding: 6px 0 2px; }
 .mw-sub { font-size: 12.5px; color: var(--ink3); margin: 6px 0 0; text-align: center; line-height: 1.5; }
+.mw-done { display: flex; align-items: center; justify-content: center; gap: 5px; color: var(--rose-ink); font-weight: 600; }
+.mw-done svg { color: var(--rose-ink); }
 .mw-out { font-size: 14px; color: var(--ink); line-height: 1.5; margin: 0 0 10px; min-height: 1.4em; }
 .mw-row { display: flex; gap: 8px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
 .mw-row .btn { flex: 1; }
