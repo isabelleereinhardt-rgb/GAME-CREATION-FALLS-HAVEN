@@ -136,26 +136,36 @@
   }
   function walkerSvg() {
     return '<svg width="86" height="52" viewBox="0 0 72 48" fill="none" aria-hidden="true">' +
-      '<path class="lucky-tail" d="M56 25c9-1 9-8 8-14" stroke="var(--fur)" stroke-width="5" stroke-linecap="round"/>' +
-      '<rect class="lucky-leg" x="46" y="32" width="5" height="13" rx="2.5" fill="var(--fur2)"/>' +
-      '<rect class="lucky-leg" x="28" y="32" width="5" height="13" rx="2.5" fill="var(--fur2)" style="animation-delay:-.31s"/>' +
-      '<rect x="23" y="19" width="34" height="17" rx="8.5" fill="var(--fur)"/>' +
-      '<ellipse cx="40" cy="33" rx="13" ry="4" fill="var(--belly)"/>' +
-      '<path d="M32 20v14M39 20v14M46 20v15" stroke="var(--fur3)" stroke-width="2.4" stroke-linecap="round" opacity=".75"/>' +
-      '<rect class="lucky-leg" x="51" y="32" width="5" height="13" rx="2.5" fill="var(--fur)" style="animation-delay:-.31s"/>' +
-      '<rect class="lucky-leg" x="33" y="32" width="5" height="13" rx="2.5" fill="var(--fur)"/>' +
-      '<path d="M11 13l2-9 8 7z" fill="var(--fur)"/><path d="M22 10l8-6 .5 9z" fill="var(--fur)"/>' +
-      '<path d="M13.5 11l1-4.5 3.6 3.2z" fill="var(--ear)"/><path d="M24 10l4-3 .3 4.6z" fill="var(--ear)"/>' +
-      '<circle cx="20" cy="20" r="11" fill="var(--head)"/>' +
-      '<path d="M17 11.5c1.6 1.4 4 1.4 5.6 0M14 15.5l3.4 1.6" stroke="var(--fur3)" stroke-width="1.8" stroke-linecap="round" opacity=".7"/>' +
-      '<circle class="lucky-eye" cx="15" cy="20" r="2" fill="var(--eye)"/>' +
-      '<circle class="lucky-eye" cx="24" cy="20" r="2" fill="var(--eye)"/>' +
-      '<circle cx="15.7" cy="19.3" r=".6" fill="#fff"/><circle cx="24.7" cy="19.3" r=".6" fill="#fff"/>' +
-      '<path d="M18 24.4h3l-1.5 1.8z" fill="var(--nose)"/>' +
-      '<path d="M19.5 26.2c-.8 1.2-2.4 1.2-3.2.2M19.5 26.2c.8 1.2 2.4 1.2 3.2.2" stroke="var(--fur3)" stroke-width="1.1" stroke-linecap="round"/>' +
-      '<circle cx="11.5" cy="24" r="2.2" fill="var(--ear)" opacity=".55"/>' +
-      '<circle cx="28.5" cy="24" r="2.2" fill="var(--ear)" opacity=".55"/>' +
-      '<path d="M6 22.5l5 .8M6 26l5-.6M31 23.3l5-.8M31 25.4l5 .6" stroke="var(--belly)" stroke-width="1" stroke-linecap="round"/>' +
+      // tail (behind the body), with a lighter tip; rotates as one group
+      '<g class="lucky-tail"><path d="M57 27q11 -1 8.6 -15.4" stroke="var(--fur)" stroke-width="5.4" fill="none" stroke-linecap="round"/><circle cx="65.4" cy="11.8" r="3" fill="var(--belly)"/></g>' +
+      // back legs (darker for depth), with pale paw tips
+      '<g class="lucky-leg" style="animation-delay:-.31s"><rect x="47" y="30.5" width="6" height="13.5" rx="3" fill="var(--fur2)"/><ellipse cx="50" cy="44.2" rx="3.4" ry="2" fill="var(--belly)"/></g>' +
+      '<g class="lucky-leg"><rect x="28.5" y="30.5" width="6" height="13.5" rx="3" fill="var(--fur2)"/><ellipse cx="31.5" cy="44.2" rx="3.4" ry="2" fill="var(--belly)"/></g>' +
+      // body: one smooth oval, with a soft white belly
+      '<ellipse cx="42" cy="26" rx="20" ry="11.6" fill="var(--fur)"/>' +
+      '<ellipse cx="39" cy="32" rx="14" ry="5.2" fill="var(--belly)"/>' +
+      // front legs (coat colour), with pale paw tips
+      '<g class="lucky-leg"><rect x="52.5" y="30.5" width="6" height="13.5" rx="3" fill="var(--fur)"/><ellipse cx="55.5" cy="44.2" rx="3.4" ry="2" fill="var(--belly)"/></g>' +
+      '<g class="lucky-leg" style="animation-delay:-.31s"><rect x="33.5" y="30.5" width="6" height="13.5" rx="3" fill="var(--fur)"/><ellipse cx="36.5" cy="44.2" rx="3.4" ry="2" fill="var(--belly)"/></g>' +
+      // ears: clean triangles with a pink inner
+      '<path d="M9.4 12.6 12.4 2.3 19.4 9.1Z" fill="var(--fur)"/>' +
+      '<path d="M21.4 9 28.6 2.5 30.6 12.7Z" fill="var(--fur)"/>' +
+      '<path d="M12 10.7 13.4 5.1 17.1 8.7Z" fill="var(--ear)"/>' +
+      '<path d="M23.4 8.9 27.1 5.5 28.4 10.9Z" fill="var(--ear)"/>' +
+      // head
+      '<circle cx="20" cy="19.2" r="12.4" fill="var(--head)"/>' +
+      // cheeks
+      '<circle cx="11.6" cy="23.2" r="2.2" fill="var(--ear)" opacity=".4"/>' +
+      '<circle cx="28.4" cy="23.2" r="2.2" fill="var(--ear)" opacity=".4"/>' +
+      // eyes (blink) with a single highlight each
+      '<ellipse class="lucky-eye" cx="15" cy="19" rx="2.5" ry="3" fill="var(--eye)"/>' +
+      '<ellipse class="lucky-eye" cx="24.4" cy="19" rx="2.5" ry="3" fill="var(--eye)"/>' +
+      '<circle cx="15.9" cy="17.8" r=".85" fill="#fff"/><circle cx="25.3" cy="17.8" r=".85" fill="#fff"/>' +
+      // nose + gentle smile
+      '<path d="M18.2 23.4h3.6l-1.8 2z" fill="var(--nose)"/>' +
+      '<path d="M20 25.5c-1 1.3-3 1.3-3.8.1M20 25.5c1 1.3 3 1.3 3.8.1" stroke="var(--fur3)" stroke-width="1.1" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' +
+      // whiskers on the leading (left) side
+      '<path d="M3.4 20.6 11 21.6M3 23.5 11 23.3M3.4 26.4 11 25" stroke="var(--fur3)" stroke-width=".8" opacity=".5" stroke-linecap="round"/>' +
       accessorySvg(state.acc) + '</svg>';
   }
   var COMPANION_SVG = {
