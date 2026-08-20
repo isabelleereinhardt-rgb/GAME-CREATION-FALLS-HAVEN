@@ -2452,7 +2452,7 @@
             </div>
             ${w.hideStats ? "" : `<div class="card__stats" style="border:0;max-width:420px;padding:0">
               <span class="stat stat--heart">${icon("heart",15)}${w.hearts} hearts</span>
-              <span class="stat">${icon("comment",15)}${w.comments}</span>
+              <span class="stat">${icon("comment",15)}<span data-comment-total="${w.id}">${w.comments}</span></span>
               <span class="stat">${icon("eye",15)}${w.reads}</span>
             </div>`}
           </div>
@@ -3364,6 +3364,7 @@
       try {
         const saved = await WispDB.postComment(w.id, body, ch.id, i);
         pushLocal((saved && saved.id) || ("local-" + Date.now()), (saved && saved.created_at) || new Date().toISOString());
+        if (saved && saved.id) bumpWorkComments(w.id, +1);   // server counted it; keep the total in step
       } catch (e) {
         // Server write failed (table not migrated, sample work, offline). Keep it
         // on the device so the reader does not lose it on reload.
@@ -3401,13 +3402,15 @@
       const id = b.dataset.cdel;
       confirmDialog({ title: "Delete this comment?", body: "It will be removed for everyone.", confirmText: "Delete", danger: true }, async () => {
         try {
-          if (!/^local-/.test(id)) await WispDB.deleteComment(id);   // device-only comments skip the server
+          const wasServer = !/^local-/.test(id);
+          if (wasServer) await WispDB.deleteComment(id);   // device-only comments skip the server
           removeLocalComment(w.id, id);
           const arr = (LIVE.comments[ch.id] && LIVE.comments[ch.id][i]) || [];
           const idx = arr.findIndex(c => c.id === id);
           if (idx >= 0) arr.splice(idx, 1);
           editingComment = null; openLiveThread(w, ch, i, slot);
           refreshLiveCount(ch, i);
+          if (wasServer) bumpWorkComments(w.id, -1);   // the trigger decremented the server; mirror it here
           toast("Comment deleted.");
         } catch (e) { toast((e && e.message) || "Could not delete."); }
       });
@@ -3420,6 +3423,23 @@
     let badge = mark.querySelector(".para__count");
     if (n && !badge) { badge = document.createElement("span"); badge.className = "para__count"; mark.appendChild(badge); }
     if (badge) badge.textContent = n ? String(n) : (badge.remove(), "");
+  }
+
+  // Keep a work's running comment total in step with the reader's own posts and
+  // deletes. The server keeps the source of truth (the comments_count trigger),
+  // and navigating back re-fetches it — but within the session we adjust the
+  // cached work object and any total on screen so a deleted comment stops being
+  // counted the moment it's gone, instead of lingering until the next reload.
+  // Only server-backed comments move the total; device-only mirrors (local-*)
+  // were never counted on the server, so they leave it alone.
+  function bumpWorkComments(workId, delta) {
+    const w = LIVE.byId[workId];
+    if (w) {
+      w.commentsN = Math.max(0, (w.commentsN || 0) + delta);
+      w.comments = WispDB.fmtCount(w.commentsN);
+      const el = document.querySelector(`[data-comment-total="${workId}"]`);
+      if (el) el.textContent = w.comments;
+    }
   }
 
   function liveThreadHTML(w, ch, i) {
@@ -5557,17 +5577,27 @@
     const compose = shelf.querySelector("[data-conv-compose]");
     if (compose && canPost) compose.hidden = false;
     const myId = window.WispDB && WispDB.user && WispDB.user.id;
+    const iAmOwner = !!(myId && profileId === myId);   // it's my own wall
     const list = $("#convList");
     let posts = [];
+    // Pinned messages sit at the top, newest first within each group. The query
+    // already returns them this way; sort here too so a live pin/unpin reorders
+    // without a round-trip.
+    const orderPosts = () => posts.sort((a, b) =>
+      ((b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)) ||
+      (new Date(b.created_at) - new Date(a.created_at)));
     const render = () => {
       if (!posts.length) { list.innerHTML = `<p class="muted" style="font-size:13px;padding:6px 2px">No messages yet.${canPost ? " Be the first to say something." : ""}</p>`; return; }
+      orderPosts();
       list.innerHTML = posts.map(p => {
         const who = p.author_name || "Reader";
-        const canDel = myId && (p.author_id === myId || profileId === myId);
-        return `<div class="conv-post">
+        const canDel = myId && (p.author_id === myId || iAmOwner);
+        const pinBtn = iAmOwner ? `<button class="conv-pin" data-conv-pin="${esc(p.id)}:${p.pinned ? "0" : "1"}">${p.pinned ? "Unpin" : "Pin"}</button>` : "";
+        return `<div class="conv-post${p.pinned ? " conv-post--pinned" : ""}">
           <span class="conv-av">${esc((who[0] || "?").toUpperCase())}</span>
           <div class="conv-cbody">
-            <div class="conv-meta"><a class="conv-who" href="#/user/${esc(p.author_handle || p.author_id)}">${esc(who)}</a><span class="conv-when">${WispDB.relTime(p.created_at)}</span>${canDel ? `<button class="conv-del" data-conv-del="${esc(p.id)}" aria-label="Delete this message">&times;</button>` : ""}</div>
+            ${p.pinned ? `<span class="conv-pinned">${icon("bookmark",12)} Pinned</span>` : ""}
+            <div class="conv-meta"><a class="conv-who" href="#/user/${esc(p.author_handle || p.author_id)}">${esc(who)}</a><span class="conv-when">${WispDB.relTime(p.created_at)}</span>${pinBtn}${canDel ? `<button class="conv-del" data-conv-del="${esc(p.id)}" aria-label="Delete this message">&times;</button>` : ""}</div>
             <div class="conv-text">${esc(p.body)}</div>
           </div>
         </div>`;
@@ -5592,6 +5622,20 @@
     if (postBtn) postBtn.addEventListener("click", submit);
     if (input) input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); submit(); } });
     list.addEventListener("click", async (e) => {
+      const pin = e.target.closest("[data-conv-pin]");
+      if (pin) {
+        const [id, want] = pin.dataset.convPin.split(":");
+        const on = want === "1";
+        pin.disabled = true;
+        try {
+          const res = await WispDB.setProfilePostPinned(id, on);
+          if (res === false) { toast("Pinning needs migration 025 on your Supabase."); pin.disabled = false; return; }
+          const t = posts.find(p => p.id === id); if (t) t.pinned = on;
+          render();
+          toast(on ? "Message pinned." : "Message unpinned.");
+        } catch (err) { pin.disabled = false; toast("Could not pin."); }
+        return;
+      }
       const del = e.target.closest("[data-conv-del]"); if (!del) return;
       const id = del.dataset.convDel;
       try { await WispDB.deleteProfilePost(id); posts = posts.filter(p => p.id !== id); render(); }
@@ -5627,10 +5671,10 @@
       <div class="page page--wide">
         <div class="profile-hero">
           <div class="profile-hero__av">${esc((name[0] || "?").toUpperCase())}</div>
-          <div style="flex:1;min-width:220px">
-            <h1 class="display" style="font-size:28px">${esc(name)}</h1>
-            <div class="muted" style="font-size:14px">${esc(handle)}</div>
-            ${p.bio ? `<p class="soft" style="font-size:15px;line-height:1.6;margin:10px 0 0;max-width:560px">${esc(p.bio)}</p>` : ""}
+          <div class="profile-id">
+            <h1 class="profile-name">${esc(name)}</h1>
+            ${handle ? `<span class="profile-handle">${esc(handle)}</span>` : ""}
+            ${p.bio ? `<p class="profile-bio">${esc(p.bio)}</p>` : ""}
             <div class="profile-stats">
               <div><b>${published.length}</b><span>Works</span></div>
               <div><b>${WispDB.fmtCount(hearts)}</b><span>Hearts</span></div>
@@ -5721,10 +5765,10 @@
         <button class="btn--link" data-back style="margin-bottom:14px">&lsaquo; Back</button>
         <div class="profile-hero">
           <div class="profile-hero__av">${esc((name[0] || "?").toUpperCase())}</div>
-          <div style="flex:1;min-width:220px">
-            <h1 class="display" style="font-size:28px">${esc(name)}</h1>
-            <div class="muted" style="font-size:14px">${p.handle ? "@" + esc(p.handle) : ""}</div>
-            ${p.bio ? `<p class="soft" style="font-size:15px;line-height:1.6;margin:10px 0 0;max-width:560px">${esc(p.bio)}</p>` : ""}
+          <div class="profile-id">
+            <h1 class="profile-name">${esc(name)}</h1>
+            ${p.handle ? `<span class="profile-handle">@${esc(p.handle)}</span>` : ""}
+            ${p.bio ? `<p class="profile-bio">${esc(p.bio)}</p>` : ""}
             <div class="profile-stats">
               <div><b>${works.length}</b><span>Works</span></div>
               <div><b>${WispDB.fmtCount(counts.followers)}</b><span>Followers</span></div>
@@ -5755,10 +5799,11 @@
       <div class="page page--wide">
         <div class="profile-hero">
           <div class="profile-hero__av">${esc(P.name[0])}</div>
-          <div style="flex:1;min-width:220px">
-            <h1 class="display" style="font-size:28px">${esc(P.name)}</h1>
-            <div class="muted" style="font-size:14px">${esc(P.handle)} &middot; ${esc(P.joined)}</div>
-            <p class="soft" style="font-size:15px;line-height:1.6;margin:10px 0 0;max-width:560px">${esc(P.bio)}</p>
+          <div class="profile-id">
+            <h1 class="profile-name">${esc(P.name)}</h1>
+            <span class="profile-handle">${esc(P.handle)}</span>
+            <div class="profile-when">${esc(P.joined)}</div>
+            <p class="profile-bio">${esc(P.bio)}</p>
             <div class="profile-stats">
               <div><b>${P.stats.works}</b><span>Works</span></div>
               <div><b>${P.stats.hearts}</b><span>Hearts</span></div>

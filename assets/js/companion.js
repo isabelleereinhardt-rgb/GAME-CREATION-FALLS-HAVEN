@@ -198,6 +198,51 @@
   }
 
   /* ---------- CSS ---------- */
+  /* Lucky is an opt-in companion with his own "Walk across the screen"
+     switch — that switch is his off switch, and no motion setting should be
+     able to strand him. Two different rules try to stop him: Wisp's
+     data-motion="reduce" kills every animation with `*{animation:none
+     !important}`, and the OS-level prefers-reduced-motion media rule
+     collapses every duration to .001ms — which parked him, frozen, just off
+     the right edge where `left:100vw` starts him. So his animations are
+     re-enabled under BOTH conditions.
+
+     They are re-enabled as LONGHANDS (name/duration/…), never the
+     `animation:` shorthand: an !important shorthand resets animation-delay
+     to 0, which had his legs swinging in unison instead of alternating and
+     the treat notes rising in one clump. The global reduce rule's shorthand
+     zeroes those delays with !important anyway, so the stagger delays are
+     restated below at higher specificity. */
+  function motionProof(prefix) {
+    function re(sel, name, dur, ease, count, fill) {
+      return prefix + sel + "{animation-name:" + name + " !important;animation-duration:" + dur +
+        " !important;animation-timing-function:" + ease + " !important;animation-iteration-count:" + count +
+        " !important" + (fill ? ";animation-fill-mode:" + fill + " !important" : "") + "}";
+    }
+    return re(".lucky-walk", "lucky-walk", "var(--pace,34s)", "linear", "infinite") +
+      re(".lucky-walk.treating", "lucky-hopaway", "4.6s", "ease-in", "1", "forwards") +
+      re(".lucky-bob", "lucky-bob", ".62s", "ease-in-out", "infinite") +
+      re(".lucky-leg", "lucky-leg", ".62s", "ease-in-out", "infinite") +
+      re(".lucky-tail", "lucky-tail", "1.6s", "ease-in-out", "infinite") +
+      re(".lucky-eye", "lucky-blink", "4.2s", "ease-in-out", "infinite") +
+      re(".lucky-tip", "tip-window", "var(--pace,34s)", "linear", "infinite") +
+      re(".lucky-pal", "lucky-bob", ".62s", "ease-in-out", "infinite") +
+      /* the treat dance: the hop, the treat itself, its bounce, the notes
+         and sparks — none of these were re-enabled, so five pets under
+         reduced motion announced a sardine that never appeared */
+      re(".lucky-walk.treating .lucky-bob", "lucky-hop", ".62s", "ease-in-out", "3") +
+      re(".lucky-walk.treating .lucky-treat", "treat-appear", "4.6s", "ease-out", "1", "forwards") +
+      re(".lucky-walk.treating .lucky-treat svg", "treat-bounce", ".5s", "ease-in-out", "4") +
+      re(".lucky-walk.treating .lucky-notes span", "note-rise", "1.6s", "ease-out", "2") +
+      re(".lucky-walk.treating .lucky-sparks span", "spark", "1.1s", "ease-out", "3") +
+      /* restate the stagger delays the global !important shorthand zeroed */
+      prefix + ".lucky-pal{animation-delay:-.2s !important}" +
+      prefix + '.lucky-leg[style*="-.31s"]{animation-delay:-.31s !important}' +
+      prefix + ".lucky-walk.treating .lucky-notes span:nth-child(2){animation-delay:.34s !important}" +
+      prefix + ".lucky-walk.treating .lucky-notes span:nth-child(3){animation-delay:.68s !important}" +
+      prefix + ".lucky-walk.treating .lucky-sparks span:nth-child(2){animation-delay:.3s !important}" +
+      prefix + ".lucky-walk.treating .lucky-sparks span:nth-child(3){animation-delay:.6s !important}";
+  }
   var CSS = SKIN_CSS +
     '.lucky-stage{position:fixed;left:0;right:0;bottom:0;height:250px;pointer-events:none;z-index:24;overflow:hidden}' +
     '.lucky-stage[hidden]{display:none}' +
@@ -245,20 +290,12 @@
     '.lucky-treat{position:absolute;bottom:4px;left:-30px;line-height:0;opacity:0}' +
     '.lucky-walk.treating .lucky-treat{animation:treat-appear 4.6s ease-out forwards}' +
     '@keyframes treat-appear{0%{opacity:0;transform:translateY(-6px) scale(.7)}14%{opacity:1;transform:none}70%{opacity:1}100%{opacity:0}}' +
-    /* Lucky is an opt-in companion the reader turned on, and he has his own
-       "Walk across the screen" switch in his settings — that is his off switch.
-       The site's global Reduce-motion rule kills every animation with
-       `* { animation: none !important }`, which would freeze him; but a
-       class-specific !important beats a universal one, so we re-enable his walk
-       here. Turning him off is a deliberate choice, not a motion-setting side
-       effect. (Petals, confetti, and page flourishes still respect Reduce motion.) */
-    ':root[data-motion="reduce"] .lucky-walk{animation:lucky-walk var(--pace,34s) linear infinite !important}' +
-    ':root[data-motion="reduce"] .lucky-walk.treating{animation:lucky-hopaway 4.6s ease-in forwards !important}' +
-    ':root[data-motion="reduce"] .lucky-bob{animation:lucky-bob .62s ease-in-out infinite !important}' +
-    ':root[data-motion="reduce"] .lucky-leg{animation:lucky-leg .62s ease-in-out infinite !important}' +
-    ':root[data-motion="reduce"] .lucky-tail{animation:lucky-tail 1.6s ease-in-out infinite !important}' +
-    ':root[data-motion="reduce"] .lucky-eye{animation:lucky-blink 4.2s ease-in-out infinite !important}' +
-    ':root[data-motion="reduce"] .lucky-tip{animation:tip-window var(--pace,34s) linear infinite !important}' +
+    /* Turning him off is a deliberate choice, not a motion-setting side
+       effect: keep him walking under the site's Reduce-motion setting AND
+       under the OS-level preference. (Petals, confetti, and page flourishes
+       still respect Reduce motion.) See motionProof() above. */
+    motionProof(':root[data-motion="reduce"] ') +
+    '@media (prefers-reduced-motion: reduce){' + motionProof('') + '}' +
     /* settings modal */
     '.lucky-modal-back{position:fixed;inset:0;z-index:120;background:color-mix(in srgb,var(--ink) 34%,transparent);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:40px 16px}' +
     '.lucky-modal{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:0 20px 60px var(--shadow-lg);width:min(640px,100%);padding:22px 22px 26px}' +
@@ -304,6 +341,16 @@
     [70, "A slow amble"], [50, "Strolling"], [34, "A steady pad"], [22, "Trotting"], [12, "Places to be"]
   ];
   function paceLabel(v) { var best = PACES[2]; for (var i = 0; i < PACES.length; i++) if (Math.abs(PACES[i][0] - v) < Math.abs(best[0] - v)) best = PACES[i]; return best[1]; }
+  /* The slider works in named stops (indexes into PACES), the way the
+     organizer's does. The old formula mapped the whole track to 42-100
+     seconds: the fastest position was slower than the default, and his two
+     quicker gaits could never be reached at all. A pace synced from another
+     device that isn't an exact stop snaps to the nearest one. */
+  function paceIndex() {
+    var p = +state.pace || 34, best = 2, bd = Infinity;
+    for (var i = 0; i < PACES.length; i++) { var d = Math.abs(PACES[i][0] - p); if (d < bd) { bd = d; best = i; } }
+    return best;
+  }
 
   function reduced() {
     var r = document.documentElement;
@@ -448,7 +495,7 @@
         habitRow("tips", "Show his little notes", "The bubble he carries as he passes.") +
         habitRow("treatsOn", "Treats after five pets", "Off means he just enjoys being petted.") +
         '<div class="lm-eyebrow">How often he strolls past</div>' +
-        '<div class="lucky-pace"><input type="range" id="luckyPace" min="12" max="70" step="2" value="' + (100 - (+state.pace || 34) + 12) + '"><span class="lp-read" id="luckyPaceRead">' + esc(paceLabel(+state.pace || 34)) + '</span></div>' +
+        '<div class="lucky-pace"><input type="range" id="luckyPace" min="0" max="' + (PACES.length - 1) + '" step="1" value="' + paceIndex() + '"><span class="lp-read" id="luckyPaceRead">' + esc(PACES[paceIndex()][1]) + '</span></div>' +
         '<div class="lm-done"><button data-lucky-close>Done</button></div>' +
       '</div>';
     document.body.appendChild(back);
@@ -476,7 +523,7 @@
     var nameIn = back.querySelector("#luckyNameIn");
     if (nameIn) nameIn.addEventListener("input", function () { state.name = nameIn.value; save(); var h = back.querySelector(".lm-head h2"); if (h) h.textContent = name(); render(); });
     var pace = back.querySelector("#luckyPace"), read = back.querySelector("#luckyPaceRead");
-    if (pace) pace.addEventListener("input", function () { var secs = 100 - (+pace.value) + 12; state.pace = secs; save(); if (read) read.textContent = paceLabel(secs); render(); });
+    if (pace) pace.addEventListener("input", function () { var p = PACES[+pace.value] || PACES[2]; state.pace = p[0]; save(); if (read) read.textContent = p[1]; render(); });
     document.addEventListener("keydown", function onKey(ev) { if (ev.key === "Escape") { var m = document.getElementById("luckyModalBack"); if (m) m.remove(); document.removeEventListener("keydown", onKey); } });
   }
 

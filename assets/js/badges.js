@@ -42,13 +42,13 @@
     // Community & kindness ---------------------------------------------------
     { id: "guardian",      name: "Guardian",       cat: "community", tier: "gold", img: "shield-gold.png",   desc: "Helps keep Wisp kind and safe.",          how: "Be a moderator or a trusted helper." },
     { id: "verified",      name: "Verified",       cat: "community", tier: "gold", img: "check-gold.png",    desc: "A trusted, verified member.",             how: "Be verified by the Wisp team." },
-    // Member rank (a ladder the team can award as members grow with Wisp) -----
-    { id: "rank-newcomer", name: "Newcomer",       cat: "rank",    tier: "bronze", img: "chevron-dark-2.png",   desc: "New to Wisp and finding their feet.",   how: "Join Wisp." },
-    { id: "rank-regular",  name: "Regular",        cat: "rank",    tier: "bronze", img: "chevron-dark-3.png",   desc: "Around often; part of the furniture.",  how: "Keep showing up." },
-    { id: "rank-familiar", name: "Familiar Face",  cat: "rank",    tier: "silver", img: "chevron-silver-2.png", desc: "A face everyone knows.",                how: "Become a known member of the community." },
-    { id: "rank-veteran",  name: "Veteran",        cat: "rank",    tier: "silver", img: "chevron-silver-3.png", desc: "Been here through the seasons.",        how: "Stick with Wisp over the long haul." },
-    { id: "rank-oldguard", name: "Old Guard",      cat: "rank",    tier: "gold",   img: "chevron-gold-2.png",   desc: "One of the people who built the place.", how: "Be a long-standing pillar." },
-    { id: "rank-pillar",   name: "Pillar",         cat: "rank",    tier: "gold",   img: "chevron-gold-3.png",   desc: "A cornerstone of the community.",       how: "Earn the community's deep trust." },
+    // Member rank: a little light that grows the longer you stay with Wisp ----
+    { id: "rank-newcomer", name: "Spark",   cat: "rank", tier: "bronze", img: "chevron-dark-2.png",   desc: "Just lit. New to Wisp.",                    how: "Join Wisp." },
+    { id: "rank-regular",  name: "Flicker", cat: "rank", tier: "bronze", img: "chevron-dark-3.png",   desc: "Catching, and coming back.",                how: "Keep coming back." },
+    { id: "rank-familiar", name: "Glow",    cat: "rank", tier: "silver", img: "chevron-silver-2.png", desc: "A steady, familiar light.",                 how: "Become a familiar part of the community." },
+    { id: "rank-veteran",  name: "Ember",   cat: "rank", tier: "silver", img: "chevron-silver-3.png", desc: "Warm through every season.",                how: "Stay with Wisp over time." },
+    { id: "rank-oldguard", name: "Flame",   cat: "rank", tier: "gold",   img: "chevron-gold-2.png",   desc: "Burning bright for the long haul.",         how: "Be here through the seasons." },
+    { id: "rank-pillar",   name: "Beacon",  cat: "rank", tier: "gold",   img: "chevron-gold-3.png",   desc: "A light the whole community reads by.",     how: "Earn the community's deep trust." },
     // Ratings ----------------------------------------------------------------
     { id: "well-rated",    name: "Well-Rated",     cat: "rating",  tier: "bronze", img: "star-3.png",        desc: "Readers rate their work highly.",         how: "Keep a solid reader rating." },
     { id: "highly-rated",  name: "Highly Rated",   cat: "rating",  tier: "silver", img: "star-4.png",        desc: "Consistently four-star loved.",           how: "Hold a four-star reader rating." },

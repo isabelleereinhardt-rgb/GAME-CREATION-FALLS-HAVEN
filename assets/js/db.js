@@ -513,11 +513,31 @@ window.WispDB = (function () {
   }
 
   async function getComments(workId) {
-    const { data, error } = await client.from("comments")
-      .select("id, body, chapter_id, paragraph_index, created_at, edited_at, user_id, profiles(display_name)")
-      .eq("work_id", workId).order("created_at");
-    if (error) throw error;
-    return data || [];
+    // Read resiliently. One missing column (edited_at needs migration 008) or a
+    // profiles-embed that the schema cache hasn't picked up would otherwise make
+    // the whole SELECT throw, and the reader would fall back to its device-only
+    // mirror — so a comment written on one device never appears on another. We
+    // step down through leaner selects until one the deployed schema supports
+    // succeeds, so every device sees the same server rows.
+    const SELECTS = [
+      "id, body, chapter_id, paragraph_index, created_at, edited_at, user_id, profiles(display_name)",
+      "id, body, chapter_id, paragraph_index, created_at, user_id, profiles(display_name)",
+      "id, body, chapter_id, paragraph_index, created_at, user_id"
+    ];
+    let lastErr = null;
+    for (let s = 0; s < SELECTS.length; s++) {
+      const { data, error } = await client.from("comments")
+        .select(SELECTS[s]).eq("work_id", workId).order("created_at");
+      if (!error) return data || [];
+      lastErr = error;
+      if (missingTable(error)) return [];
+      // Only step down for a schema-shape problem (missing column / unresolved
+      // embed). A real failure (RLS, auth, network) should surface, not be masked.
+      const embedIssue = /relationship|schema cache|find the .* column|profiles/i.test(error.message || "");
+      if (!(missingColumn(error) || embedIssue)) throw error;
+    }
+    if (missingTable(lastErr)) return [];
+    throw lastErr;
   }
   async function postComment(workId, body, chapterId, paragraphIndex) {
     if (!user) throw new Error("Sign in to comment.");
@@ -595,6 +615,19 @@ window.WispDB = (function () {
   // soft until the table exists, so the app keeps working without it.
   async function listProfilePosts(profileId, limit) {
     if (!client || !profileId) return [];
+    // Try with the pinned column (pinned first, newest next). If the column
+    // isn't there yet (migration 025 not re-run), fall back to a plain read so
+    // the wall still works.
+    try {
+      const { data, error } = await client.from("profile_posts")
+        .select("id, body, created_at, author_id, author_name, author_handle, pinned")
+        .eq("profile_id", profileId)
+        .order("pinned", { ascending: false }).order("created_at", { ascending: false })
+        .limit(limit || 40);
+      if (!error) return data || [];
+      if (missingTable(error)) return [];
+      if (!missingColumn(error)) throw error;
+    } catch (e) { if (missingTable(e)) return []; }
     try {
       const { data, error } = await client.from("profile_posts")
         .select("id, body, created_at, author_id, author_name, author_handle")
@@ -602,6 +635,17 @@ window.WispDB = (function () {
       if (error) { if (missingTable(error) || missingColumn(error)) return []; throw error; }
       return data || [];
     } catch (e) { return []; }
+  }
+  // Pin or unpin a message on a wall. Only the wall owner passes the RLS update
+  // policy. Resilient: returns false (not thrown) when the column/table is absent.
+  async function setProfilePostPinned(id, pinned) {
+    if (!user || !client || !id) return false;
+    try {
+      const { data, error } = await client.from("profile_posts")
+        .update({ pinned: !!pinned }).eq("id", id).select().single();
+      if (error) { if (missingTable(error) || missingColumn(error)) return false; throw error; }
+      return data || true;
+    } catch (e) { if (missingTable(e) || missingColumn(e)) return false; throw e; }
   }
   async function postProfilePost(profileId, body) {
     if (!user) throw new Error("Sign in to post.");
@@ -1394,7 +1438,7 @@ window.WispDB = (function () {
     toggle, myRelations, getComments, postComment, editComment, deleteComment, getReactions, toggleReaction, uploadCover,
     toggleFollow, amFollowing, followCounts, myFollowingIds, getNotifications,
     updateProfile, getProfile, getWidgets, saveWidgets, saveMyBadges, grantBadges, worksByAuthor,
-    listProfilePosts, postProfilePost, deleteProfilePost,
+    listProfilePosts, postProfilePost, deleteProfilePost, setProfilePostPinned,
     listEvents, myEventIds, toggleEventJoin, getEvent, eventMemberCount, listEventPosts, postToEvent, deleteEventPost,
     listHubs, myHubIds, hubMemberCounts, toggleHubMembership, hubDetail, worksInHub, worksByTag,
     getAdminSettings, setAdminPassword, createEvent, updateEvent, deleteEvent, createHub, updateHub, deleteHub, adminDeleteWork,
