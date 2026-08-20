@@ -3537,7 +3537,7 @@
         // Server write failed (table not migrated, sample work, offline). Keep it
         // on the device so the reader does not lose it on reload.
         pushLocal("local-" + Date.now(), new Date().toISOString());
-        toast("Saved on this device — couldn't reach the server.");
+        toast("Saved on this device. Couldn't reach the server.");
       }
     });
 
@@ -4501,7 +4501,7 @@
         <div class="writer">
           <div>
             <input class="title-input" id="we-title" placeholder="Title your work" value="${esc(title)}">
-            <input class="chtitle-input" id="we-chtitle" placeholder="Chapter title (optional) — name this part anything, like Wattpad" value="${esc(chTitle)}" maxlength="120" aria-label="Chapter title">
+            <input class="chtitle-input" id="we-chtitle" placeholder="Chapter title (optional). Name it anything you like." value="${esc(chTitle)}" maxlength="120" aria-label="Chapter title">
             <div id="we-body-zone">${bodyZoneHTML(bodyHTML)}</div>
             <div class="write-actions" style="margin-top:16px">
               ${(editingLive && liveEditor && liveEditor.chapter && liveEditor.chapter.published)
@@ -6443,7 +6443,7 @@
         shown = true;
       }
     } catch (e) {}
-    if (!shown && document.getElementById("toast")) toast("Time for a glass of water — " + body);
+    if (!shown && document.getElementById("toast")) toast("Time for a glass of water. " + body);
   }
   let waterTimer = null;
   function waterReminderTick() {
@@ -9973,7 +9973,7 @@
       dirty:  [dot, "Unsaved changes…", "is-dirty"],
       saving: [spin, "Saving…", "is-saving"],
       saved:  [icon("check", 14), "Saved", "is-saved"],
-      error:  [warn, "Couldn't save — will retry", "is-error"],
+      error:  [warn, "Couldn't save, will retry", "is-error"],
       local:  [icon("check", 14), "Kept on this device", "is-idle"]
     };
     const row = map[state] || map.idle;
