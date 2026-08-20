@@ -6592,13 +6592,17 @@
   }
   // A small figure that stretches while the break runs.
   function stretchFigSVG() {
+    // Arms attach at the shoulders (the top corners of the torso), NOT the
+    // centre: starting them a hair apart made their round caps overlap into a
+    // blob in the middle. Each arm's rotation pivot (mw-fig-arm transform-origin)
+    // is its inner-upper end, i.e. its shoulder, so the stretch poses still work.
     return `<svg class="mw-fig-svg" viewBox="0 0 60 64" width="72" height="76" fill="none" aria-hidden="true">
-      <circle cx="30" cy="12" r="7" fill="var(--rose)"/>
-      <rect class="mw-fig-torso" x="26" y="19" width="8" height="22" rx="4" fill="var(--rose-ink)"/>
-      <path class="mw-fig-arm mw-fig-arm--l" d="M28 24 L14 34" stroke="var(--rose)" stroke-width="4.5" stroke-linecap="round"/>
-      <path class="mw-fig-arm mw-fig-arm--r" d="M32 24 L46 34" stroke="var(--rose)" stroke-width="4.5" stroke-linecap="round"/>
-      <path d="M27 40 L22 60" stroke="var(--rose-ink)" stroke-width="4.5" stroke-linecap="round"/>
-      <path d="M33 40 L38 60" stroke="var(--rose-ink)" stroke-width="4.5" stroke-linecap="round"/>
+      <circle cx="30" cy="11" r="7" fill="var(--rose)"/>
+      <rect class="mw-fig-torso" x="25" y="18" width="10" height="20" rx="5" fill="var(--rose-ink)"/>
+      <path class="mw-fig-arm mw-fig-arm--l" d="M26 21 L13 31" stroke="var(--rose)" stroke-width="4.5" stroke-linecap="round"/>
+      <path class="mw-fig-arm mw-fig-arm--r" d="M34 21 L47 31" stroke="var(--rose)" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="M28 37 L23 58" stroke="var(--rose-ink)" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="M32 37 L37 58" stroke="var(--rose-ink)" stroke-width="4.5" stroke-linecap="round"/>
     </svg>`;
   }
   // Backward-compatible readers for the to-do list and sticky notes, which grew
