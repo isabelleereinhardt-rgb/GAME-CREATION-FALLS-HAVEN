@@ -1071,8 +1071,15 @@ window.WispDB = (function () {
         }
       } catch (e) { /* ignore */ }
       try {
-        const { data } = await client.from("works_with_author").select("id").ilike("source", name).in("status", ["ongoing", "complete"]);
-        (data || []).forEach(r => ids.add(r.id));
+        // `source` may hold several comma-joined fandoms; match on contains then
+        // confirm the hub name is one whole part (see worksByTag).
+        const like = "%" + name.replace(/[%_]/g, " ").trim() + "%";
+        const want = name.trim().toLowerCase();
+        const { data } = await client.from("works_with_author").select("id, source").ilike("source", like).in("status", ["ongoing", "complete"]);
+        (data || []).forEach(r => {
+          const parts = String(r.source || "").split(",").map(s => s.trim().toLowerCase());
+          if (parts.indexOf(want) >= 0) ids.add(r.id);
+        });
       } catch (e) { /* ignore */ }
     }
     if (/format/i.test(hub.kind || "") || /webcomic|comic/i.test(name)) {
@@ -1146,9 +1153,18 @@ window.WispDB = (function () {
         (wt || []).forEach(r => ids.add(r.work_id));
       }
     } catch (e) { /* ignore */ }
+    // A work's fandom/setting lives in `source`, which can hold several fandoms
+    // comma-joined ("Love is War and Happiness, Hamilton"). Match on contains,
+    // then confirm the name is one whole comma-separated part, so a work set in
+    // this fandom (even alongside others) is included and near-misses are not.
     try {
-      const { data } = await client.from("works_with_author").select("id").ilike("source", name).in("status", ["ongoing", "complete"]);
-      (data || []).forEach(r => ids.add(r.id));
+      const like = "%" + String(name).replace(/[%_]/g, " ").trim() + "%";
+      const want = String(name).trim().toLowerCase();
+      const { data } = await client.from("works_with_author").select("id, source").ilike("source", like).in("status", ["ongoing", "complete"]);
+      (data || []).forEach(r => {
+        const parts = String(r.source || "").split(",").map(s => s.trim().toLowerCase());
+        if (parts.indexOf(want) >= 0) ids.add(r.id);
+      });
     } catch (e) { /* ignore */ }
     if (!ids.size) return [];
     const works = await getWorksByIds([...ids]);

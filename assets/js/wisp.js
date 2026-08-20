@@ -5435,7 +5435,13 @@
     let works = [];
     try {
       if (isLive()) { works = await WispDB.worksByTag(name).catch(() => []); works.forEach(w => { LIVE.byId[w.id] = w; }); }
-      else { const nl = name.toLowerCase(); works = W.WORKS.filter(w => (w.source || "").toLowerCase() === nl || (w.type === "fan" ? "fanwork" : "original") === nl || (w.tags || []).some(t => t.toLowerCase() === nl)); }
+      else {
+        const nl = name.toLowerCase();
+        works = W.WORKS.filter(w => {
+          const src = (w.source || "").toLowerCase().split(",").map(s => s.trim());
+          return src.indexOf(nl) >= 0 || (w.type === "fan" ? "fanwork" : "original") === nl || (w.tags || []).some(t => t.toLowerCase() === nl);
+        });
+      }
     } catch (e) { console.error("[wisp] tag page load failed:", e); }
     LIVE.tagPage = { name: name, works: works };
     renderTagPage();
