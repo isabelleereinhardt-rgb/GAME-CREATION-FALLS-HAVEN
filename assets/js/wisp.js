@@ -2924,12 +2924,17 @@
   function richEmbedHTML(url, label) {
     const info = embedInfo(url);
     if (!info) return linkCardHTML(url, label);
-    const allow = info.kind === "video" ? 'allow="fullscreen; picture-in-picture; encrypted-media"'
+    // clipboard-write lets the player's own "copy link" (chain) button reach the
+    // clipboard; without it that button silently does nothing inside the frame.
+    const allow = info.kind === "video" ? 'allow="fullscreen; picture-in-picture; encrypted-media; clipboard-write"'
       : info.kind === "audio" ? 'allow="encrypted-media; clipboard-write"' : "";
     let host = ""; try { host = new URL(url).hostname.replace(/^www\./, ""); } catch (e) {}
     // Send just the origin (not the full URL): providers like YouTube need to
     // see the embedding domain or they refuse with a "player configuration error".
-    const frame = `<div class="embed--${info.kind}"><iframe src="${esc(info.src)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation" ${allow} allowfullscreen title="${esc(label || "Embedded content")}"></iframe></div>`;
+    // allow-popups-to-escape-sandbox: the player's "Watch on YouTube" opens a new
+    // tab, and without it that tab inherits the sandbox so youtube.com refuses to
+    // load (ERR_BLOCKED_BY_RESPONSE). With it, the tab opens as a normal page.
+    const frame = `<div class="embed--${info.kind}"><iframe src="${esc(info.src)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms allow-presentation" ${allow} allowfullscreen title="${esc(label || "Embedded content")}"></iframe></div>`;
     // A caption link so readers can jump straight to the source (like the sample).
     const src = `<figcaption class="embed__source"><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc((label && label.trim()) || ("Open on " + host))} <span aria-hidden="true">&#8599;</span></a></figcaption>`;
     return `<figure class="embed embed--rich">${frame}${src}</figure>`;
