@@ -164,8 +164,8 @@
       // nose + gentle smile
       '<path d="M18.2 23.4h3.6l-1.8 2z" fill="var(--nose)"/>' +
       '<path d="M20 25.5c-1 1.3-3 1.3-3.8.1M20 25.5c1 1.3 3 1.3 3.8.1" stroke="var(--fur3)" stroke-width="1.1" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' +
-      // whiskers on the leading (left) side
-      '<path d="M3.4 20.6 11 21.6M3 23.5 11 23.3M3.4 26.4 11 25" stroke="var(--fur3)" stroke-width=".8" opacity=".5" stroke-linecap="round"/>' +
+      // whiskers, both sides of the muzzle (mirrored around the head centre, x=20)
+      '<path d="M3.4 20.6 11 21.6M3 23.5 11 23.3M3.4 26.4 11 25 M36.6 20.6 29 21.6M37 23.5 29 23.3M36.6 26.4 29 25" stroke="var(--fur3)" stroke-width=".8" opacity=".5" stroke-linecap="round"/>' +
       accessorySvg(state.acc) + '</svg>';
   }
   var COMPANION_SVG = {
