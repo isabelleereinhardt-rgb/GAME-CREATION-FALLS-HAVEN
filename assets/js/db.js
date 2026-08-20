@@ -1077,6 +1077,119 @@ window.WispDB = (function () {
     if (error) throw error;
   }
 
+  /* ---- contests -------------------------------------------------------- */
+  async function listContests() {
+    if (!client) return [];
+    try {
+      const { data, error } = await client.from("contests").select("*").order("created_at", { ascending: false });
+      if (error) { if (missingTable(error)) return []; throw error; }
+      return data || [];
+    } catch (e) { console.warn("[wisp] listContests failed:", e && e.message); return []; }
+  }
+  async function getContest(id) {
+    const { data, error } = await client.from("contests").select("*").eq("id", id).maybeSingle();
+    if (error) throw error;
+    return data || null;
+  }
+  async function createContest(f) {                          // admin only (RLS)
+    if (!user) throw new Error("Sign in first.");
+    const row = { title: f.title || "Untitled contest", description: f.description || "", hub: f.hub || "", created_by: user.id };
+    if (f.closes_at !== undefined) row.closes_at = f.closes_at;
+    const { data, error } = await client.from("contests").insert(row).select().single();
+    if (error) throw error;
+    return data;
+  }
+  async function updateContest(id, f) {
+    if (!user) throw new Error("Sign in first.");
+    const patch = {};
+    ["title", "description", "hub", "closes_at", "status"].forEach(k => { if (f[k] !== undefined) patch[k] = f[k]; });
+    const { error } = await client.from("contests").update(patch).eq("id", id);
+    if (error) throw error;
+  }
+  async function deleteContest(id) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("contests").delete().eq("id", id);
+    if (error) throw error;
+  }
+  // {entry_id: vote count} for a contest.
+  async function contestVoteCounts(contestId) {
+    const { data } = await client.from("contest_votes").select("entry_id").eq("contest_id", contestId);
+    const c = {}; (data || []).forEach(r => { c[r.entry_id] = (c[r.entry_id] || 0) + 1; });
+    return c;
+  }
+  // Entries as work cards, each with its live vote tally.
+  async function contestEntries(contestId) {
+    const { data: entries, error } = await client.from("contest_entries").select("*").eq("contest_id", contestId).order("created_at");
+    if (error) { if (missingTable(error)) return []; throw error; }
+    const ids = (entries || []).map(e => e.work_id);
+    const byId = {};
+    if (ids.length) {
+      const { data: w } = await client.from("works_with_author").select("*").in("id", ids);
+      const tagMap = await tagsFor((w || []).map(x => x.id));
+      (w || []).forEach(x => { byId[x.id] = toUi(x, tagMap[x.id] || []); });
+    }
+    const counts = await contestVoteCounts(contestId);
+    return (entries || []).map(e => ({ entryId: e.id, workId: e.work_id, authorId: e.author_id, work: byId[e.work_id] || null, votes: counts[e.id] || 0 }));
+  }
+  async function submitEntry(contestId, workId) {            // writers enter their own works (RLS)
+    if (!user) throw new Error("Sign in to enter.");
+    const { error } = await client.from("contest_entries").insert({ contest_id: contestId, work_id: workId, author_id: user.id });
+    if (error) throw error;
+  }
+  async function withdrawEntry(contestId, workId) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("contest_entries").delete()
+      .eq("contest_id", contestId).eq("work_id", workId).eq("author_id", user.id);
+    if (error) throw error;
+  }
+  // The entry the signed-in reader voted for (or null). One vote per contest.
+  async function myVote(contestId) {
+    if (!user) return null;
+    const { data } = await client.from("contest_votes").select("entry_id").eq("contest_id", contestId).eq("user_id", user.id).maybeSingle();
+    return data ? data.entry_id : null;
+  }
+  async function castVote(contestId, entryId) {
+    if (!user) throw new Error("Sign in to vote.");
+    const { error } = await client.from("contest_votes")
+      .upsert({ contest_id: contestId, user_id: user.id, entry_id: entryId }, { onConflict: "contest_id,user_id" });
+    if (error) throw error;
+  }
+  async function clearVote(contestId) {
+    if (!user) throw new Error("Sign in first.");
+    const { error } = await client.from("contest_votes").delete().eq("contest_id", contestId).eq("user_id", user.id);
+    if (error) throw error;
+  }
+  // The final ranking (after close), each place with its work card.
+  async function contestResults(contestId) {
+    const { data: res, error } = await client.from("contest_results").select("*").eq("contest_id", contestId).order("place");
+    if (error) { if (missingTable(error)) return []; throw error; }
+    const ids = (res || []).map(r => r.work_id).filter(Boolean);
+    const byId = {};
+    if (ids.length) {
+      const { data: w } = await client.from("works_with_author").select("*").in("id", ids);
+      const tagMap = await tagsFor((w || []).map(x => x.id));
+      (w || []).forEach(x => { byId[x.id] = toUi(x, tagMap[x.id] || []); });
+    }
+    return (res || []).map(r => ({ place: r.place, workId: r.work_id, authorId: r.author_id, votes: r.votes, work: byId[r.work_id] || null }));
+  }
+  // The static-site stand-in for a scheduler: ask the server to finalize any
+  // contest whose close time has passed. The DB function no-ops when it isn't
+  // due or is already closed, and awards the top-three badges itself.
+  async function finalizeContest(contestId) {
+    const { error } = await client.rpc("finalize_contest", { cid: contestId });
+    if (error) throw error;
+  }
+  async function finalizeDueContests(list) {
+    const now = Date.now();
+    let ran = false;
+    for (const c of (list || [])) {
+      if (c && c.status === "open" && c.closes_at && new Date(c.closes_at).getTime() <= now) {
+        try { await finalizeContest(c.id); ran = true; } catch (e) {}
+      }
+    }
+    return ran;
+  }
+
   // One hub, with its real follower count and whether I follow it.
   async function hubDetail(id) {
     const { data: hub } = await client.from("hubs").select("*").eq("id", id).maybeSingle();
@@ -1572,6 +1685,8 @@ window.WispDB = (function () {
     getAdminSettings, setAdminPassword, createEvent, updateEvent, deleteEvent, createHub, updateHub, deleteHub, adminDeleteWork,
     listExchanges, getExchange, createExchange, updateExchange, deleteExchange,
     mySignup, joinExchange, withdrawSignup, listSignups, signupCounts, runMatching, myAssignment, myGift, attachGift,
+    listContests, getContest, createContest, updateContest, deleteContest, contestEntries, contestVoteCounts,
+    submitEntry, withdrawEntry, myVote, castVote, clearVote, contestResults, finalizeContest, finalizeDueContests,
     listHubWidgets, createWidget, updateWidget, deleteWidget, pollTally, myPollVote, castPollVote,
     pinEventPost, myEventNotify, setEventNotify,
     listCategories, createCategory, deleteCategory,

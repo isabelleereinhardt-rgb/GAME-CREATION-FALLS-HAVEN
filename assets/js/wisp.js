@@ -5007,13 +5007,14 @@
   async function loadCommunity() {
     loadingScreen("#screen-community");
     try {
-      const [events, mine, hubs, myHubs, hubCounts, exchanges] = await Promise.all([
+      const [events, mine, hubs, myHubs, hubCounts, exchanges, contests] = await Promise.all([
         WispDB.listEvents(),
         WispDB.myEventIds().catch(() => new Set()),
         WispDB.listHubs().catch(() => []),
         WispDB.myHubIds().catch(() => new Set()),
         WispDB.hubMemberCounts().catch(() => ({})),
-        WispDB.listExchanges().catch(() => [])
+        WispDB.listExchanges().catch(() => []),
+        (WispDB.listContests ? WispDB.listContests() : Promise.resolve([])).catch(() => [])
       ]);
       LIVE.events = events;
       LIVE.myEvents = mine;
@@ -5021,10 +5022,17 @@
       LIVE.myHubs = myHubs;
       LIVE.hubCounts = hubCounts;
       LIVE.exchanges = exchanges;
+      LIVE.contests = contests;
       // If any exchange is past its close time, run matching (admin only).
       if (await autoMatchDueExchanges(LIVE.exchanges)) {
         LIVE.exchanges = await WispDB.listExchanges().catch(() => LIVE.exchanges);
         toast("An exchange reached its close time; matching ran.");
+      }
+      // Any contest past its close date finalizes itself (server function) and
+      // hands out the placement badges. Safe for any viewer to trigger.
+      if (WispDB.finalizeDueContests && await WispDB.finalizeDueContests(LIVE.contests)) {
+        LIVE.contests = await WispDB.listContests().catch(() => LIVE.contests);
+        toast("A contest reached its closing date and the winners were decided.");
       }
     } catch (e) { console.error("[wisp] community load failed:", e); }
     renderCommunity();
@@ -5122,6 +5130,32 @@
           })()}
         </div>` : ""}
 
+        ${isLive() ? `<div class="shelf">
+          <div class="shelf__head"><span class="shelf__title">Contests</span>${WispDB.isAdmin ? `<button class="btn btn--ghost btn--sm" data-contest-new>${icon("plus", 14)} New contest</button>` : ""}</div>
+          <p class="muted event-sort__note">Enter your own works, then everyone gets one vote. When a contest closes, the top three win the first, second, and third place badges.</p>
+          ${(() => {
+            const list = (LIVE.contests || []).slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            if (!list.length) return `<p class="muted" style="font-size:14px;padding:12px 2px;line-height:1.6">No contests yet.${WispDB.isAdmin ? " Open one from the admin panel." : " When one opens, you can enter a work and vote here."}</p>`;
+            const now = Date.now();
+            return list.map(c => {
+              const closed = c.status === "closed";
+              const closeMs = c.closes_at ? new Date(c.closes_at).getTime() : 0;
+              let countdown = "";
+              if (closed) countdown = `<div class="event__count muted">Closed${c.closes_at ? " " + esc(fmtEasternStamp(c.closes_at)) : ""} &middot; winners decided</div>`;
+              else if (closeMs && now < closeMs) countdown = `<div class="event__count"><span class="ch-countdown" data-countdown="${esc(c.closes_at)}" data-countdown-label="Closes in" data-countdown-done="Closing now">Closes in: &hellip;</span></div>`;
+              else if (closeMs) countdown = `<div class="event__count is-due">Closing now</div>`;
+              return `<div class="event">
+                <div style="flex:1">
+                  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="font:600 18px var(--font-display);color:var(--ink)">${esc(c.title)}</span><span class="pill">${closed ? "Closed" : "Open"}</span>${c.hub ? `<span class="pill">${esc(c.hub)} hub</span>` : ""}</div>
+                  ${c.description ? `<p class="soft" style="font-size:14px;margin:6px 0 0;line-height:1.6">${esc(c.description)}</p>` : ""}
+                  ${countdown}
+                </div>
+                <button class="btn btn--ghost btn--sm" data-contest-open="${c.id}">${closed ? "Results" : "View and vote"}</button>
+              </div>`;
+            }).join("");
+          })()}
+        </div>` : ""}
+
         <div class="shelf">
           <div class="shelf__head"><span class="shelf__title">Hubs</span></div>
           ${(() => {
@@ -5160,6 +5194,184 @@
         </div>
       </div>`;
     startCountdowns();   // events with a start time count down live, like chapter releases
+  }
+
+  /* ---- Contests -----------------------------------------------------------
+     A time-boxed competition: writers enter their own works, every member gets
+     ONE vote (changeable until it closes), and at the close date it finalizes
+     and the top three win the placement badges. */
+  let contestCtx = null;
+  async function loadContest(id) {
+    loadingScreen("#screen-community");
+    contestCtx = null;
+    try {
+      let contest = await WispDB.getContest(id);
+      if (!contest) { renderContestGone(); return; }
+      // Deep-linked past the close date? Finalize it now, then re-read.
+      if (contest.status === "open" && contest.closes_at && new Date(contest.closes_at).getTime() <= Date.now()) {
+        try { await WispDB.finalizeContest(id); contest = (await WispDB.getContest(id)) || contest; } catch (e) {}
+      }
+      const [entries, mine, results, myWorks] = await Promise.all([
+        WispDB.contestEntries(id).catch(() => []),
+        WispDB.myVote(id).catch(() => null),
+        contest.status === "closed" ? WispDB.contestResults(id).catch(() => []) : Promise.resolve([]),
+        (WispDB.signedIn ? WispDB.myWorks().catch(() => []) : Promise.resolve([]))
+      ]);
+      contestCtx = { contest, entries, myVote: mine, results, myWorks };
+      renderContest();
+    } catch (e) { console.error("[wisp] contest load failed:", e); renderContestGone(); }
+  }
+  function renderContestGone() {
+    $("#screen-community").innerHTML = `<div class="page page--wide"><button class="btn--link" data-nav="community" style="margin-bottom:18px">&lsaquo; Community</button><div class="editorial" style="text-align:center;padding:50px 20px"><p class="soft" style="font-size:16px">That contest could not be found.</p></div></div>`;
+  }
+  const PLACE_BADGE = { 1: "first-place", 2: "second-place", 3: "third-place" };
+  function contestEntryCard(en, opts) {
+    const w = en.work;
+    if (!w) return "";
+    const votes = en.votes || 0;
+    const voted = opts.myVote === en.entryId;
+    const place = opts.placeByEntry ? opts.placeByEntry[en.entryId] : 0;
+    const badge = (place && place <= 3 && window.WispBadges) ? `<span class="contest-card__medal" title="${["", "First place", "Second place", "Third place"][place]}">${WispBadges.svg(PLACE_BADGE[place], 30)}</span>` : "";
+    let action = "";
+    if (opts.open) {
+      if (!WispDB.signedIn) action = "";
+      else action = `<button class="btn ${voted ? "btn--primary" : "btn--ghost"} btn--sm" data-vote="${en.entryId}" aria-pressed="${voted}">${voted ? icon("check", 14) + " Your vote" : "Vote"}</button>`;
+    }
+    return `<div class="contest-card ${voted ? "is-voted" : ""} ${place === 1 ? "is-first" : ""}">
+      ${badge}
+      <a class="contest-card__cover" href="#/work/${w.id}">${cover(w.cover, w.title)}</a>
+      <div class="contest-card__body">
+        <a href="#/work/${w.id}" class="contest-card__title">${esc(w.title)}</a>
+        <div class="contest-card__by">by ${esc(w.author)}</div>
+        <div class="contest-card__foot">
+          <span class="contest-card__votes">${votes} ${votes === 1 ? "vote" : "votes"}</span>
+          ${action}
+        </div>
+      </div>
+    </div>`;
+  }
+  function renderContest() {
+    const cx = contestCtx; if (!cx) return;
+    const c = cx.contest;
+    const closed = c.status === "closed";
+    const now = Date.now();
+    const closeMs = c.closes_at ? new Date(c.closes_at).getTime() : 0;
+    const entries = (cx.entries || []).slice().sort((a, b) => (b.votes || 0) - (a.votes || 0));
+    const signedIn = WispDB.signedIn;
+
+    // status line / countdown
+    let statusLine = "";
+    if (closed) statusLine = `<div class="event__count muted">Closed${c.closes_at ? " " + esc(fmtEasternStamp(c.closes_at)) : ""} &middot; winners decided</div>`;
+    else if (closeMs && now < closeMs) statusLine = `<div class="event__count"><span class="ch-countdown" data-countdown="${esc(c.closes_at)}" data-countdown-label="Closes in" data-countdown-done="Closing now">Closes in: &hellip;</span></div>`;
+    else if (closeMs) statusLine = `<div class="event__count is-due">Closing now; refresh to see the winners</div>`;
+    else statusLine = `<div class="event__count muted">Open. No closing date set yet.</div>`;
+
+    // my entries + a picker of my other published works to enter (open only)
+    let entrySection = "";
+    if (!closed) {
+      const myId = WispDB.user && WispDB.user.id;
+      const mineEntered = new Set((cx.entries || []).filter(e => e.authorId === myId).map(e => e.workId));
+      if (!signedIn) {
+        entrySection = `<p class="muted" style="font-size:14px">Sign in to enter one of your works and to vote.</p>`;
+      } else {
+        const eligible = (cx.myWorks || []).filter(w => {
+          const st = w._dbStatus || w.status; return (st === "ongoing" || st === "complete") && !mineEntered.has(w.id);
+        });
+        const options = eligible.map(w => `<option value="${w.id}">${esc(w.title || "Untitled")}</option>`).join("");
+        const mineRows = (cx.entries || []).filter(e => e.authorId === myId).map(e => `<span class="contest-mine"><a href="#/work/${e.workId}">${esc((e.work && e.work.title) || "Your work")}</a><button class="contest-mine__x" data-withdraw="${e.workId}" aria-label="Withdraw">&times;</button></span>`).join("");
+        entrySection = `<div class="contest-enter">
+          ${mineRows ? `<div class="contest-enter__mine"><span class="muted" style="font-size:13px">Your entries:</span> ${mineRows}</div>` : ""}
+          ${eligible.length
+            ? `<div class="contest-enter__row"><select class="contest-select" id="contestWork" aria-label="Choose one of your works">${options}</select><button class="btn btn--ghost btn--sm" data-enter>${icon("plus", 14)} Enter this work</button></div>`
+            : (mineRows ? "" : `<p class="muted" style="font-size:13px;margin:0">Publish a work first, then enter it here.</p>`)}
+        </div>`;
+      }
+    }
+
+    // body: results (closed) or the voting grid (open)
+    let body = "";
+    if (closed) {
+      const results = (cx.results || []);
+      const placeByEntry = {}; results.forEach(r => { const en = (cx.entries || []).find(e => e.workId === r.workId); if (en) placeByEntry[en.entryId] = r.place; });
+      const podium = results.filter(r => r.place <= 3 && r.work);
+      const podiumHTML = podium.length ? `<div class="contest-podium">${podium.map(r => {
+        const en = (cx.entries || []).find(e => e.workId === r.workId) || { work: r.work, votes: r.votes, entryId: null };
+        return `<div class="contest-podium__slot contest-podium__slot--${r.place}">
+          <div class="contest-podium__medal">${window.WispBadges ? WispBadges.svg(PLACE_BADGE[r.place], 44) : ""}</div>
+          ${contestEntryCard({ entryId: en.entryId, work: r.work, votes: r.votes }, { open: false, placeByEntry })}
+        </div>`;
+      }).join("")}</div>` : `<p class="muted" style="font-size:14px">No entries were submitted, so there are no winners.</p>`;
+      const rest = results.filter(r => r.place > 3 && r.work);
+      body = `<h2 class="shelf__title" style="margin:22px 0 12px">Winners</h2>${podiumHTML}
+        ${rest.length ? `<h2 class="shelf__title" style="margin:24px 0 12px">Full ranking</h2><div class="contest-grid">${rest.map(r => contestEntryCard({ entryId: (cx.entries.find(e => e.workId === r.workId) || {}).entryId, work: r.work, votes: r.votes }, { open: false, placeByEntry })).join("")}</div>` : ""}`;
+    } else {
+      body = `<h2 class="shelf__title" style="margin:22px 0 12px">Entries${entries.length ? ` (${entries.length})` : ""}</h2>
+        ${signedIn ? `<p class="muted" style="font-size:13px;margin:-4px 0 14px">You get one vote. ${cx.myVote ? "Tap another entry to move your vote, or tap your vote again to clear it." : "Tap Vote on the entry you like best."}</p>` : ""}
+        ${entries.length
+          ? `<div class="contest-grid">${entries.map(en => contestEntryCard(en, { open: true, myVote: cx.myVote })).join("")}</div>`
+          : `<p class="muted" style="font-size:14px;padding:10px 2px">No entries yet. ${signedIn ? "Be the first to enter one of your works." : "Sign in to enter yours."}</p>`}`;
+    }
+
+    const adminBar = WispDB.isAdmin ? `<div class="contest-adminbar"><button class="btn btn--quiet btn--sm" data-contest-edit="${c.id}">${icon("edit", 14)} Edit</button><button class="btn btn--quiet btn--sm" data-contest-del="${c.id}">${icon("trash", 14)} Delete</button>${!closed ? `<button class="btn btn--quiet btn--sm" data-contest-closenow="${c.id}">Close and award now</button>` : ""}</div>` : "";
+
+    $("#screen-community").innerHTML = `<div class="page page--wide">
+      <button class="btn--link" data-nav="community" style="margin-bottom:16px">&lsaquo; Community</button>
+      <div class="eyebrow rose" style="margin-bottom:6px">${closed ? "Contest &middot; closed" : "Contest"}</div>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <h1 class="display" style="font-size:28px">${esc(c.title)}</h1>${c.hub ? `<span class="pill">${esc(c.hub)} hub</span>` : ""}
+      </div>
+      ${c.description ? `<p class="section-lead" style="max-width:70ch">${esc(c.description)}</p>` : ""}
+      ${statusLine}
+      ${adminBar}
+      ${entrySection}
+      ${body}
+    </div>`;
+    startCountdowns();
+    wireContest();
+  }
+  function wireContest() {
+    const scr = $("#screen-community"); if (!scr || !contestCtx) return;
+    const id = contestCtx.contest.id;
+    // enter a work
+    const enterBtn = scr.querySelector("[data-enter]");
+    if (enterBtn) enterBtn.addEventListener("click", async () => {
+      const sel = scr.querySelector("#contestWork"); const wid = sel && sel.value; if (!wid) return;
+      enterBtn.disabled = true;
+      try { await WispDB.submitEntry(id, wid); toast("Your work is entered."); loadContest(id); }
+      catch (e) { enterBtn.disabled = false; toast((e && e.message) || "Could not enter that work."); }
+    });
+    scr.querySelectorAll("[data-withdraw]").forEach(b => b.addEventListener("click", async () => {
+      try { await WispDB.withdrawEntry(id, b.dataset.withdraw); toast("Entry withdrawn."); loadContest(id); }
+      catch (e) { toast((e && e.message) || "Could not withdraw."); }
+    }));
+    // vote: one per member; tapping your current vote clears it, tapping another moves it
+    scr.querySelectorAll("[data-vote]").forEach(b => b.addEventListener("click", async () => {
+      if (!WispDB.signedIn) { openAuth("in"); return; }
+      const entryId = b.dataset.vote;
+      scr.querySelectorAll("[data-vote]").forEach(x => x.disabled = true);
+      try {
+        if (contestCtx.myVote === entryId) { await WispDB.clearVote(id); toast("Vote cleared."); }
+        else { await WispDB.castVote(id, entryId); toast("Vote counted."); }
+        loadContest(id);
+      } catch (e) { scr.querySelectorAll("[data-vote]").forEach(x => x.disabled = false); toast((e && e.message) || "Could not vote."); }
+    }));
+    // admin controls
+    const ce = scr.querySelector("[data-contest-edit]"); if (ce) ce.addEventListener("click", () => openEditContest(contestCtx.contest));
+    const cd = scr.querySelector("[data-contest-del]"); if (cd) cd.addEventListener("click", () => {
+      confirmDialog({ title: "Delete this contest?", body: "The contest, its entries, and its votes are removed. This can't be undone.", confirmText: "Delete", danger: true },
+        async () => { try { await WispDB.deleteContest(id); toast("Contest deleted."); navigate("community"); } catch (e) { toast((e && e.message) || "Could not delete."); } });
+    });
+    const cc = scr.querySelector("[data-contest-closenow]"); if (cc) cc.addEventListener("click", () => {
+      confirmDialog({ title: "Close and award now?", body: "The contest closes immediately, the votes are tallied, and the top three get their badges.", confirmText: "Close and award" },
+        async () => {
+          try {
+            await WispDB.updateContest(id, { closes_at: new Date(Date.now() - 1000).toISOString() });
+            await WispDB.finalizeContest(id);
+            toast("Contest closed. Winners decided.");
+            loadContest(id);
+          } catch (e) { toast((e && e.message) || "Could not close the contest."); }
+        });
+    });
   }
 
   // ---- Hub landing page ----------------------------------------------------
@@ -7839,6 +8051,7 @@
     if (seg === "user") screen = "profile";
     if (seg === "hub") screen = "community";   // hub pages live in the community surface
     if (seg === "event") screen = "community"; // event spaces live in the community surface
+    if (seg === "contest") screen = "community"; // contest pages live in the community surface
     if (seg === "series") screen = "browse";   // series pages live in the browse surface
     if (seg === "tag") screen = "browse";       // tag collection pages live in the browse surface
 
@@ -7870,6 +8083,7 @@
     else if (screen === "community") {
       if (seg === "hub") { live ? loadHubPage(arg) : renderHubUnavailable(); }
       else if (seg === "event") { live ? loadEventSpace(arg) : renderHubUnavailable(); }
+      else if (seg === "contest") { live ? loadContest(arg) : renderHubUnavailable(); }
       else { live ? loadCommunity() : renderCommunity(); }
     }
     else if (screen === "profile") { (seg === "user" && live) ? loadUserProfile(arg) : renderProfile(); }
@@ -7996,6 +8210,10 @@
     }
     const exOpen = e.target.closest("[data-exchange-open]");
     if (exOpen) { openExchange(exOpen.dataset.exchangeOpen); return; }
+    const ctOpen = e.target.closest("[data-contest-open]");
+    if (ctOpen) { navigate("contest/" + ctOpen.dataset.contestOpen); return; }
+    const ctNew = e.target.closest("[data-contest-new]");
+    if (ctNew) { openCreateContest(); return; }
 
     const hopen = e.target.closest("[data-hub-open]");
     if (hopen && !e.target.closest("[data-hub-follow]")) { navigate("hub/" + hopen.dataset.hubOpen); return; }
@@ -9059,6 +9277,45 @@
       catch (e) { toast((e && e.message) || "Could not update the exchange."); }
     });
   }
+
+  // Create or edit a contest (admins). One modal for both; pass the contest to edit.
+  function openContestModal(existing) {
+    const c = existing || {};
+    const whenVal = c.closes_at ? toEasternInputValue(new Date(c.closes_at)) : "";
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <h2 style="font-size:20px">${existing ? "Edit contest" : "New contest"}</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <div class="field"><label>Title</label><input type="text" id="ct-title" value="${esc(c.title || "")}" placeholder="Summer one-shot contest"></div>
+      <div class="field"><label>Description</label><textarea id="ct-desc" rows="3" placeholder="The theme, the rules, what to write...">${esc(c.description || "")}</textarea></div>
+      <div class="field"><label>Hub (optional)</label><input type="text" id="ct-hub" value="${esc(c.hub || "")}" placeholder="A hub name, or leave blank for site-wide"></div>
+      <div class="field"><label>Closes at (Eastern Time)</label>${datePickerHTML("ctd")}<p class="muted" id="ctd-echo" style="font-size:12px;margin:6px 0 0"></p></div>
+      <div class="modal-actions">
+        <button class="btn btn--quiet" data-modal-cancel>Cancel</button>
+        <button class="btn btn--primary" id="ct-save">${existing ? "Save contest" : "Create contest"}</button>
+      </div>`, existing ? "Edit contest" : "New contest");
+    const echo = () => { const el = $("#ctd-echo"); if (!el) return; const raw = readDatePicker("ctd");
+      el.textContent = raw ? "Closes and awards the badges " + fmtEasternStamp(easternWallToInstant(raw).toISOString()) : "No closing date yet; set one so it can finalize on its own."; };
+    initDatePicker("ctd", whenVal, echo); echo();
+    $("#ct-save").addEventListener("click", async () => {
+      const title = $("#ct-title").value.trim(); if (!title) { toast("Give the contest a title."); return; }
+      const raw = readDatePicker("ctd");
+      const closes_at = raw ? easternWallToInstant(raw).toISOString() : null;
+      const fields = { title, description: $("#ct-desc").value.trim(), hub: $("#ct-hub").value.trim(), closes_at };
+      try {
+        if (existing) {
+          await WispDB.updateContest(existing.id, fields); toast("Contest updated."); closeModal();
+          if (contestCtx && contestCtx.contest.id === existing.id) loadContest(existing.id); else navigate("community");
+        } else {
+          const created = await WispDB.createContest(fields); toast("Contest created."); closeModal();
+          if (created && created.id) navigate("contest/" + created.id);
+        }
+      } catch (e) { toast((e && e.message) || "Could not save the contest. You need to be an admin."); }
+    });
+  }
+  function openCreateContest() { openContestModal(null); }
+  function openEditContest(c) { openContestModal(c); }
 
   function openEditEvent(ev) {
     const whenVal = ev.starts_at ? toEasternInputValue(new Date(ev.starts_at)) : "";
