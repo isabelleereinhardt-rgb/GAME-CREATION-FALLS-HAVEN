@@ -8249,18 +8249,21 @@
   }
 
   function syncAuthHeader() {
-    const link = $("#signOutBtn"); const avatar = $(".avatar-btn");
+    const link = $("#signOutBtn"); const avatar = $(".avatar-btn"); const linkM = $("#signOutBtnMobile");
+    const setMobileLabel = (t) => { if (linkM) { const svg = linkM.querySelector("svg"); linkM.textContent = t; if (svg) linkM.prepend(svg); } };
     if (!window.WispDB || !WispDB.enabled) return;             // demo mode: leave the header as-is
     updateAuthGate();
     renderActivity(); renderWidgets();                         // rails reflect the connected state
     if (WispDB.signedIn) {
       const name = (WispDB.profile && WispDB.profile.display_name) || "You";
       if (link) link.textContent = "Sign out";
+      setMobileLabel("Sign out");
       if (avatar) { avatar.textContent = name[0].toUpperCase(); avatar.title = name; }
       loadNotifications();                                     // fetch the activity feed once signed in
       loadReadingStats();                                      // and the reading stats widget
     } else {
       if (link) link.textContent = "Sign in";
+      setMobileLabel("Sign in");
       if (avatar) { avatar.textContent = "?"; avatar.title = "Sign in"; }
       LIVE.notifications = null; updateNotifBadge();           // drop any feed from a previous session
       LIVE.readingStats = null;
@@ -10256,11 +10259,15 @@
     $("#safeModeFlag") && $("#safeModeFlag").addEventListener("click", toggleSafeMode);
     $("#themeClose").addEventListener("click", closeTheme);
     $("#themeScrim").addEventListener("click", (e) => { if (e.target.id === "themeScrim") closeTheme(); });
-    $("#signOutBtn").addEventListener("click", () => {
+    const doSignInOut = () => {
       if (!window.WispDB || !WispDB.enabled) { toast("Sign out isn't wired up in demo mode. Connect Supabase to enable accounts."); return; }
       if (WispDB.signedIn) WispDB.signOut().then(() => { guestBrowsing = false; toast("Signed out."); updateAuthGate(); });
       else openAuth("in");
-    });
+    };
+    $("#signOutBtn").addEventListener("click", doSignInOut);
+    // The header link is hidden on phones, so the mobile menu needs its own
+    // sign-out; close the sheet first, then run the same flow.
+    $("#signOutBtnMobile") && $("#signOutBtnMobile").addEventListener("click", () => { closeSheet(); doSignInOut(); });
     $("#notifBtn").addEventListener("click", (e) => { e.stopPropagation(); toggleNotifPop(); });
     $("#railSheet").addEventListener("click", (e) => { if (e.target.id === "railSheet" || e.target.closest("[data-railclose]")) closeOverlay($("#railSheet")); });
     $("#menuBtn").addEventListener("click", openSheet);
