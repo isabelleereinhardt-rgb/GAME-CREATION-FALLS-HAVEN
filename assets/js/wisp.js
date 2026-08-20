@@ -9986,9 +9986,92 @@
     return fix;
   }
 
-  function runGrammarCheck() {
+  // ---- Spelling via the browser's own dictionary (Typo.js + Hunspell en_US) --
+  // Loaded on demand the first time a writer runs a check, so nobody downloads
+  // the word list unless they use it. It is the same en_US Hunspell dictionary
+  // browsers underline words against, so the button agrees with the native red
+  // squiggle and offers the same corrections.
+  var wispDict = null;    // Typo instance once ready, or "fail"
+  var wispDictP = null;   // in-flight load promise
+  function loadScriptOnce(src) {
+    return new Promise((res, rej) => {
+      if (document.querySelector('script[data-src="' + src + '"]')) { res(); return; }
+      const s = document.createElement("script"); s.src = src; s.setAttribute("data-src", src);
+      s.onload = res; s.onerror = rej; document.head.appendChild(s);
+    });
+  }
+  function ensureDictionary() {
+    if (wispDict) return Promise.resolve(wispDict === "fail" ? null : wispDict);
+    if (wispDictP) return wispDictP;
+    wispDictP = (async () => {
+      try {
+        if (!window.Typo) await loadScriptOnce("assets/js/typo.js");
+        const [aff, dic] = await Promise.all([
+          fetch("assets/dict/en_US.aff").then(r => r.text()),
+          fetch("assets/dict/en_US.dic").then(r => r.text())
+        ]);
+        wispDict = new window.Typo("en_US", aff, dic, { platform: "any" });
+      } catch (e) { wispDict = "fail"; }
+      return wispDict === "fail" ? null : wispDict;
+    })();
+    return wispDictP;
+  }
+  // Levenshtein distance, short-circuited: a far-off suggestion (a coined name
+  // with no near dictionary word) is ignored rather than "corrected" to nonsense.
+  function levDist(a, b) {
+    a = a.toLowerCase(); b = b.toLowerCase();
+    const m = a.length, n = b.length; if (Math.abs(m - n) > 3) return 9;
+    const dp = []; for (let j = 0; j <= n; j++) dp[j] = j;
+    for (let i = 1; i <= m; i++) {
+      let prev = dp[0]; dp[0] = i;
+      for (let j = 1; j <= n; j++) {
+        const tmp = dp[j];
+        dp[j] = Math.min(dp[j] + 1, dp[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+        prev = tmp;
+      }
+    }
+    return dp[n];
+  }
+  // Give a suggestion the capitalisation of the word it replaces, so "EMEPEROR"
+  // -> "EMPEROR" and "Beautifull" -> "Beautiful".
+  function matchCase(orig, fix) {
+    if (/^[A-Z]+$/.test(orig)) return fix.toUpperCase();
+    if (/^[A-Z]/.test(orig)) return fix.charAt(0).toUpperCase() + fix.slice(1);
+    return fix;
+  }
+  const GC_WORD_RE = /[A-Za-z][A-Za-z']*/g;
+  // Add likely misspellings in one text run to the match list, each with up to a
+  // few near suggestions (the same list the browser shows on right-click). Proper
+  // nouns (Capitalised mid-sentence) are left alone so invented names are not
+  // nagged, and only near suggestions are offered so a coined word with no close
+  // match is skipped rather than mangled.
+  function spellcheckText(text, dict, raw, budget) {
+    GC_WORD_RE.lastIndex = 0; let m;
+    while ((m = GC_WORD_RE.exec(text))) {
+      if (budget.n <= 0) break;
+      const w = m[0], s = m.index, e = s + w.length;
+      if (w.length < 3) continue;
+      if (/^[A-Z]{2,4}$/.test(w)) continue;                   // short all-caps: likely an acronym
+      const before = text.slice(0, s);
+      const sentenceStart = !/\S/.test(before) || /[.!?]["')\]]?\s+$/.test(before);
+      if (/^[A-Z][a-z]/.test(w) && !sentenceStart) continue;  // proper noun mid-sentence
+      if (dict.check(w)) continue;
+      budget.n--;
+      const sugg = (dict.suggest(w) || []).filter(x => x && x.toLowerCase() !== w.toLowerCase());
+      const near = sugg.filter(x => levDist(w, x) <= 2).slice(0, 4);
+      if (!near.length) continue;
+      const alts = near.map(x => matchCase(w, x));
+      raw.push({ s: s, e: e, orig: w, fix: alts[0], alts: alts });
+    }
+  }
+
+  async function runGrammarCheck() {
     const ed = $("#we-body"); if (!ed) return;
+    if (!wispDict && !wispDictP) toast("Checking spelling, grammar, and punctuation...");
+    const dict = await ensureDictionary();
+    if (!$("#we-body")) return;   // the writer navigated away while the dictionary loaded
     stripGrammarMarks(ed);
+    const budget = { n: 500 };    // cap dictionary suggestions on very long chapters
     const walker = document.createTreeWalker(ed, NodeFilter.SHOW_TEXT, {
       acceptNode(n) {
         if (!n.nodeValue || !n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
@@ -10021,6 +10104,8 @@
         if (!GC_DOUBLE_OK.has(d[1].toLowerCase())) raw.push({ s, e, orig: d[0], fix: d[1] });
         if (d.index === GC_DOUBLE.lastIndex) GC_DOUBLE.lastIndex++;
       }
+      // Spelling, using the browser's own Hunspell dictionary (when it loaded).
+      if (dict) spellcheckText(text, dict, raw, budget);
       raw.sort((a, b) => (b.e - b.s) - (a.e - a.s) || a.s - b.s);   // longest match first
       const hits = [];
       raw.forEach(h => { if (hits.every(x => h.e <= x.s || h.s >= x.e)) hits.push(h); });
@@ -10031,13 +10116,15 @@
         if (h.s > pos) frag.appendChild(document.createTextNode(text.slice(pos, h.s)));
         const span = document.createElement("span");
         span.className = "gc-mark"; span.setAttribute("data-fix", h.fix); span.setAttribute("data-orig", h.orig); span.textContent = h.orig;
+        if (h.alts && h.alts.length) span.setAttribute("data-alts", JSON.stringify(h.alts));
         frag.appendChild(span); pos = h.e; count++;
       });
       if (pos < text.length) frag.appendChild(document.createTextNode(text.slice(pos)));
       node.parentNode.replaceChild(frag, node);
     });
     if (count) toast(count + (count === 1 ? " suggestion. Tap the green word to fix it." : " suggestions. Tap a green word to fix it."));
-    else toast("No grammar, spacing, or punctuation issues found. Words your browser marks with a red underline are spelling it flags as you type.");
+    else toast(dict ? "No spelling, grammar, or punctuation issues found. Looks clean."
+      : "No grammar or punctuation issues found. Your browser underlines misspelled words as you type.");
   }
 
   // A small popover offering the fix for one flagged word.
@@ -10053,9 +10140,13 @@
       return;
     }
     const fix = mark.getAttribute("data-fix") || "";
+    // A misspelling carries several near suggestions (like the browser's own
+    // right-click menu); a grammar or spacing rule carries just the one fix.
+    let alts = []; try { alts = JSON.parse(mark.getAttribute("data-alts") || "[]"); } catch (e) {}
+    if (!alts.length && fix) alts = [fix];
     gcPop = document.createElement("div"); gcPop.className = "gc-pop";
     gcPop.innerHTML = `<span class="gc-pop__lead">Change to</span>` +
-      `<button class="gc-pop__fix" data-gc-apply>${esc(fix)}</button>` +
+      alts.map(a => `<button class="gc-pop__fix" data-gc-apply="${esc(a)}">${esc(a)}</button>`).join("") +
       `<button class="gc-pop__ignore" data-gc-ignore>Ignore</button>`;
     document.body.appendChild(gcPop);
     const r = mark.getBoundingClientRect(); const pw = gcPop.offsetWidth, ph = gcPop.offsetHeight;
@@ -10063,11 +10154,11 @@
     let top = r.top - ph - 8; if (top < 8) top = r.bottom + 8;
     top = Math.max(8, Math.min(top, window.innerHeight - ph - 8));   // keep it fully on screen
     gcPop.style.left = left + "px"; gcPop.style.top = top + "px";
-    gcPop.querySelector("[data-gc-apply]").addEventListener("click", () => {
-      mark.parentNode.replaceChild(document.createTextNode(fix), mark);
+    gcPop.querySelectorAll("[data-gc-apply]").forEach(btn => btn.addEventListener("click", () => {
+      mark.parentNode.replaceChild(document.createTextNode(btn.getAttribute("data-gc-apply") || fix), mark);
       const ed = $("#we-body"); if (ed) { ed.normalize(); updateEditorEmpty(); markEditorDirty(); }
       closeGrammarPop();
-    });
+    }));
     gcPop.querySelector("[data-gc-ignore]").addEventListener("click", () => {
       mark.parentNode.replaceChild(document.createTextNode(mark.textContent), mark);
       const ed = $("#we-body"); if (ed) ed.normalize();
