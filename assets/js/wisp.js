@@ -2885,22 +2885,54 @@
   // @[label](url) for a rich embed. Only https is allowed. Interactive frames
   // are built for a fixed provider whitelist (video, maps, audio) and rendered
   // sandboxed; anything else becomes a plain link card. No user HTML is injected.
+  // Work out how to embed a URL live, the way Notion does: known providers get
+  // their official player/preview frame, and anything else https is shown in a
+  // generic site frame rather than a bare link. Returns null only for a URL we
+  // cannot frame at all (not https, or unparseable), which falls back to a card.
   function embedInfo(url) {
     let u; try { u = new URL(url); } catch (e) { return null; }
     if (u.protocol !== "https:") return null;
     const host = u.hostname.replace(/^www\./, ""), path = u.pathname;
+
+    // Video
     if (host === "youtu.be") { const id = path.slice(1).split("/")[0]; if (/^[\w-]{6,}$/.test(id)) return { kind: "video", src: "https://www.youtube-nocookie.com/embed/" + id }; }
     if (host === "youtube.com" || host === "m.youtube.com" || host === "youtube-nocookie.com") {
       const m = path.match(/^\/embed\/([\w-]{6,})/); if (m) return { kind: "video", src: "https://www.youtube-nocookie.com/embed/" + m[1] };
+      const sh = path.match(/^\/shorts\/([\w-]{6,})/); if (sh) return { kind: "video", src: "https://www.youtube-nocookie.com/embed/" + sh[1] };
       const id = u.searchParams.get("v"); if (id && /^[\w-]{6,}$/.test(id)) return { kind: "video", src: "https://www.youtube-nocookie.com/embed/" + id };
     }
     if (host === "vimeo.com") { const id = path.split("/").filter(Boolean)[0]; if (/^\d+$/.test(id)) return { kind: "video", src: "https://player.vimeo.com/video/" + id }; }
     if (host === "player.vimeo.com" && /^\/video\/\d+/.test(path)) return { kind: "video", src: u.origin + path };
-    if ((host === "google.com" || host === "maps.google.com") && /^\/maps\/embed/.test(path)) return { kind: "map", src: u.href };
-    if (host === "google.com" && /^\/maps/.test(path)) { const q = u.searchParams.get("q"); if (q) return { kind: "map", src: "https://maps.google.com/maps?q=" + encodeURIComponent(q) + "&z=14&output=embed" }; }
-    if (host === "openstreetmap.org" && /^\/export\/embed/.test(path)) return { kind: "map", src: u.href };
+
+    // Audio
     if (host === "open.spotify.com" && /^\/(track|album|playlist|episode|show)\//.test(path)) return { kind: "audio", src: "https://open.spotify.com/embed" + path };
-    return null;
+    if (host === "soundcloud.com") return { kind: "audio", src: "https://w.soundcloud.com/player/?url=" + encodeURIComponent(u.href) + "&visual=false" };
+
+    // Maps
+    if ((host === "google.com" || host === "maps.google.com") && /^\/maps\/embed/.test(path)) return { kind: "map", src: u.href };
+    if ((host === "google.com" || host === "maps.google.com") && /^\/maps/.test(path)) {
+      const q = u.searchParams.get("q") || (path.match(/@(-?[\d.]+,-?[\d.]+)/) || [])[1];
+      return { kind: "map", src: "https://maps.google.com/maps?q=" + encodeURIComponent(q || path) + "&z=13&output=embed" };
+    }
+    if (host === "openstreetmap.org" && /^\/export\/embed/.test(path)) return { kind: "map", src: u.href };
+
+    // Documents: Google Docs / Sheets / Slides / Forms / Drive, and raw PDFs,
+    // shown inline as a live preview.
+    if (host === "docs.google.com") {
+      const m = path.match(/^\/(document|spreadsheets|presentation)\/d\/([\w-]+)/);
+      if (m) return { kind: "doc", src: m[1] === "presentation"
+        ? "https://docs.google.com/presentation/d/" + m[2] + "/embed"
+        : "https://docs.google.com/" + m[1] + "/d/" + m[2] + "/preview" };
+      if (/^\/forms\/d\/e\/[\w-]+\/viewform/.test(path)) return { kind: "doc", src: u.origin + path + (u.search ? u.search + "&" : "?") + "embedded=true" };
+    }
+    if (host === "drive.google.com") { const m = path.match(/^\/file\/d\/([\w-]+)/); if (m) return { kind: "doc", src: "https://drive.google.com/file/d/" + m[1] + "/preview" }; }
+    if (/\.pdf($|[?#])/i.test(path)) return { kind: "doc", src: u.href };
+
+    // Code sandboxes
+    if (host === "codepen.io") { const m = path.match(/^\/([\w-]+)\/(?:pen|details|full)\/([\w-]+)/); if (m) return { kind: "site", src: "https://codepen.io/" + m[1] + "/embed/" + m[2] + "?default-tab=result" }; }
+
+    // Anything else https: show the page itself in a live site frame.
+    return { kind: "site", src: u.href };
   }
   function imageEmbedHTML(url, alt, size) {
     if (!/^https:\/\//i.test(url)) return `<p>${mdInline("![" + alt + "](" + url + ")")}</p>`;
@@ -2935,6 +2967,17 @@
     // tab, and without it that tab inherits the sandbox so youtube.com refuses to
     // load (ERR_BLOCKED_BY_RESPONSE). With it, the tab opens as a normal page.
     const frame = `<div class="embed--${info.kind}"><iframe src="${esc(info.src)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms allow-presentation" ${allow} allowfullscreen title="${esc(label || "Embedded content")}"></iframe></div>`;
+    // Documents and generic sites get a slim header bar naming the source with an
+    // "open" button. It reads like a Notion embed and, if a page refuses to be
+    // framed, still gives the reader the name and a way out instead of a blank box.
+    if (info.kind === "doc" || info.kind === "site") {
+      const nm = (label && label.trim()) || host;
+      const bar = `<div class="embed-frame__bar">` +
+        `<span class="embed-frame__site">${icon("external", 14)}<span class="embed-frame__name">${esc(nm)}</span></span>` +
+        `<a class="embed-frame__open" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Open ${esc(host)} <span aria-hidden="true">&#8599;</span></a>` +
+        `</div>`;
+      return `<figure class="embed embed--rich embed--frame">${bar}${frame}</figure>`;
+    }
     // A caption link so readers can jump straight to the source (like the sample).
     const src = `<figcaption class="embed__source"><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc((label && label.trim()) || ("Open on " + host))} <span aria-hidden="true">&#8599;</span></a></figcaption>`;
     return `<figure class="embed embed--rich">${frame}${src}</figure>`;
@@ -3059,6 +3102,19 @@
       if (label === host || label === href) label = "";
       return `@[${label}](${href})`;
     }
+    // A framed doc/site embed keeps its label in the header name span and its URL
+    // in the "Open" link. Read those directly so it round-trips as @[label](url)
+    // rather than picking up the "Open host" button text as the label.
+    const openA = node.querySelector ? node.querySelector(".embed-frame__open[href]") : null;
+    if (openA) {
+      const href = openA.getAttribute("href") || "";
+      if (!/^https?:\/\//i.test(href)) return "";
+      const nameEl = node.querySelector(".embed-frame__name");
+      let label = nameEl ? (nameEl.textContent || "").trim() : "";
+      let fhost = ""; try { fhost = new URL(href).hostname.replace(/^www\./, ""); } catch (e) {}
+      if (label === fhost) label = "";
+      return `@[${label}](${href})`;
+    }
     const a = node.querySelector ? node.querySelector(".embed__source a[href], a[href]") : null;
     if (a) {
       const href = a.getAttribute("href") || "";
@@ -3080,7 +3136,7 @@
     if (!node || node.nodeType !== 1 || !node.cloneNode) return "";
     const clone = node.cloneNode(true);
     clone.querySelectorAll(
-      "iframe, img, figcaption, .embed__source, .img-tools, .embed-link__main, .embed-link__side, .embed-link__label, .embed-link__host, [class*='embed--']"
+      "iframe, img, figcaption, .embed__source, .embed-frame__bar, .img-tools, .embed-link__main, .embed-link__side, .embed-link__label, .embed-link__host, [class*='embed--']"
     ).forEach(n => n.remove());
     return (clone.textContent || "")
       .replace(new RegExp(String.fromCharCode(0xA0), "g"), " ")
@@ -9540,7 +9596,8 @@
       config = { label: label, url: url };
     } else if (kind === "video") {
       const url = safeUrl((($("#" + pfx + "-url") || {}).value || "").trim());
-      if (!url || !embedInfo(url)) throw new Error("Add a video URL from a supported site (YouTube, Vimeo, ...).");
+      const vi = url && embedInfo(url);
+      if (!vi || vi.kind !== "video") throw new Error("Add a video URL from a supported site (YouTube, Vimeo, ...).");
       config = { url: url };
     } else if (kind === "faq") {
       const items = (($("#" + pfx + "-faq") || {}).value || "").split("\n").map(l => l.trim()).filter(Boolean).map(l => {
@@ -9991,13 +10048,12 @@
       inp.click();
     }
     else if (kind === "embed") {
-      const url = (window.prompt("Embed address: a YouTube or Vimeo link, a Google Maps or OpenStreetMap embed URL, or a Spotify link.", "https://") || "").trim();
+      const url = (window.prompt("Paste any link to embed it: a video, a PDF, a Google Doc, a map, a Spotify track, or a web page. It shows inline, not as a plain link.", "https://") || "").trim();
       if (!url || url === "https://") return;
       if (!/^https:\/\//i.test(url)) { toast("Embeds need to start with https://"); return; }
-      if (!embedInfo(url)) toast("That address will show as a link. Interactive embeds support YouTube, Vimeo, Google Maps, OpenStreetMap, and Spotify.");
       const label = (window.prompt("Label (optional)", "") || "").trim();
       insertEmbedBlock("@[" + label + "](" + url + ")");
-      if (embedInfo(url)) toast("Embed added. It shows as a player in Preview and for readers.");
+      toast("Embed added. It shows inline in Preview and for readers.");
     }
   }
   // Wrap the current selection in a highlight (or clear it if already highlighted).
