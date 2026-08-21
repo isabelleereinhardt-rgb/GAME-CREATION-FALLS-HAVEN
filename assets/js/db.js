@@ -1178,6 +1178,20 @@ window.WispDB = (function () {
   async function finalizeContest(contestId) {
     const { error } = await client.rpc("finalize_contest", { cid: contestId });
     if (error) throw error;
+    // The close may have pinned a placement badge onto this very account;
+    // refresh the cached profile so the badge case shows it right away.
+    refreshProfile().catch(() => {});
+  }
+  // Re-read the signed-in account's profile row (badges, counts) into the
+  // cache, so screens that render from it see server-side changes without a
+  // sign-out. Quiet: no emit, callers re-render themselves.
+  async function refreshProfile() {
+    if (!user || !client) return null;
+    try {
+      const { data } = await client.from("profiles").select("*").eq("id", user.id).single();
+      if (data) profile = data;
+      return profile;
+    } catch (e) { return profile; }
   }
   async function finalizeDueContests(list) {
     const now = Date.now();
@@ -1708,7 +1722,7 @@ window.WispDB = (function () {
     listExchanges, getExchange, createExchange, updateExchange, deleteExchange,
     mySignup, joinExchange, withdrawSignup, listSignups, signupCounts, runMatching, myAssignment, myGift, attachGift,
     listContests, getContest, createContest, updateContest, deleteContest, contestEntries, contestVoteCounts,
-    submitEntry, withdrawEntry, myVote, castVote, clearVote, contestResults, finalizeContest, finalizeDueContests,
+    submitEntry, withdrawEntry, myVote, castVote, clearVote, contestResults, finalizeContest, finalizeDueContests, refreshProfile,
     listHubWidgets, createWidget, updateWidget, deleteWidget, pollTally, myPollVote, castPollVote,
     pinEventPost, myEventNotify, setEventNotify,
     listCategories, createCategory, deleteCategory,

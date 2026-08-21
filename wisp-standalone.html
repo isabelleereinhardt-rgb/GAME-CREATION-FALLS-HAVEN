@@ -4436,6 +4436,20 @@ window.WispDB = (function () {
   async function finalizeContest(contestId) {
     const { error } = await client.rpc("finalize_contest", { cid: contestId });
     if (error) throw error;
+    // The close may have pinned a placement badge onto this very account;
+    // refresh the cached profile so the badge case shows it right away.
+    refreshProfile().catch(() => {});
+  }
+  // Re-read the signed-in account's profile row (badges, counts) into the
+  // cache, so screens that render from it see server-side changes without a
+  // sign-out. Quiet: no emit, callers re-render themselves.
+  async function refreshProfile() {
+    if (!user || !client) return null;
+    try {
+      const { data } = await client.from("profiles").select("*").eq("id", user.id).single();
+      if (data) profile = data;
+      return profile;
+    } catch (e) { return profile; }
   }
   async function finalizeDueContests(list) {
     const now = Date.now();
@@ -4966,7 +4980,7 @@ window.WispDB = (function () {
     listExchanges, getExchange, createExchange, updateExchange, deleteExchange,
     mySignup, joinExchange, withdrawSignup, listSignups, signupCounts, runMatching, myAssignment, myGift, attachGift,
     listContests, getContest, createContest, updateContest, deleteContest, contestEntries, contestVoteCounts,
-    submitEntry, withdrawEntry, myVote, castVote, clearVote, contestResults, finalizeContest, finalizeDueContests,
+    submitEntry, withdrawEntry, myVote, castVote, clearVote, contestResults, finalizeContest, finalizeDueContests, refreshProfile,
     listHubWidgets, createWidget, updateWidget, deleteWidget, pollTally, myPollVote, castPollVote,
     pinEventPost, myEventNotify, setEventNotify,
     listCategories, createCategory, deleteCategory,
@@ -5057,13 +5071,13 @@ window.WISP_BADGE_IMG = {"book-gold.png":"data:image/png;base64,iVBORw0KGgoAAAAN
     { id: "number-one",    name: "Number One",     cat: "contest", tier: "gold",   img: "top-1-banner.png",  desc: "Held the top spot on the charts.",        how: "Top the site charts with a work." },
     // Milestones -------------------------------------------------------------
     { id: "first-publication", name: "First Publication", cat: "milestone", tier: "gold", img: "seal-gold.png", desc: "Published a first work on Wisp.",       how: "Publish your first work.", auto: function (s) { return (s.works || 0) >= 1; } },
-    { id: "shelf-of-stories", name: "Shelf of Stories", cat: "milestone", tier: "gold", img: "book-gold.png", desc: "Published five works.",                   how: "Publish five works. Earned automatically.", auto: function (s) { return (s.works || 0) >= 5; } },
-    { id: "wordsmith",     name: "Wordsmith",      cat: "milestone", tier: "gold",   img: "feather-gold.png",  desc: "Wrote fifty thousand words on Wisp.",     how: "Publish 50,000 words across your works. Earned automatically.", auto: function (s) { return (s.words || 0) >= 50000; } },
+    { id: "shelf-of-stories", name: "Shelf of Stories", cat: "milestone", tier: "gold", img: "book-gold.png", desc: "Published five works.",                   how: "Publish five works.", auto: function (s) { return (s.works || 0) >= 5; } },
+    { id: "wordsmith",     name: "Wordsmith",      cat: "milestone", tier: "gold",   img: "feather-gold.png",  desc: "Wrote fifty thousand words on Wisp.",     how: "Publish 50,000 words across your works.", auto: function (s) { return (s.words || 0) >= 50000; } },
     { id: "unlocked",      name: "Milestone Unlocked", cat: "milestone", tier: "gold", img: "padlock-gold.png", desc: "Crossed a hearts milestone.",           how: "Reach 100 hearts across your works.", auto: function (s) { return (s.hearts || 0) >= 100; } },
-    { id: "breakout",      name: "Breakout",       cat: "milestone", tier: "gold",   img: "star-burst.png",    desc: "Hit five hundred hearts.",                how: "Reach 500 hearts across your works. Earned automatically.", auto: function (s) { return (s.hearts || 0) >= 500; } },
+    { id: "breakout",      name: "Breakout",       cat: "milestone", tier: "gold",   img: "star-burst.png",    desc: "Hit five hundred hearts.",                how: "Reach 500 hearts across your works.", auto: function (s) { return (s.hearts || 0) >= 500; } },
     { id: "legend",        name: "Legend",         cat: "milestone", tier: "gold",   img: "star-black.png",    desc: "A rare, standout honor.",                 how: "Earn a special recognition from the team." },
     // Consistency & streaks --------------------------------------------------
-    { id: "rising-star",   name: "Rising Star",    cat: "streak",  tier: "gold",   img: "star-gold.png",     desc: "Posted at least twice a week for a month.", how: "Update 2+ times a week, four weeks running. Earned automatically.", auto: function (s) { return !!s.consistentMonth; } },
+    { id: "rising-star",   name: "Rising Star",    cat: "streak",  tier: "gold",   img: "star-gold.png",     desc: "Posted at least twice a week for a month.", how: "Update 2+ times a week, four weeks running.", auto: function (s) { return !!s.consistentMonth; } },
     { id: "old-faithful",  name: "Old Faithful",   cat: "streak",  tier: "gold",   img: "ribbon-gold.png",   desc: "Never missed an update day.",             how: "Hit every scheduled update for a season." },
     // Community & kindness ---------------------------------------------------
     { id: "guardian",      name: "Guardian",       cat: "community", tier: "gold", img: "shield-gold.png",   desc: "Helps keep Wisp kind and safe.",          how: "Be a moderator or a trusted helper." },
@@ -5083,8 +5097,8 @@ window.WISP_BADGE_IMG = {"book-gold.png":"data:image/png;base64,iVBORw0KGgoAAAAN
     { id: "rank-pillar",   name: "Pillar",        cat: "rank", tier: "gold",   img: "chevron-gold-down.png",  desc: "A core part of the community.",     how: "Earn the community's trust over time." },
     { id: "founding",      name: "Founding Member", cat: "rank", tier: "silver", img: "seal-silver.png",      desc: "Here since the early days.",        how: "Be part of Wisp's first season." },
     // Ratings ----------------------------------------------------------------
-    { id: "first-rating",  name: "First Rating",   cat: "rating",  tier: "bronze", img: "star-1.png",        desc: "A reader rated one of the works.", how: "Get your first reader rating. Earned automatically.", auto: function (s) { return (s.ratingsCount || 0) >= 1; } },
-    { id: "talked-about",  name: "Talked About",   cat: "rating",  tier: "bronze", img: "star-2.png",        desc: "Ten reader ratings and counting.", how: "Collect ten ratings across your books. Earned automatically.", auto: function (s) { return (s.ratingsCount || 0) >= 10; } },
+    { id: "first-rating",  name: "First Rating",   cat: "rating",  tier: "bronze", img: "star-1.png",        desc: "A reader rated one of the works.", how: "Get your first reader rating.", auto: function (s) { return (s.ratingsCount || 0) >= 1; } },
+    { id: "talked-about",  name: "Talked About",   cat: "rating",  tier: "bronze", img: "star-2.png",        desc: "Ten reader ratings and counting.", how: "Collect ten ratings across your books.", auto: function (s) { return (s.ratingsCount || 0) >= 10; } },
     { id: "well-rated",    name: "Well-Rated",     cat: "rating",  tier: "bronze", img: "star-3.png",        desc: "A solid average reader rating.", how: "Average 3 stars or more across your books (5+ ratings).", auto: function (s) { return (s.ratingsCount || 0) >= 5 && (s.avgRating || 0) >= 3; } },
     { id: "highly-rated",  name: "Highly Rated",   cat: "rating",  tier: "silver", img: "star-4.png",        desc: "A high average reader rating.",  how: "Average 4 stars or more across your books (5+ ratings).", auto: function (s) { return (s.ratingsCount || 0) >= 5 && (s.avgRating || 0) >= 4; } },
     { id: "five-star",     name: "Five-Star Author", cat: "rating", tier: "gold",  img: "star-5.png",        desc: "A near-perfect average rating.", how: "Average 4.5 stars or more across your books (10+ ratings).", auto: function (s) { return (s.ratingsCount || 0) >= 10 && (s.avgRating || 0) >= 4.5; } }
@@ -11471,7 +11485,24 @@ window.WISP_WIDGET_CONTENT = (function () {
       ]);
       contestCtx = { contest, entries, myVote: mine, results, myWorks };
       renderContest();
+      celebratePlacement(contest, results);
     } catch (e) { console.error("[wisp] contest load failed:", e); renderContestGone(); }
+  }
+  // The first time a member sees a contest they placed in, say so: the badge
+  // landed on their profile the moment it closed, and this points them to it.
+  function celebratePlacement(contest, results) {
+    const myId = WispDB.user && WispDB.user.id;
+    if (!myId || !contest || contest.status !== "closed") return;
+    const mine = (results || []).find(r => r.authorId === myId && r.place <= 10);
+    if (!mine) return;
+    const key = "wisp.contest.cheered";
+    let seen = [];
+    try { seen = JSON.parse(localStorage.getItem(key) || "[]"); } catch (e) {}
+    if (seen.indexOf(contest.id) >= 0) return;
+    try { seen.push(contest.id); localStorage.setItem(key, JSON.stringify(seen.slice(-50))); } catch (e) {}
+    toast(mine.place <= 3
+      ? "You placed " + ordinal(mine.place) + "! The badge is in your badge case."
+      : "You finished " + ordinal(mine.place) + ". Well run.");
   }
   function renderContestGone() {
     $("#screen-community").innerHTML = `<div class="page page--wide"><button class="btn--link" data-nav="community" style="margin-bottom:18px">&lsaquo; Community</button><div class="editorial" style="text-align:center;padding:50px 20px"><p class="soft" style="font-size:16px">That contest could not be found.</p></div></div>`;
@@ -12453,7 +12484,10 @@ window.WISP_WIDGET_CONTENT = (function () {
       const uid = WispDB.user && WispDB.user.id;
       const [works, counts] = await Promise.all([
         WispDB.myWorks(),
-        uid ? WispDB.followCounts(uid).catch(() => ({ followers: 0, following: 0 })) : { followers: 0, following: 0 }
+        uid ? WispDB.followCounts(uid).catch(() => ({ followers: 0, following: 0 })) : { followers: 0, following: 0 },
+        // Badges can land on the account from elsewhere (a contest closing);
+        // read the profile row fresh so the badge case is never stale.
+        WispDB.refreshProfile ? WispDB.refreshProfile().catch(() => null) : null
       ]);
       renderProfileLive(works, counts);
     } catch (e) { console.error("[wisp] profile load failed:", e); renderProfileLive([]); }
@@ -12887,10 +12921,37 @@ window.WISP_WIDGET_CONTENT = (function () {
     const pid = WispDB.profile.id;
     if (stateSyncedFor === pid) return;
     stateSyncedFor = pid;
+    // A different account than the one this device's state belongs to: their
+    // saved state applies whatever the local timestamp says, and if they have
+    // none saved they begin from defaults, never from the previous member's
+    // theme, muted tags, or blocked authors.
+    let owner = null; try { owner = localStorage.getItem("wisp.state.owner"); } catch (e) {}
+    const foreign = owner && owner !== pid;
+    try { localStorage.setItem("wisp.state.owner", pid); } catch (e) {}
     const remote = await WispDB.getUserState().catch(() => null);
     const remoteAt = remote && remote.updated_at ? new Date(remote.updated_at).getTime() : 0;
     const hasRemote = !!(remote && remote.settings && Object.keys(remote.settings).length);
-    if (hasRemote && remoteAt > localStateStamp()) {
+    if (foreign && !hasRemote) {
+      stateApplying = true;
+      try {
+        settings = Object.assign({}, DEFAULTS, { typography: typographyDefaults() });
+        save();
+        userState.mutedTags = new Set();
+        userState.blockedUsers = new Set();
+        applySettings();
+        syncSafeMode();
+        if (window.__wispGC) window.__wispGC.userDict = new Set();
+        try { localStorage.setItem("wisp.dict.user", "[]"); } catch (e) {}
+        editorLineSpace = "normal";
+        try { localStorage.setItem("wisp.editorLineSpace", "normal"); } catch (e) {}
+        try { localStorage.setItem("wisp.grammar.live", "on"); } catch (e) {}
+        if (window.__wispGC) window.__wispGC.enabled = true;
+      } finally { stateApplying = false; }
+      touchLocalStateStamp(0);
+      schedulePushState();
+      return;
+    }
+    if (hasRemote && (foreign || remoteAt > localStateStamp())) {
       stateApplying = true;
       try {
         settings = Object.assign({}, DEFAULTS, remote.settings);
@@ -12917,12 +12978,17 @@ window.WISP_WIDGET_CONTENT = (function () {
       schedulePushState();
     }
   }
-  try { window.__wispSync = { push: schedulePushState, pull: syncStateFromAccount }; } catch (e) {}   // console debugging handle
+  try { window.__wispSync = { push: schedulePushState, pull: syncStateFromAccount, reset: function () { stateSyncedFor = null; } }; } catch (e) {}   // console debugging handle
   function mwSyncFromAccount() {
     if (!(window.WispDB && WispDB.enabled && WispDB.signedIn && WispDB.profile)) { mwSyncedFor = null; return; }
     const pid = WispDB.profile.id;
     if (mwSyncedFor === pid) return;
     mwSyncedFor = pid;
+    // Whose widgets does this DEVICE currently hold? A different account
+    // signing in must never inherit them (sticky notes are someone's notes),
+    // and must never upload them to its own account.
+    let owner = null; try { owner = localStorage.getItem("wisp.widgets.owner"); } catch (e) {}
+    const foreign = owner && owner !== pid;
     const remote = WispDB.getWidgets ? WispDB.getWidgets() : null;
     const hasWidgets = remote && typeof remote === "object" &&
       ((Array.isArray(remote.installed) && remote.installed.length) || (remote.state && Object.keys(remote.state).length));
@@ -12933,11 +12999,20 @@ window.WISP_WIDGET_CONTENT = (function () {
       mwPersistLocal();
       applyAmbientWidgetState();
       renderWidgetsEverywhere();
+    } else if (foreign) {
+      // A different member on a used device, with nothing saved of their own:
+      // they start with a fresh station, not the previous member's.
+      MW.installed = []; MW.state = {};
+      mwPersistLocal();
+      applyAmbientWidgetState();
+      renderWidgetsEverywhere();
     }
     // The reading companion (Lucky) rides in the same synced blob.
     if (hasCompanion && window.WispCompanion && WispCompanion.applyPrefs) WispCompanion.applyPrefs(remote.companion);
-    if (!hasWidgets && !hasCompanion) mwPersistRemote();   // account empty (or column unmigrated): upload this device's state
+    if (!hasWidgets && !hasCompanion && !foreign) mwPersistRemote();   // first sign-in from this device: upload its state
+    try { localStorage.setItem("wisp.widgets.owner", pid); } catch (e) {}
   }
+  try { window.__wispMW = { sync: mwSyncFromAccount, reset: function () { mwSyncedFor = null; } }; } catch (e) {}   // console debugging handle
   // Reflect ambient toggles (petals, focus mode) after a cross-device sync.
   function applyAmbientWidgetState() {
     const installed = new Set(MW.installed);
