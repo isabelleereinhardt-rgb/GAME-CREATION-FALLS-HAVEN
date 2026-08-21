@@ -1857,7 +1857,10 @@
     const rest = tags.slice(shown);
     // The +N button carries the hidden tags so a click can reveal them in place.
     const more = rest.length ? `<button class="tag--more tag" data-tag-more="${esc(JSON.stringify(rest))}">+${rest.length}</button>` : "";
-    return `<div class="tag-row">${head}${more}</div>`;
+    // Navigation landmark: read-aloud and reader modes then treat the chips as
+    // navigation instead of prose, so "listen to this page" reads the story,
+    // not a run of tag names.
+    return `<div class="tag-row" role="navigation" aria-label="Tags">${head}${more}</div>`;
   }
 
   // A work's fandom/source can hold several fandoms, comma-separated. Show each as
@@ -1887,7 +1890,7 @@
     return `<article class="card" data-work="${w.id}">
       <span class="card__cover">${cover(w.cover, w.title)}${flag}${readMark}</span>
       <span class="card__body">
-        <span class="tag-row"><button class="pill pill--link" data-browse-type="${w.type}">${w.type === "fan" ? "Fanwork" : "Original"}</button>${sourcePills(w.source)}</span>
+        <span class="tag-row" role="navigation" aria-label="Fandoms"><button class="pill pill--link" data-browse-type="${w.type}">${w.type === "fan" ? "Fanwork" : "Original"}</button>${sourcePills(w.source)}</span>
         <span class="card__titlerow"><a class="card__title" href="#/work/${w.id}">${esc(w.title)}</a>${ratePill(w.rating)}</span>
         <span class="card__by">by ${esc(w.author)}</span>
         <span class="card__summary">${esc(w.summary)}</span>
@@ -2536,7 +2539,7 @@
         <div class="work-hero">
           <span class="work-hero__cover">${cover(w.cover, w.title)}</span>
           <div class="work-hero__main">
-            <span class="tag-row"><button class="pill pill--link" data-browse-type="${w.type}">${w.type === "fan" ? "Fanwork" : "Original"}</button>${sourcePills(w.source)}${w.format === "comic" ? '<span class="pill">Comic</span>' : ""}</span>
+            <span class="tag-row" role="navigation" aria-label="Fandoms"><button class="pill pill--link" data-browse-type="${w.type}">${w.type === "fan" ? "Fanwork" : "Original"}</button>${sourcePills(w.source)}${w.format === "comic" ? '<span class="pill">Comic</span>' : ""}</span>
             <h1 class="work-hero__title">${esc(w.title)}</h1>
             ${w._db && w.seriesId && w.seriesName ? `<div style="font-size:14px;margin:2px 0 4px"><a href="#/series/${w.seriesId}" class="series-crumb">${icon("book",13)} ${esc(w.seriesName)}${w.book ? `, book ${w.book}` : ""}</a></div>` : ""}
             <div class="soft" style="font-size:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -4374,7 +4377,7 @@
         <button type="button" title="Upload an image from your device" data-fmt="image">${icon("upload",13)} Image</button>
         <button type="button" title="Embed a video, map, or audio by link" data-fmt="embed">${icon("external",13)} Embed</button>
         <button type="button" title="Dictate: speak and it types for you" data-fmt="dictate" id="we-dictate">${micSVG}</button>
-        <button type="button" title="Check grammar and spelling" data-fmt="grammar" id="we-grammar">${icon("check",13)} Grammar</button>
+        <button type="button" title="Check spelling and grammar as you type" data-fmt="grammar" id="we-grammar" aria-pressed="false">${icon("check",13)} Grammar<span class="gc-count" id="we-gccount" hidden></span></button>
         <span class="sep"></span>
         <button type="button" title="Horizontal rule" data-fmt="hr"><span style="display:inline-block;width:16px;height:2px;background:currentColor;border-radius:2px"></span></button>
         <label class="tb-space" title="Line spacing while you write">Spacing
@@ -4385,7 +4388,7 @@
           </select>
         </label>
       </div>
-      <div class="editor" id="we-body" contenteditable="true" spellcheck="true" aria-label="Chapter body" style="line-height:${lineSpaceValue(sp)}" data-placeholder="Start typing, or paste from another editor. Format with the toolbar above, or use Markdown shortcuts.">${bodyHTML}</div>`;
+      <div class="editor-stage"><div class="editor" id="we-body" contenteditable="true" spellcheck="true" aria-label="Chapter body" style="line-height:${lineSpaceValue(sp)}" data-placeholder="Start typing, or paste from another editor. Format with the toolbar above, or use Markdown shortcuts.">${bodyHTML}</div></div>`;
   }
   const LINE_SPACE = { compact: "1.45", normal: "1.7", relaxed: "2.05" };
   function lineSpaceValue(k) { return LINE_SPACE[k] || LINE_SPACE.normal; }
@@ -4421,7 +4424,7 @@
     if (!z) return;
     z.innerHTML = bodyZoneHTML();
     wireBodyZone();
-    if (editorFormat !== "comic") { const ed = $("#we-body"); if (ed) { ["input", "keyup", "paste", "cut", "focus", "blur"].forEach(ev => ed.addEventListener(ev, () => setTimeout(updateEditorEmpty, 0))); updateEditorEmpty(); } }
+    if (editorFormat !== "comic") { const ed = $("#we-body"); if (ed) { ["input", "keyup", "paste", "cut", "focus", "blur"].forEach(ev => ed.addEventListener(ev, () => setTimeout(updateEditorEmpty, 0))); updateEditorEmpty(); gcAttach(); ed.addEventListener("click", (e) => { if (gcHandleEditorClick(e)) e.preventDefault(); }); } }
   }
   function wireBodyZone() {
     if (editorFormat !== "comic") return;
@@ -4826,9 +4829,10 @@
       // Video/map/audio embeds become non-editable, each with a paragraph after.
       decorateEditorEmbeds();
       wireFigResize(bodyEd);
+      // Live spelling and grammar squiggles (the toolbar button toggles them).
+      gcAttach();
       bodyEd.addEventListener("click", (e) => {
-        const gm = e.target.closest(".gc-mark");
-        if (gm) { e.preventDefault(); openGrammarPop(gm); return; }
+        if (gcHandleEditorClick(e)) { e.preventDefault(); return; }
         const sz = e.target.closest("[data-img-size]");
         if (sz) { applyFigWidth(sz.closest("figure.embed--img"), sz.dataset.imgSize); markEditorDirty(); e.preventDefault(); return; }
         const del = e.target.closest("[data-img-del]");
@@ -4868,6 +4872,7 @@
       editorLineSpace = lineSel.value;
       try { localStorage.setItem("wisp.editorLineSpace", editorLineSpace); } catch (e) {}
       if (bodyEd) bodyEd.style.lineHeight = lineSpaceValue(editorLineSpace);
+      gcRenderSoon();   // the squiggles follow the reflowed lines
     });
     // Font-size box: apply on change, and mirror the selection's size (Docs-like).
     const fsInp = $("#we-fontsize");
@@ -5267,7 +5272,7 @@
 
         ${isLive() ? `<div class="shelf">
           <div class="shelf__head"><span class="shelf__title">Contests</span>${WispDB.isAdmin ? `<button class="btn btn--ghost btn--sm" data-contest-new>${icon("plus", 14)} New contest</button>` : ""}</div>
-          <p class="muted event-sort__note">Enter your own works, then everyone gets one vote. When a contest closes, the top three win the first, second, and third place badges.</p>
+          <p class="muted event-sort__note">Enter your own works, then everyone gets one vote. When a contest closes, the top three win the first, second, and third place badges; bigger fields also award Top Five and Top Ten.</p>
           ${(() => {
             const list = (LIVE.contests || []).slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             if (!list.length) return `<p class="muted" style="font-size:14px;padding:12px 2px;line-height:1.6">No contests yet.${WispDB.isAdmin ? " Open one from the admin panel." : " When one opens, you can enter a work and vote here."}</p>`;
@@ -5360,13 +5365,20 @@
     $("#screen-community").innerHTML = `<div class="page page--wide"><button class="btn--link" data-nav="community" style="margin-bottom:18px">&lsaquo; Community</button><div class="editorial" style="text-align:center;padding:50px 20px"><p class="soft" style="font-size:16px">That contest could not be found.</p></div></div>`;
   }
   const PLACE_BADGE = { 1: "first-place", 2: "second-place", 3: "third-place" };
+  const ordinal = (n) => n + ({ 1: "st", 2: "nd", 3: "rd" }[n % 10 > 3 || Math.floor(n / 10) === 1 ? 0 : n % 10] || "th");
   function contestEntryCard(en, opts) {
     const w = en.work;
     if (!w) return "";
     const votes = en.votes || 0;
     const voted = opts.myVote === en.entryId;
     const place = opts.placeByEntry ? opts.placeByEntry[en.entryId] : 0;
-    const badge = (place && place <= 3 && window.WispBadges) ? `<span class="contest-card__medal" title="${["", "First place", "Second place", "Third place"][place]}">${WispBadges.svg(PLACE_BADGE[place], 30)}</span>` : "";
+    // Top three wear their real badges; places four through nine still get
+    // their numbered rosette art on the results grid (art only, not a badge).
+    let badge = "";
+    if (place && window.WispBadges) {
+      if (place <= 3) badge = `<span class="contest-card__medal" title="${["", "First place", "Second place", "Third place"][place]}">${WispBadges.svg(PLACE_BADGE[place], 30)}</span>`;
+      else if (place <= 9) badge = `<span class="contest-card__medal" title="${ordinal(place)} place">${WispBadges.art("place-" + place + ".png", 30, ordinal(place) + " place")}</span>`;
+    }
     let action = "";
     if (opts.open) {
       if (!WispDB.signedIn) action = "";
@@ -5497,7 +5509,7 @@
         async () => { try { await WispDB.deleteContest(id); toast("Contest deleted."); navigate("community"); } catch (e) { toast((e && e.message) || "Could not delete."); } });
     });
     const cc = scr.querySelector("[data-contest-closenow]"); if (cc) cc.addEventListener("click", () => {
-      confirmDialog({ title: "Close and award now?", body: "The contest closes immediately, the votes are tallied, and the top three get their badges.", confirmText: "Close and award" },
+      confirmDialog({ title: "Close and award now?", body: "The contest closes immediately, the votes are tallied, and the winners get their placement badges.", confirmText: "Close and award" },
         async () => {
           try {
             await WispDB.updateContest(id, { closes_at: new Date(Date.now() - 1000).toISOString() });
@@ -8286,8 +8298,13 @@
   }
 
   // Keep the caret in the editor when a formatting button is pressed: without
-  // this, mousedown on the toolbar button blurs the contenteditable and
-  // execCommand has no selection to act on.
+  // this, pressing a toolbar button blurs the contenteditable and the command
+  // has no selection to act on. pointerdown covers touch, where the blur
+  // happens before mousedown even fires (this is what broke the highlighter
+  // chips on phones); mousedown stays as a fallback for older browsers.
+  document.addEventListener("pointerdown", (e) => {
+    if (e.target.closest("#screen-write [data-fmt]")) e.preventDefault();
+  });
   document.addEventListener("mousedown", (e) => {
     if (e.target.closest("#screen-write [data-fmt]")) e.preventDefault();
   });
@@ -9973,51 +9990,14 @@
     "um", "uh", "oh", "ho", "blah", "hear", "knock", "tick", "choo", "bang", "beep", "tap",
     "run", "go", "chop", "very", "really", "hush", "now", "there", "who"]);
 
-  function stripGrammarMarks(ed) {
-    const scope = ed || document;
-    scope.querySelectorAll(".gc-mark").forEach(m => { m.parentNode.replaceChild(document.createTextNode(m.textContent), m); });
-    if (scope.normalize) scope.normalize();
-    closeGrammarPop();
-  }
   // Preserve the original capitalization for a respelling fix (Teh -> The).
   function gcApplyCase(original, fix) {
     if (original && original[0] === original[0].toUpperCase() && original[0] !== original[0].toLowerCase())
       return fix.charAt(0).toUpperCase() + fix.slice(1);
     return fix;
   }
-
-  // ---- Spelling via the browser's own dictionary (Typo.js + Hunspell en_US) --
-  // Loaded on demand the first time a writer runs a check, so nobody downloads
-  // the word list unless they use it. It is the same en_US Hunspell dictionary
-  // browsers underline words against, so the button agrees with the native red
-  // squiggle and offers the same corrections.
-  var wispDict = null;    // Typo instance once ready, or "fail"
-  var wispDictP = null;   // in-flight load promise
-  function loadScriptOnce(src) {
-    return new Promise((res, rej) => {
-      if (document.querySelector('script[data-src="' + src + '"]')) { res(); return; }
-      const s = document.createElement("script"); s.src = src; s.setAttribute("data-src", src);
-      s.onload = res; s.onerror = rej; document.head.appendChild(s);
-    });
-  }
-  function ensureDictionary() {
-    if (wispDict) return Promise.resolve(wispDict === "fail" ? null : wispDict);
-    if (wispDictP) return wispDictP;
-    wispDictP = (async () => {
-      try {
-        if (!window.Typo) await loadScriptOnce("assets/js/typo.js");
-        const [aff, dic] = await Promise.all([
-          fetch("assets/dict/en_US.aff").then(r => r.text()),
-          fetch("assets/dict/en_US.dic").then(r => r.text())
-        ]);
-        wispDict = new window.Typo("en_US", aff, dic, { platform: "any" });
-      } catch (e) { wispDict = "fail"; }
-      return wispDict === "fail" ? null : wispDict;
-    })();
-    return wispDictP;
-  }
   // Levenshtein distance, short-circuited: a far-off suggestion (a coined name
-  // with no near dictionary word) is ignored rather than "corrected" to nonsense.
+  // with no near dictionary word) is dropped rather than offered as nonsense.
   function levDist(a, b) {
     a = a.toLowerCase(); b = b.toLowerCase();
     const m = a.length, n = b.length; if (Math.abs(m - n) > 3) return 9;
@@ -10040,131 +10020,508 @@
     return fix;
   }
   const GC_WORD_RE = /[A-Za-z][A-Za-z']*/g;
-  // Add likely misspellings in one text run to the match list, each with up to a
-  // few near suggestions (the same list the browser shows on right-click). Proper
-  // nouns (Capitalised mid-sentence) are left alone so invented names are not
-  // nagged, and only near suggestions are offered so a coined word with no close
-  // match is skipped rather than mangled.
-  function spellcheckText(text, dict, raw, budget) {
+
+  /* ---- The live checker ----------------------------------------------------
+     Rewritten to work the way a word processor does:
+
+       · It checks AS YOU TYPE (debounced), not on a button press. The toolbar
+         button toggles it, and remembers the choice.
+       · Spelling runs in a Web Worker. Hunspell suggestion generation costs up
+         to a second PER WORD; on the main thread that froze the tab for the
+         length of a coffee break on a real chapter, which is why the old
+         button felt broken. The worker keeps typing at 60fps; word lookups
+         (fast) come back in one batch, suggestions stream in behind.
+       · Issues are drawn on an OVERLAY, not by wrapping editor text in spans.
+         The editor's DOM is never touched by the checker, so the caret never
+         jumps, undo keeps working, and a mark can never leak into a saved
+         chapter. Spelling underlines red, grammar and punctuation blue, the
+         same convention as Docs and Word.
+       · Clicking an underlined word opens a small card: suggestion buttons,
+         Ignore, and (for spelling) Add to dictionary, which persists.
+       · The word the caret is inside is never flagged, so it does not nag
+         about half-typed words.
+     ------------------------------------------------------------------------ */
+  const GC_PREF_KEY = "wisp.grammar.live";
+  const GC_DICT_KEY = "wisp.dict.user";
+  const gcState = {
+    enabled: (function () { try { return localStorage.getItem(GC_PREF_KEY) !== "off"; } catch (e) { return true; } })(),
+    layer: null,             // the overlay div the squiggles live in
+    cache: new WeakMap(),    // block element -> { text, issues }
+    hits: [],                // squiggle hitboxes for click lookup
+    count: 0,
+    ignoredWords: new Set(), // session "Ignore all" for spellings
+    ignoredRules: new Set(), // session ignores for rule matches (by orig text)
+    userDict: (function () { try { const v = JSON.parse(localStorage.getItem(GC_DICT_KEY) || "[]"); return new Set(Array.isArray(v) ? v : []); } catch (e) { return new Set(); } })(),
+    suggCache: new Map(),    // word -> [suggestions]
+    suggQueue: [],
+    suggBusy: false,
+    scanT: 0, scanning: false, rerun: false
+  };
+  function gcSaveUserDict() {
+    try { localStorage.setItem(GC_DICT_KEY, JSON.stringify(Array.from(gcState.userDict))); } catch (e) {}
+  }
+  try { window.__wispGC = gcState; } catch (e) {}   // console debugging handle
+
+  /* ---- Spelling backend: Typo.js in a Worker, main thread as fallback ---- */
+  // Sources load lazily. In the one-file build they sit inline in the page as
+  // type="text/plain" blocks; on the site they load from assets/.
+  function gcText(url, inlineId) {
+    const el = document.getElementById(inlineId);
+    if (el) return Promise.resolve(el.textContent);
+    return fetch(url).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); });
+  }
+  let gcBackendP = null;
+  function gcBackend() {
+    if (gcBackendP) return gcBackendP;
+    gcBackendP = (async () => {
+      let typoSrc, aff, dic;
+      try {
+        [typoSrc, aff, dic] = await Promise.all([
+          gcText("assets/js/typo.js", "wisp-typo-src"),
+          gcText("assets/dict/en_US.aff", "wisp-dict-aff"),
+          gcText("assets/dict/en_US.dic", "wisp-dict-dic")
+        ]);
+      } catch (e) { return null; }   // no dictionary: grammar rules still run
+      // Preferred: the worker. Everything Hunspell happens off the main thread.
+      // (file:// pages cannot spawn workers; skip straight to the fallback.)
+      try {
+        if (location.protocol === "file:") throw new Error("file: page");
+        const glue = "\n;var __dict=null;self.onmessage=function(ev){var m=ev.data;try{" +
+          "if(m.t==='init'){__dict=new Typo('en_US',m.aff,m.dic,{platform:'any'});self.postMessage({t:'ready'});}" +
+          "else if(m.t==='check'){var bad=[];if(__dict)for(var i=0;i<m.words.length;i++){if(!__dict.check(m.words[i]))bad.push(m.words[i]);}self.postMessage({t:'check',id:m.id,bad:bad});}" +
+          "else if(m.t==='suggest'){var s=__dict?(__dict.suggest(m.word,6)||[]):[];self.postMessage({t:'suggest',word:m.word,sugg:s});}" +
+          "}catch(err){self.postMessage({t:'fail',id:m.id,word:m.word});}};";
+        const worker = new Worker(URL.createObjectURL(new Blob([typoSrc + glue], { type: "text/javascript" })));
+        const pending = new Map(); let seq = 0;
+        const suggWaiters = new Map();
+        const ready = new Promise((res, rej) => {
+          const t = setTimeout(() => rej(new Error("worker timeout")), 8000);
+          worker.onmessage = (ev) => {
+            const m = ev.data;
+            if (m.t === "ready") { clearTimeout(t); res(); }
+            else if (m.t === "check") { const p = pending.get(m.id); if (p) { pending.delete(m.id); p(new Set(m.bad)); } }
+            else if (m.t === "suggest") { const w = suggWaiters.get(m.word); if (w) { suggWaiters.delete(m.word); w(m.sugg || []); } }
+            else if (m.t === "fail") {
+              const p = m.id != null && pending.get(m.id); if (p) { pending.delete(m.id); p(new Set()); }
+              const w = m.word != null && suggWaiters.get(m.word); if (w) { suggWaiters.delete(m.word); w([]); }
+            }
+          };
+          worker.onerror = () => { clearTimeout(t); rej(new Error("worker error")); };
+        });
+        worker.postMessage({ t: "init", aff: aff, dic: dic });
+        await ready;
+        return {
+          check(words) {
+            return new Promise((res) => { const id = ++seq; pending.set(id, res); worker.postMessage({ t: "check", id: id, words: words }); });
+          },
+          suggest(word) {
+            return new Promise((res) => { suggWaiters.set(word, res); worker.postMessage({ t: "suggest", word: word }); });
+          }
+        };
+      } catch (e) { /* fall through to the main-thread dictionary */ }
+      try {
+        if (!window.Typo) (0, eval)(typoSrc);   // indirect eval: defines the global Typo
+        const dict = new window.Typo("en_US", aff, dic, { platform: "any" });
+        return {
+          check(words) { return Promise.resolve(new Set(words.filter(w => !dict.check(w)))); },
+          suggest(word) { return Promise.resolve(dict.suggest(word, 6) || []); }
+        };
+      } catch (e) { return null; }
+    })();
+    return gcBackendP;
+  }
+
+  /* ---- Reading a block: its plain text plus a map back into the DOM ------- */
+  // Text inside links, code, figures, and embeds is not prose; a "\n" stands in
+  // for each skipped stretch so words on either side never fuse into one.
+  function gcBlockRead(block) {
+    let text = "";
+    const segs = [];   // { node, start } : node's text begins at `start` in text
+    const walk = (n) => {
+      if (n.nodeType === 3) { segs.push({ node: n, start: text.length }); text += n.nodeValue; return; }
+      if (n.nodeType !== 1) return;
+      const tag = n.nodeName;
+      if (tag === "BR") { text += "\n"; return; }
+      if (tag === "FIGURE" || tag === "A" || tag === "CODE" || tag === "IFRAME" || tag === "SCRIPT" || tag === "STYLE") { text += "\n"; return; }
+      for (let c = n.firstChild; c; c = c.nextSibling) walk(c);
+    };
+    walk(block);
+    return { text, segs };
+  }
+  // Turn [s, e) offsets in a block's text back into a live DOM Range.
+  function gcRangeFor(read, s, e) {
+    let sn = null, so = 0, en = null, eo = 0;
+    for (let i = 0; i < read.segs.length; i++) {
+      const seg = read.segs[i], len = seg.node.nodeValue.length;
+      if (!sn && s >= seg.start && s <= seg.start + len) { sn = seg.node; so = s - seg.start; }
+      if (e >= seg.start && e <= seg.start + len) { en = seg.node; eo = e - seg.start; }
+    }
+    if (!sn || !en || !sn.isConnected || !en.isConnected) return null;
+    try { const r = document.createRange(); r.setStart(sn, so); r.setEnd(en, eo); return r; } catch (err) { return null; }
+  }
+
+  /* ---- Finding the issues in one block's text ----------------------------- */
+  function gcSpellCandidates(text, out) {
     GC_WORD_RE.lastIndex = 0; let m;
     while ((m = GC_WORD_RE.exec(text))) {
-      if (budget.n <= 0) break;
-      const w = m[0], s = m.index, e = s + w.length;
+      const w = m[0];
       if (w.length < 3) continue;
-      if (/^[A-Z]{2,4}$/.test(w)) continue;                   // short all-caps: likely an acronym
-      const before = text.slice(0, s);
-      const sentenceStart = !/\S/.test(before) || /[.!?]["')\]]?\s+$/.test(before);
-      if (/^[A-Z][a-z]/.test(w) && !sentenceStart) continue;  // proper noun mid-sentence
-      if (dict.check(w)) continue;
-      budget.n--;
-      const sugg = (dict.suggest(w) || []).filter(x => x && x.toLowerCase() !== w.toLowerCase());
-      const near = sugg.filter(x => levDist(w, x) <= 2).slice(0, 4);
-      if (!near.length) continue;
-      const alts = near.map(x => matchCase(w, x));
-      raw.push({ s: s, e: e, orig: w, fix: alts[0], alts: alts });
+      if (/^[A-Z]{2,4}$/.test(w)) continue;                    // short all-caps: an acronym
+      const before = text.slice(0, m.index);
+      const sentenceStart = !/\S/.test(before) || /[.!?\n]["')\]]?\s*$/.test(before);
+      if (/^[A-Z][a-z]/.test(w) && !sentenceStart) continue;   // proper noun mid-sentence
+      const lower = w.toLowerCase();
+      if (gcState.userDict.has(lower) || gcState.ignoredWords.has(lower)) continue;
+      out.push({ s: m.index, e: m.index + w.length, orig: w });
+    }
+  }
+  function gcRuleIssues(text) {
+    const raw = [];
+    GRAMMAR_RULES.forEach(rule => {
+      rule.re.lastIndex = 0; let m;
+      while ((m = rule.re.exec(text))) {
+        const s = m.index, e = s + m[0].length;
+        const fix = typeof rule.fix === "function" ? rule.fix(m) : (rule.caps ? gcApplyCase(m[0], rule.fix) : rule.fix);
+        if (fix != null && fix !== m[0] && !gcState.ignoredRules.has(m[0].toLowerCase()))
+          raw.push({ s, e, orig: m[0], fix, kind: "grammar" });
+        if (m.index === rule.re.lastIndex) rule.re.lastIndex++;
+      }
+    });
+    GC_DOUBLE.lastIndex = 0; let d;
+    while ((d = GC_DOUBLE.exec(text))) {
+      if (!GC_DOUBLE_OK.has(d[1].toLowerCase()) && !gcState.ignoredRules.has(d[0].toLowerCase()))
+        raw.push({ s: d.index, e: d.index + d[0].length, orig: d[0], fix: d[1], kind: "grammar" });
+      if (d.index === GC_DOUBLE.lastIndex) GC_DOUBLE.lastIndex++;
+    }
+    return raw;
+  }
+  // Non-overlapping, longest match first, so "i is" -> "I am" beats the bare
+  // "i" -> "I", and a phrase rule beats the spellcheck on one of its words.
+  function gcResolve(raw) {
+    raw.sort((a, b) => (b.e - b.s) - (a.e - a.s) || a.s - b.s);
+    const hits = [];
+    raw.forEach(h => { if (hits.every(x => h.e <= x.s || h.s >= x.e)) hits.push(h); });
+    hits.sort((a, b) => a.s - b.s);
+    return hits;
+  }
+
+  /* ---- The scan loop ------------------------------------------------------ */
+  function gcScheduleScan(delay) {
+    clearTimeout(gcState.scanT);
+    gcState.scanT = setTimeout(() => { gcScan(); }, delay == null ? 650 : delay);
+  }
+  function gcBlocksOf(ed) {
+    // Scan units: the editor's element children. (Figures are skipped inside
+    // gcBlockRead; loose text nodes only exist for a keystroke or two before
+    // the browser wraps them, and get caught on the next pass.)
+    return Array.from(ed.children).filter(el => !/^(FIGURE)$/.test(el.nodeName));
+  }
+  async function gcScan() {
+    const ed = $("#we-body");
+    if (!ed || !gcState.enabled) { gcRender(); return; }
+    if (gcState.scanning) { gcState.rerun = true; return; }
+    gcState.scanning = true;
+    try {
+      // Phase one, synchronous: the grammar rules paint straight away, before
+      // the dictionary has even loaded, so the checker always feels alive.
+      const blocks = gcBlocksOf(ed);
+      const changed = [];
+      blocks.forEach(b => {
+        const read = gcBlockRead(b);
+        const c = gcState.cache.get(b);
+        if (!c || c.text !== read.text) changed.push({ block: b, read });
+      });
+      changed.forEach(ch => {
+        ch.rules = gcRuleIssues(ch.read.text);
+        ch.words = []; gcSpellCandidates(ch.read.text, ch.words);
+        gcState.cache.set(ch.block, { text: ch.read.text, rules: ch.rules, words: ch.words, issues: gcResolve(ch.rules.slice()), spellDone: false });
+      });
+      if (changed.length) gcRender();
+      // Phase two: the dictionary answers every unchecked word in one batch,
+      // and the affected blocks repaint with their spelling issues merged in.
+      const backend = await gcBackend();               // null: rules-only mode
+      const edNow = $("#we-body"); if (!edNow || !gcState.enabled) return;
+      const todo = gcBlocksOf(edNow).map(b => ({ block: b, c: gcState.cache.get(b) }))
+        .filter(x => x.c && !x.c.spellDone);
+      const wordSet = new Set();
+      todo.forEach(x => (x.c.words || []).forEach(w => wordSet.add(w.orig)));
+      let bad = new Set();
+      if (backend && wordSet.size) {
+        try { bad = await backend.check(Array.from(wordSet)); } catch (e) { bad = new Set(); }
+      }
+      let repaint = false;
+      todo.forEach(x => {
+        const spell = (x.c.words || []).filter(w => bad.has(w.orig)).map(w => ({ s: w.s, e: w.e, orig: w.orig, kind: "spell" }));
+        x.c.spellDone = true;
+        if (spell.length) { x.c.issues = gcResolve((x.c.rules || []).concat(spell)); repaint = true; }
+      });
+      if (repaint) gcRender();
+      gcQueueSuggestions();
+    } finally {
+      gcState.scanning = false;
+      if (gcState.rerun) { gcState.rerun = false; gcScheduleScan(80); }
     }
   }
 
-  async function runGrammarCheck() {
-    const ed = $("#we-body"); if (!ed) return;
-    if (!wispDict && !wispDictP) toast("Checking spelling, grammar, and punctuation...");
-    const dict = await ensureDictionary();
-    if (!$("#we-body")) return;   // the writer navigated away while the dictionary loaded
-    stripGrammarMarks(ed);
-    const budget = { n: 500 };    // cap dictionary suggestions on very long chapters
-    const walker = document.createTreeWalker(ed, NodeFilter.SHOW_TEXT, {
-      acceptNode(n) {
-        if (!n.nodeValue || !n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
-        if (n.parentElement && n.parentElement.closest("figure, a, code, .gc-mark")) return NodeFilter.FILTER_REJECT;
-        return NodeFilter.FILTER_ACCEPT;
-      }
-    });
-    const texts = []; let tn; while ((tn = walker.nextNode())) texts.push(tn);
+  /* ---- Painting the squiggles --------------------------------------------- */
+  function gcCaretOffsetIn(block) {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount || !sel.isCollapsed) return -1;
+    const r = sel.getRangeAt(0);
+    if (!block.contains(r.startContainer)) return -1;
+    const read = gcBlockRead(block);
+    for (const seg of read.segs) if (seg.node === r.startContainer) return seg.start + r.startOffset;
+    return -1;
+  }
+  function gcRender() {
+    const layer = gcState.layer;
+    if (!layer || !layer.isConnected) return;
+    layer.innerHTML = ""; gcState.hits = [];
+    const ed = $("#we-body");
     let count = 0;
-    texts.forEach(node => {
-      const text = node.nodeValue;
-      // Gather every candidate match, then keep non-overlapping ones with the
-      // LONGEST winning, so "i is" -> "I am" beats the bare "i" -> "I" and
-      // "he dont" -> "he doesn't" beats "dont" -> "don't".
-      const raw = [];
-      GRAMMAR_RULES.forEach(rule => {
-        rule.re.lastIndex = 0; let m;
-        while ((m = rule.re.exec(text))) {
-          const s = m.index, e = s + m[0].length;
-          // A rule's fix may be a plain replacement or a function of the match
-          // (so a captured word can be kept while one word is corrected).
-          const fix = typeof rule.fix === "function" ? rule.fix(m) : (rule.caps ? gcApplyCase(m[0], rule.fix) : rule.fix);
-          if (fix != null && fix !== m[0]) raw.push({ s, e, orig: m[0], fix });
-          if (m.index === rule.re.lastIndex) rule.re.lastIndex++;
+    if (ed && gcState.enabled) {
+      const stageRect = layer.parentNode.getBoundingClientRect();
+      const focused = document.activeElement === ed;
+      gcBlocksOf(ed).forEach(block => {
+        const c = gcState.cache.get(block);
+        if (!c || !c.issues.length) return;
+        const read = gcBlockRead(block);
+        if (read.text !== c.text) return;          // mid-edit; the scan will catch up
+        const caret = focused ? gcCaretOffsetIn(block) : -1;
+        c.issues.forEach(issue => {
+          if (caret >= issue.s && caret <= issue.e) return;   // the word being typed
+          const range = gcRangeFor(read, issue.s, issue.e);
+          if (!range) return;
+          const rects = range.getClientRects();
+          if (!rects.length) return;
+          count++;
+          for (const r of rects) {
+            if (r.width < 2) continue;
+            const div = document.createElement("div");
+            div.className = "gc-squig gc-squig--" + (issue.kind === "spell" ? "spell" : "gram");
+            div.style.left = (r.left - stageRect.left) + "px";
+            div.style.top = (r.bottom - stageRect.top - 3) + "px";
+            div.style.width = r.width + "px";
+            layer.appendChild(div);
+            // Hitboxes are stored stage-relative so scrolling can't strand them.
+            gcState.hits.push({
+              x0: r.left - stageRect.left, y0: r.top - stageRect.top - 2,
+              x1: r.right - stageRect.left, y1: r.bottom - stageRect.top + 6,
+              issue, block
+            });
+          }
+        });
+      });
+    }
+    gcState.count = count;
+    const chip = $("#we-gccount");
+    if (chip) { chip.hidden = !gcState.enabled || !count; chip.textContent = String(count); }
+    const btn = $("#we-grammar");
+    if (btn) { btn.classList.toggle("is-on", gcState.enabled); btn.setAttribute("aria-pressed", String(gcState.enabled)); }
+  }
+
+  /* ---- Streaming suggestions in behind the squiggles ---------------------- */
+  function gcQueueSuggestions() {
+    const seen = new Set(); const q = [];
+    const ed = $("#we-body"); if (!ed) return;
+    gcBlocksOf(ed).forEach(block => {
+      const c = gcState.cache.get(block);
+      if (c) c.issues.forEach(i => {
+        if (i.kind === "spell" && !gcState.suggCache.has(i.orig.toLowerCase()) && !seen.has(i.orig.toLowerCase())) {
+          seen.add(i.orig.toLowerCase()); q.push(i.orig);
         }
       });
-      GC_DOUBLE.lastIndex = 0; let d;
-      while ((d = GC_DOUBLE.exec(text))) {
-        const s = d.index, e = s + d[0].length;
-        if (!GC_DOUBLE_OK.has(d[1].toLowerCase())) raw.push({ s, e, orig: d[0], fix: d[1] });
-        if (d.index === GC_DOUBLE.lastIndex) GC_DOUBLE.lastIndex++;
-      }
-      // Spelling, using the browser's own Hunspell dictionary (when it loaded).
-      if (dict) spellcheckText(text, dict, raw, budget);
-      raw.sort((a, b) => (b.e - b.s) - (a.e - a.s) || a.s - b.s);   // longest match first
-      const hits = [];
-      raw.forEach(h => { if (hits.every(x => h.e <= x.s || h.s >= x.e)) hits.push(h); });
-      if (!hits.length) return;
-      hits.sort((a, b) => a.s - b.s);
-      const frag = document.createDocumentFragment(); let pos = 0;
-      hits.forEach(h => {
-        if (h.s > pos) frag.appendChild(document.createTextNode(text.slice(pos, h.s)));
-        const span = document.createElement("span");
-        span.className = "gc-mark"; span.setAttribute("data-fix", h.fix); span.setAttribute("data-orig", h.orig); span.textContent = h.orig;
-        if (h.alts && h.alts.length) span.setAttribute("data-alts", JSON.stringify(h.alts));
-        frag.appendChild(span); pos = h.e; count++;
-      });
-      if (pos < text.length) frag.appendChild(document.createTextNode(text.slice(pos)));
-      node.parentNode.replaceChild(frag, node);
     });
-    if (count) toast(count + (count === 1 ? " suggestion. Tap the green word to fix it." : " suggestions. Tap a green word to fix it."));
-    else toast(dict ? "No spelling, grammar, or punctuation issues found. Looks clean."
-      : "No grammar or punctuation issues found. Your browser underlines misspelled words as you type.");
+    gcState.suggQueue = q.slice(0, 40);   // freshest scan wins; more queue later
+    gcPumpSuggestions();
+  }
+  async function gcPumpSuggestions() {
+    if (gcState.suggBusy) return;
+    gcState.suggBusy = true;
+    try {
+      const backend = await gcBackend(); if (!backend) return;
+      while (gcState.suggQueue.length) {
+        const word = gcState.suggQueue.shift();
+        const key = word.toLowerCase();
+        if (gcState.suggCache.has(key)) continue;
+        let sugg = [];
+        try { sugg = await backend.suggest(word) || []; } catch (e) { sugg = []; }
+        const near = sugg.filter(x => x && x.toLowerCase() !== key && levDist(word, x) <= 2).slice(0, 4);
+        gcState.suggCache.set(key, near);
+        if (gcState.suggCache.size > 600) gcState.suggCache.delete(gcState.suggCache.keys().next().value);
+        gcCardRefresh(word);
+      }
+    } finally { gcState.suggBusy = false; }
   }
 
-  // A small popover offering the fix for one flagged word.
-  let gcPop = null;
-  function closeGrammarPop() { if (gcPop) { gcPop.remove(); gcPop = null; } }
-  function openGrammarPop(mark) {
-    closeGrammarPop();
-    // If the writer has since edited this word, the stored fix is stale — quietly
-    // drop the mark instead of offering a wrong suggestion.
-    if ((mark.textContent || "") !== (mark.getAttribute("data-orig") || "")) {
-      mark.parentNode.replaceChild(document.createTextNode(mark.textContent), mark);
-      const ed = $("#we-body"); if (ed) ed.normalize();
-      return;
-    }
-    const fix = mark.getAttribute("data-fix") || "";
-    // A misspelling carries several near suggestions (like the browser's own
-    // right-click menu); a grammar or spacing rule carries just the one fix.
-    let alts = []; try { alts = JSON.parse(mark.getAttribute("data-alts") || "[]"); } catch (e) {}
-    if (!alts.length && fix) alts = [fix];
-    gcPop = document.createElement("div"); gcPop.className = "gc-pop";
-    gcPop.innerHTML = `<span class="gc-pop__lead">Change to</span>` +
-      alts.map(a => `<button class="gc-pop__fix" data-gc-apply="${esc(a)}">${esc(a)}</button>`).join("") +
-      `<button class="gc-pop__ignore" data-gc-ignore>Ignore</button>`;
-    document.body.appendChild(gcPop);
-    const r = mark.getBoundingClientRect(); const pw = gcPop.offsetWidth, ph = gcPop.offsetHeight;
-    const left = Math.max(8, Math.min(r.left, window.innerWidth - pw - 8));
-    let top = r.top - ph - 8; if (top < 8) top = r.bottom + 8;
-    top = Math.max(8, Math.min(top, window.innerHeight - ph - 8));   // keep it fully on screen
-    gcPop.style.left = left + "px"; gcPop.style.top = top + "px";
-    gcPop.querySelectorAll("[data-gc-apply]").forEach(btn => btn.addEventListener("click", () => {
-      mark.parentNode.replaceChild(document.createTextNode(btn.getAttribute("data-gc-apply") || fix), mark);
-      const ed = $("#we-body"); if (ed) { ed.normalize(); updateEditorEmpty(); markEditorDirty(); }
-      closeGrammarPop();
+  /* ---- The suggestion card ------------------------------------------------ */
+  let gcCard = null, gcCardCtx = null;
+  function closeGrammarPop() { if (gcCard) { gcCard.remove(); gcCard = null; gcCardCtx = null; } }
+  // Client coords -> stage-relative coords -> the squiggle under the tap.
+  function gcHitAt(cx, cy) {
+    const layer = gcState.layer;
+    if (!layer || !layer.isConnected) return null;
+    const sr = layer.parentNode.getBoundingClientRect();
+    const x = cx - sr.left, y = cy - sr.top;
+    for (const h of gcState.hits) if (x >= h.x0 - 2 && x <= h.x1 + 2 && y >= h.y0 && y <= h.y1) return h;
+    return null;
+  }
+  function gcStageRect() {
+    const layer = gcState.layer;
+    return layer && layer.isConnected ? layer.parentNode.getBoundingClientRect() : { left: 0, top: 0 };
+  }
+  function gcAltsFor(issue) {
+    if (issue.kind !== "spell") return issue.fix ? [issue.fix] : [];
+    const near = gcState.suggCache.get(issue.orig.toLowerCase());
+    if (near == null) return null;   // still thinking
+    return near.map(x => matchCase(issue.orig, x));
+  }
+  function gcCardHTML(issue) {
+    const spell = issue.kind === "spell";
+    const alts = gcAltsFor(issue);
+    let mid;
+    if (alts === null) mid = `<span class="gc-card__wait">Finding suggestions&hellip;</span>`;
+    else if (!alts.length) mid = `<span class="gc-card__wait">No suggestions. If it's a name or a coined word, add it to your dictionary.</span>`;
+    else mid = alts.map(a => `<button class="gc-card__fix" data-gc-apply="${esc(a)}">${esc(a)}</button>`).join("");
+    return `
+      <div class="gc-card__head">
+        <span class="gc-card__dot gc-card__dot--${spell ? "spell" : "gram"}"></span>
+        <span class="gc-card__kind">${spell ? "Spelling" : "Grammar"}</span>
+        <span class="gc-card__orig">${esc(issue.orig.length > 42 ? issue.orig.slice(0, 42) + "…" : issue.orig)}</span>
+      </div>
+      <div class="gc-card__fixes">${mid}</div>
+      <div class="gc-card__foot">
+        <button class="gc-card__link" data-gc-ignore>Ignore</button>
+        ${spell ? `<button class="gc-card__link" data-gc-ignore-all>Ignore all</button><button class="gc-card__link" data-gc-add>Add to dictionary</button>` : ""}
+      </div>`;
+  }
+  function gcCardRefresh(word) {
+    if (!gcCard || !gcCardCtx || gcCardCtx.issue.orig.toLowerCase() !== word.toLowerCase()) return;
+    gcCard.innerHTML = gcCardHTML(gcCardCtx.issue);
+    gcCardWire();
+  }
+  function gcCardWire() {
+    if (!gcCard || !gcCardCtx) return;
+    const { issue, block } = gcCardCtx;
+    gcCard.querySelectorAll("[data-gc-apply]").forEach(b => b.addEventListener("click", () => {
+      gcApplyFix(block, issue, b.getAttribute("data-gc-apply"));
     }));
-    gcPop.querySelector("[data-gc-ignore]").addEventListener("click", () => {
-      mark.parentNode.replaceChild(document.createTextNode(mark.textContent), mark);
-      const ed = $("#we-body"); if (ed) ed.normalize();
-      closeGrammarPop();
+    const ig = gcCard.querySelector("[data-gc-ignore]");
+    if (ig) ig.addEventListener("click", () => {
+      if (issue.kind === "spell") gcState.ignoredWords.add(issue.orig.toLowerCase());
+      else gcState.ignoredRules.add(issue.orig.toLowerCase());
+      closeGrammarPop(); gcInvalidateAll(); gcScheduleScan(0);
+    });
+    const igAll = gcCard.querySelector("[data-gc-ignore-all]");
+    if (igAll) igAll.addEventListener("click", () => {
+      gcState.ignoredWords.add(issue.orig.toLowerCase());
+      closeGrammarPop(); gcInvalidateAll(); gcScheduleScan(0);
+    });
+    const add = gcCard.querySelector("[data-gc-add]");
+    if (add) add.addEventListener("click", () => {
+      gcState.userDict.add(issue.orig.toLowerCase()); gcSaveUserDict();
+      toast(`"${issue.orig}" saved to your dictionary.`);
+      closeGrammarPop(); gcInvalidateAll(); gcScheduleScan(0);
     });
   }
+  function openGrammarPop(hit) {
+    closeGrammarPop();
+    gcCardCtx = { issue: hit.issue, block: hit.block };
+    gcCard = document.createElement("div");
+    gcCard.className = "gc-card";
+    gcCard.innerHTML = gcCardHTML(hit.issue);
+    document.body.appendChild(gcCard);
+    gcCardWire();
+    const sr = gcStageRect();   // hitboxes are stage-relative; the card is fixed
+    const hx = hit.x0 + sr.left, hy0 = hit.y0 + sr.top, hy1 = hit.y1 + sr.top;
+    const pw = gcCard.offsetWidth, ph = gcCard.offsetHeight;
+    const left = Math.max(8, Math.min(hx, window.innerWidth - pw - 8));
+    let top = hy1 + 4; if (top + ph > window.innerHeight - 8) top = hy0 - ph - 8;
+    top = Math.max(8, Math.min(top, window.innerHeight - ph - 8));
+    gcCard.style.left = left + "px"; gcCard.style.top = top + "px";
+    // Suggestions may still be on their way for this word; bump it to the front.
+    if (hit.issue.kind === "spell" && !gcState.suggCache.has(hit.issue.orig.toLowerCase())) {
+      gcState.suggQueue = [hit.issue.orig].concat(gcState.suggQueue.filter(w => w !== hit.issue.orig));
+      gcPumpSuggestions();
+    }
+  }
+  function gcApplyFix(block, issue, fix) {
+    const ed = $("#we-body"); if (!ed || !block.isConnected) { closeGrammarPop(); return; }
+    const read = gcBlockRead(block);
+    const cached = gcState.cache.get(block);
+    if (!cached || read.text !== cached.text || read.text.slice(issue.s, issue.e) !== issue.orig) {
+      // The writer edited under us; drop the stale card and rescan.
+      closeGrammarPop(); gcScheduleScan(0); return;
+    }
+    const range = gcRangeFor(read, issue.s, issue.e);
+    if (!range) { closeGrammarPop(); gcScheduleScan(0); return; }
+    const sel = window.getSelection();
+    sel.removeAllRanges(); sel.addRange(range);
+    ed.focus();
+    let ok = false;
+    try { ok = document.execCommand("insertText", false, fix); } catch (e) { ok = false; }
+    if (!ok) {   // manual fallback: same result, without the native undo entry
+      range.deleteContents(); range.insertNode(document.createTextNode(fix));
+      ed.normalize();
+    }
+    closeGrammarPop();
+    updateEditorEmpty(); markEditorDirty();
+    gcScheduleScan(60);
+  }
+  function gcInvalidateAll() { gcState.cache = new WeakMap(); }
+
+  /* ---- Attach / toggle ---------------------------------------------------- */
+  function gcAttach() {
+    const ed = $("#we-body"); if (!ed) return;
+    const stage = ed.closest(".editor-stage"); if (!stage) return;
+    let layer = stage.querySelector(".gc-layer");
+    if (!layer) { layer = document.createElement("div"); layer.className = "gc-layer"; layer.setAttribute("aria-hidden", "true"); stage.appendChild(layer); }
+    gcState.layer = layer;
+    gcInvalidateAll();
+    ed.spellcheck = !gcState.enabled;   // one squiggle set at a time
+    if (gcState.enabled) { gcBackend(); gcScheduleScan(250); }
+    ed.addEventListener("input", () => { closeGrammarPop(); gcScheduleScan(); });
+    // Wait out the browser's own caret move after a click before repainting,
+    // so the word the caret just left gets its squiggle back (and the word it
+    // entered goes quiet).
+    ed.addEventListener("keyup", () => gcRenderSoon());
+    ed.addEventListener("mouseup", () => gcRenderSoon());
+    ed.addEventListener("blur", () => gcRenderSoon());
+    ed.addEventListener("focus", () => gcRenderSoon());
+    // Media loading changes the text layout; repaint when sizes settle.
+    ed.addEventListener("load", () => gcRenderSoon(), true);
+  }
+  let gcRenderT = 0;
+  function gcRenderSoon() { clearTimeout(gcRenderT); gcRenderT = setTimeout(gcRender, 120); }
+  function gcToggle() {
+    gcState.enabled = !gcState.enabled;
+    try { localStorage.setItem(GC_PREF_KEY, gcState.enabled ? "on" : "off"); } catch (e) {}
+    const ed = $("#we-body"); if (ed) ed.spellcheck = !gcState.enabled;
+    closeGrammarPop();
+    if (gcState.enabled) {
+      toast("Checking spelling and grammar as you type. Tap an underlined word to fix it.");
+      gcBackend(); gcInvalidateAll(); gcScheduleScan(0);
+    } else {
+      toast("Grammar check off.");
+      gcRender();
+    }
+  }
+  // The editor's click handler asks us first: a tap on a squiggle opens the
+  // card, anything else falls through to the normal editing behavior.
+  function gcHandleEditorClick(e) {
+    if (!gcState.enabled) return false;
+    // A drag-select that ends on a squiggle is a selection, not a tap on it.
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) { closeGrammarPop(); return false; }
+    const hit = gcHitAt(e.clientX, e.clientY);
+    if (!hit) { closeGrammarPop(); return false; }
+    openGrammarPop(hit);
+    return true;
+  }
+  window.addEventListener("resize", () => gcRenderSoon());
+  // Coming back to the Writing Station re-shows the editor; squiggles painted
+  // while its screen was hidden have no geometry, so repaint on arrival.
+  window.addEventListener("hashchange", () => { closeGrammarPop(); if (gcState.enabled) gcRenderSoon(); });
 
   // Toolbar: apply formatting to the current selection in the editor. Uses the
   // browser's built-in rich-text editing; the DOM it produces is serialized
@@ -10173,6 +10530,7 @@
     const ed = $("#we-body");
     if (!ed) return;
     ed.focus();
+    restoreEditorSelection();   // a toolbar tap on mobile may have dropped it
     const exec = (cmd, val) => { try { document.execCommand(cmd, false, val); } catch (e) {} };
     if (kind === "bold") exec("bold");
     else if (kind === "italic") exec("italic");
@@ -10186,7 +10544,7 @@
     else if (kind === "align-center") exec("justifyCenter");
     else if (kind === "align-right") exec("justifyRight");
     else if (kind === "dictate") toggleDictation();
-    else if (kind === "grammar") runGrammarCheck();
+    else if (kind === "grammar") gcToggle();
     else if (kind === "h2") toggleBlock("h2");
     else if (kind === "quote") toggleBlock("blockquote");
     else if (kind === "ul") exec("insertUnorderedList");
@@ -10220,6 +10578,8 @@
       insertEmbedBlock("@[" + label + "](" + url + ")");
       toast("Embed added. It shows inline in Preview and for readers.");
     }
+    // Formatting reflows the text, so the squiggles need their places refreshed.
+    if (kind !== "grammar") gcScheduleScan(200);
   }
   // Wrap the current selection in a highlight (or clear it if already highlighted).
   // Which block element a node sits in, so an inline format stays within one.
@@ -10236,6 +10596,9 @@
   function wrapSelectionInline(tag, cls, sameBlockMsg, opts) {
     opts = opts || {};
     const ed = $("#we-body"); if (!ed) return;
+    // On a phone, tapping the toolbar chip blurs the editor and the selection
+    // is gone before this runs; put the writer's last real selection back.
+    restoreEditorSelection();
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || !sel.toString().trim()) { toast("Select some text first."); return; }
     const range = sel.getRangeAt(0);
@@ -10955,8 +11318,9 @@
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushAutosave(); });
     wirePullToRefresh();
     wireRailToggles();
-    // Dismiss the grammar suggestion popover on an outside tap or a scroll.
-    document.addEventListener("click", (e) => { if (gcPop && !e.target.closest(".gc-pop") && !e.target.closest(".gc-mark")) closeGrammarPop(); }, true);
+    // Dismiss the grammar suggestion card on an outside tap, Escape, or scroll.
+    document.addEventListener("click", (e) => { if (gcCard && !e.target.closest(".gc-card") && !e.target.closest("#we-body")) closeGrammarPop(); }, true);
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && gcCard) closeGrammarPop(); });
     window.addEventListener("scroll", () => closeGrammarPop(), true);
     initTips();
     if (!location.hash) location.replace("#/home");
