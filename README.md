@@ -59,7 +59,11 @@ assets/js/db.js       The data layer: accounts, works, chapters, comments,
 supabase/             The database: schema.sql (tables, security, triggers),
                       storage.sql (image buckets), seed.sql (starter tags).
 SUPABASE_SETUP.md     Step-by-step for connecting your own project.
-wisp-standalone.html  The entire site bundled into one file, fonts embedded.
+wisp-standalone.html  The entire site bundled into one file: fonts, badge art,
+                      and the spelling dictionary embedded. Generated output;
+                      rebuild it with `node tools/build-standalone.js`.
+tools/                build-standalone.js (regenerates the one-file build) and
+                      png-trim.js (crops badge art to its pixels).
 ```
 
 ## Accounts and data (optional)
