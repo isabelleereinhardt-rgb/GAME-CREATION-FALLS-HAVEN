@@ -5582,7 +5582,24 @@
       ]);
       contestCtx = { contest, entries, myVote: mine, results, myWorks };
       renderContest();
+      celebratePlacement(contest, results);
     } catch (e) { console.error("[wisp] contest load failed:", e); renderContestGone(); }
+  }
+  // The first time a member sees a contest they placed in, say so: the badge
+  // landed on their profile the moment it closed, and this points them to it.
+  function celebratePlacement(contest, results) {
+    const myId = WispDB.user && WispDB.user.id;
+    if (!myId || !contest || contest.status !== "closed") return;
+    const mine = (results || []).find(r => r.authorId === myId && r.place <= 10);
+    if (!mine) return;
+    const key = "wisp.contest.cheered";
+    let seen = [];
+    try { seen = JSON.parse(localStorage.getItem(key) || "[]"); } catch (e) {}
+    if (seen.indexOf(contest.id) >= 0) return;
+    try { seen.push(contest.id); localStorage.setItem(key, JSON.stringify(seen.slice(-50))); } catch (e) {}
+    toast(mine.place <= 3
+      ? "You placed " + ordinal(mine.place) + "! The badge is in your badge case."
+      : "You finished " + ordinal(mine.place) + ". Well run.");
   }
   function renderContestGone() {
     $("#screen-community").innerHTML = `<div class="page page--wide"><button class="btn--link" data-nav="community" style="margin-bottom:18px">&lsaquo; Community</button><div class="editorial" style="text-align:center;padding:50px 20px"><p class="soft" style="font-size:16px">That contest could not be found.</p></div></div>`;
@@ -6564,7 +6581,10 @@
       const uid = WispDB.user && WispDB.user.id;
       const [works, counts] = await Promise.all([
         WispDB.myWorks(),
-        uid ? WispDB.followCounts(uid).catch(() => ({ followers: 0, following: 0 })) : { followers: 0, following: 0 }
+        uid ? WispDB.followCounts(uid).catch(() => ({ followers: 0, following: 0 })) : { followers: 0, following: 0 },
+        // Badges can land on the account from elsewhere (a contest closing);
+        // read the profile row fresh so the badge case is never stale.
+        WispDB.refreshProfile ? WispDB.refreshProfile().catch(() => null) : null
       ]);
       renderProfileLive(works, counts);
     } catch (e) { console.error("[wisp] profile load failed:", e); renderProfileLive([]); }
@@ -6998,10 +7018,37 @@
     const pid = WispDB.profile.id;
     if (stateSyncedFor === pid) return;
     stateSyncedFor = pid;
+    // A different account than the one this device's state belongs to: their
+    // saved state applies whatever the local timestamp says, and if they have
+    // none saved they begin from defaults, never from the previous member's
+    // theme, muted tags, or blocked authors.
+    let owner = null; try { owner = localStorage.getItem("wisp.state.owner"); } catch (e) {}
+    const foreign = owner && owner !== pid;
+    try { localStorage.setItem("wisp.state.owner", pid); } catch (e) {}
     const remote = await WispDB.getUserState().catch(() => null);
     const remoteAt = remote && remote.updated_at ? new Date(remote.updated_at).getTime() : 0;
     const hasRemote = !!(remote && remote.settings && Object.keys(remote.settings).length);
-    if (hasRemote && remoteAt > localStateStamp()) {
+    if (foreign && !hasRemote) {
+      stateApplying = true;
+      try {
+        settings = Object.assign({}, DEFAULTS, { typography: typographyDefaults() });
+        save();
+        userState.mutedTags = new Set();
+        userState.blockedUsers = new Set();
+        applySettings();
+        syncSafeMode();
+        if (window.__wispGC) window.__wispGC.userDict = new Set();
+        try { localStorage.setItem("wisp.dict.user", "[]"); } catch (e) {}
+        editorLineSpace = "normal";
+        try { localStorage.setItem("wisp.editorLineSpace", "normal"); } catch (e) {}
+        try { localStorage.setItem("wisp.grammar.live", "on"); } catch (e) {}
+        if (window.__wispGC) window.__wispGC.enabled = true;
+      } finally { stateApplying = false; }
+      touchLocalStateStamp(0);
+      schedulePushState();
+      return;
+    }
+    if (hasRemote && (foreign || remoteAt > localStateStamp())) {
       stateApplying = true;
       try {
         settings = Object.assign({}, DEFAULTS, remote.settings);
@@ -7028,12 +7075,17 @@
       schedulePushState();
     }
   }
-  try { window.__wispSync = { push: schedulePushState, pull: syncStateFromAccount }; } catch (e) {}   // console debugging handle
+  try { window.__wispSync = { push: schedulePushState, pull: syncStateFromAccount, reset: function () { stateSyncedFor = null; } }; } catch (e) {}   // console debugging handle
   function mwSyncFromAccount() {
     if (!(window.WispDB && WispDB.enabled && WispDB.signedIn && WispDB.profile)) { mwSyncedFor = null; return; }
     const pid = WispDB.profile.id;
     if (mwSyncedFor === pid) return;
     mwSyncedFor = pid;
+    // Whose widgets does this DEVICE currently hold? A different account
+    // signing in must never inherit them (sticky notes are someone's notes),
+    // and must never upload them to its own account.
+    let owner = null; try { owner = localStorage.getItem("wisp.widgets.owner"); } catch (e) {}
+    const foreign = owner && owner !== pid;
     const remote = WispDB.getWidgets ? WispDB.getWidgets() : null;
     const hasWidgets = remote && typeof remote === "object" &&
       ((Array.isArray(remote.installed) && remote.installed.length) || (remote.state && Object.keys(remote.state).length));
@@ -7044,11 +7096,20 @@
       mwPersistLocal();
       applyAmbientWidgetState();
       renderWidgetsEverywhere();
+    } else if (foreign) {
+      // A different member on a used device, with nothing saved of their own:
+      // they start with a fresh station, not the previous member's.
+      MW.installed = []; MW.state = {};
+      mwPersistLocal();
+      applyAmbientWidgetState();
+      renderWidgetsEverywhere();
     }
     // The reading companion (Lucky) rides in the same synced blob.
     if (hasCompanion && window.WispCompanion && WispCompanion.applyPrefs) WispCompanion.applyPrefs(remote.companion);
-    if (!hasWidgets && !hasCompanion) mwPersistRemote();   // account empty (or column unmigrated): upload this device's state
+    if (!hasWidgets && !hasCompanion && !foreign) mwPersistRemote();   // first sign-in from this device: upload its state
+    try { localStorage.setItem("wisp.widgets.owner", pid); } catch (e) {}
   }
+  try { window.__wispMW = { sync: mwSyncFromAccount, reset: function () { mwSyncedFor = null; } }; } catch (e) {}   // console debugging handle
   // Reflect ambient toggles (petals, focus mode) after a cross-device sync.
   function applyAmbientWidgetState() {
     const installed = new Set(MW.installed);
