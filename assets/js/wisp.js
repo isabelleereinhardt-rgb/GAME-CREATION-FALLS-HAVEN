@@ -57,7 +57,11 @@
     }
     catch (e) { return Object.assign({}, DEFAULTS, { typography: typographyDefaults() }); }
   }
-  function save() { try { localStorage.setItem("wisp.settings", JSON.stringify(settings)); } catch (e) {} }
+  function save() {
+    try { localStorage.setItem("wisp.settings", JSON.stringify(settings)); } catch (e) {}
+    // Signed in, every settings change follows the account across devices.
+    try { schedulePushState(); } catch (e) {}
+  }
 
   /* ---- small view helpers ------------------------------------------------ */
   const RATE = { G:"General", T:"Teen", M:"Mature", E:"Explicit" };
@@ -5089,6 +5093,7 @@
     if (lineSel) lineSel.addEventListener("change", () => {
       editorLineSpace = lineSel.value;
       try { localStorage.setItem("wisp.editorLineSpace", editorLineSpace); } catch (e) {}
+      try { schedulePushState(); } catch (e) {}
       if (bodyEd) bodyEd.style.lineHeight = lineSpaceValue(editorLineSpace);
       gcRenderSoon();   // the squiggles follow the reflowed lines
     });
@@ -6962,6 +6967,68 @@
   // On sign-in, pull the account's saved station. The account wins across devices;
   // if it has none yet, seed it from whatever is already on this device.
   let mwSyncedFor = null;
+  /* ---- cross-device account state ----------------------------------------
+     What Wattpad and AO3 members expect: sign in on the phone and the site is
+     the way the laptop left it. Works, drafts, highlights, and progress
+     already live in the database; this syncs the last device-bound tier: the
+     settings blob (theme, typography, reading comfort, safe mode, muted tags,
+     blocked authors), the personal spelling dictionary, and small editor
+     extras. Newer side wins on sign-in; every later change pushes, debounced.
+     ---------------------------------------------------------------------- */
+  let stateSyncedFor = null, statePushT = 0, stateApplying = false;
+  function localStateStamp() { try { return +localStorage.getItem("wisp.sync.at") || 0; } catch (e) { return 0; } }
+  function touchLocalStateStamp(t) { try { localStorage.setItem("wisp.sync.at", String(t || Date.now())); } catch (e) {} }
+  function collectStateExtras() {
+    let gl = true; try { gl = localStorage.getItem("wisp.grammar.live") !== "off"; } catch (e) {}
+    return { editorLineSpace: editorLineSpace, grammarLive: gl };
+  }
+  function schedulePushState() {
+    if (stateApplying) return;   // applying a pulled state must not echo it back
+    if (!(window.WispDB && WispDB.enabled && WispDB.signedIn && WispDB.saveUserState)) return;
+    clearTimeout(statePushT);
+    statePushT = setTimeout(() => {
+      const dict = (window.__wispGC && window.__wispGC.userDict) ? Array.from(window.__wispGC.userDict) : [];
+      WispDB.saveUserState({ settings: settings, dictionary: dict, extras: collectStateExtras() })
+        .then(ok => { if (ok) touchLocalStateStamp(); })
+        .catch(() => {});
+    }, 1200);
+  }
+  async function syncStateFromAccount() {
+    if (!(window.WispDB && WispDB.enabled && WispDB.signedIn && WispDB.profile && WispDB.getUserState)) { stateSyncedFor = null; return; }
+    const pid = WispDB.profile.id;
+    if (stateSyncedFor === pid) return;
+    stateSyncedFor = pid;
+    const remote = await WispDB.getUserState().catch(() => null);
+    const remoteAt = remote && remote.updated_at ? new Date(remote.updated_at).getTime() : 0;
+    const hasRemote = !!(remote && remote.settings && Object.keys(remote.settings).length);
+    if (hasRemote && remoteAt > localStateStamp()) {
+      stateApplying = true;
+      try {
+        settings = Object.assign({}, DEFAULTS, remote.settings);
+        settings.typography = Object.assign(typographyDefaults(), settings.typography || {});
+        save();
+        userState.mutedTags = new Set(settings.muted || []);
+        userState.blockedUsers = new Set(settings.blocked || []);
+        applySettings();
+        syncSafeMode();
+        if (Array.isArray(remote.dictionary) && window.__wispGC) {
+          window.__wispGC.userDict = new Set(remote.dictionary.map(String));
+          try { localStorage.setItem("wisp.dict.user", JSON.stringify(remote.dictionary.map(String))); } catch (e) {}
+        }
+        const ex = remote.extras || {};
+        if (ex.editorLineSpace) { editorLineSpace = String(ex.editorLineSpace); try { localStorage.setItem("wisp.editorLineSpace", editorLineSpace); } catch (e) {} }
+        if (typeof ex.grammarLive === "boolean") {
+          try { localStorage.setItem("wisp.grammar.live", ex.grammarLive ? "on" : "off"); } catch (e) {}
+          if (window.__wispGC) window.__wispGC.enabled = ex.grammarLive;
+        }
+        touchLocalStateStamp(remoteAt);
+      } finally { stateApplying = false; }
+    } else {
+      // Account empty (or older than this device): upload what is here.
+      schedulePushState();
+    }
+  }
+  try { window.__wispSync = { push: schedulePushState, pull: syncStateFromAccount }; } catch (e) {}   // console debugging handle
   function mwSyncFromAccount() {
     if (!(window.WispDB && WispDB.enabled && WispDB.signedIn && WispDB.profile)) { mwSyncedFor = null; return; }
     const pid = WispDB.profile.id;
@@ -10282,6 +10349,7 @@
   };
   function gcSaveUserDict() {
     try { localStorage.setItem(GC_DICT_KEY, JSON.stringify(Array.from(gcState.userDict))); } catch (e) {}
+    try { schedulePushState(); } catch (e) {}
   }
   try { window.__wispGC = gcState; } catch (e) {}   // console debugging handle
 
@@ -10753,6 +10821,7 @@
   function gcToggle() {
     gcState.enabled = !gcState.enabled;
     try { localStorage.setItem(GC_PREF_KEY, gcState.enabled ? "on" : "off"); } catch (e) {}
+    try { schedulePushState(); } catch (e) {}
     const ed = $("#we-body"); if (ed) ed.spellcheck = !gcState.enabled;
     closeGrammarPop();
     if (gcState.enabled) {
@@ -11728,6 +11797,7 @@
       if (WispDB.configured) renderAuthGate(true);
       WispDB.onChange(syncAuthHeader);
       WispDB.onChange(mwSyncFromAccount);   // pull the account's widget station (and companion) across devices
+      WispDB.onChange(syncStateFromAccount); // pull settings, dictionary, mutes and blocks across devices
       document.addEventListener("wisp-companion-changed", () => mwPersistRemote());   // sync Lucky's look across devices
       // A password-reset link lands the reader back here with a recovery
       // session: show the "set a new password" screen when that happens.
