@@ -3532,31 +3532,29 @@
     setMode(settings.comicMode || "strip");
   }
 
-  // Wrap a reader's text selection in a highlight mark, but ONLY when it is safe:
-  // the selection sits inside a single block and contains no block-level or
-  // embedded content. Wrapping a range that crosses paragraphs or swallows an
-  // embed in a <mark> (an inline element) mangles the DOM: it leaves a thin
-  // colored sliver and can break an embed sitting just below. When it is not
-  // safe we skip the visual mark; the highlight text is still saved to Things.
+  // Wrap a reader's text selection in highlight marks. A selection that spans
+  // paragraphs is split into one <mark> per paragraph (an inline element must
+  // never swallow a block or an embed: that mangles the DOM and leaves thin
+  // colored slivers). A slice that still contains embedded content is skipped
+  // visually; the highlight text is saved to Things regardless.
   function safeHighlightRange(range) {
     if (!range) return false;
-    try {
-      var blockOf = function (node) {
-        var n = node && node.nodeType === 3 ? node.parentNode : node;
-        while (n && n.id !== "prose") {
-          if (n.nodeType === 1 && /^(P|LI|BLOCKQUOTE|H[1-6]|PRE|FIGURE|DIV)$/.test(n.nodeName)) return n;
-          n = n.parentNode;
-        }
-        return n;
-      };
-      if (blockOf(range.startContainer) !== blockOf(range.endContainer)) return false;
-      var frag = range.cloneContents();
-      if (frag.querySelector && frag.querySelector(
-        "p,div,figure,img,iframe,video,audio,blockquote,pre,h1,h2,h3,h4,h5,h6,hr,ul,ol,li,table,button,.para__marker,.thread-slot,.embed,.embed-block")) return false;
+    const UNSAFE = "p,div,figure,img,iframe,video,audio,blockquote,pre,h1,h2,h3,h4,h5,h6,hr,ul,ol,li,table,button,.para__marker,.thread-slot,.embed,.embed-block";
+    const wrapOne = (r) => {
+      const frag = r.cloneContents();
+      if (frag.querySelector && frag.querySelector(UNSAFE)) return false;
       if (!(frag.textContent || "").trim()) return false;   // nothing but whitespace: no sliver
-      var mk = document.createElement("mark"); mk.className = "hl";
-      mk.appendChild(range.extractContents()); range.insertNode(mk);
+      const mk = document.createElement("mark"); mk.className = "hl";
+      mk.appendChild(r.extractContents()); r.insertNode(mk);
       return true;
+    };
+    try {
+      const prose = document.getElementById("prose");
+      const slices = prose ? blockSlicesOf(range, prose, "p, li, blockquote, h1, h2, h3, h4, h5, h6, pre", "figure, .embed, .embed-block, .thread-slot") : [];
+      if (!slices.length) return wrapOne(range);
+      let any = false;
+      slices.forEach(r => { try { if (wrapOne(r)) any = true; } catch (e) {} });
+      return any;
     } catch (e) { return false; }
   }
 
@@ -3919,13 +3917,33 @@
   // Which work/chapter the reader is in, so scroll progress can be saved and
   // "Continue reading" can advance. Set when a chapter renders.
   let readingCtx = null, lastProgSave = 0, lastProgPct = -1;
+  // Words on the open chapter, counted once per render (embeds, line markers,
+  // and comment threads excluded), so the progress chip can say how many
+  // minutes of reading remain at an average pace.
+  let proseWordsEl = null, proseWords = 0;
+  function chapterWordCount() {
+    const prose = document.getElementById("prose");
+    if (!prose) return 0;
+    if (prose !== proseWordsEl) {
+      proseWordsEl = prose;
+      const clone = prose.cloneNode(true);
+      clone.querySelectorAll("figure, iframe, .thread-slot, .para__marker, .embed, .embed-block").forEach(x => x.remove());
+      proseWords = (clone.textContent || "").trim().split(/\s+/).filter(Boolean).length;
+    }
+    return proseWords;
+  }
   function updateReadProgress() {
     const bar = $("#readProgress > i"); if (!bar) return;
     const el = readerScroller();
     const max = el.scrollHeight - el.clientHeight;
     const pct = max > 0 ? Math.min(100, Math.round(100 * el.scrollTop / max)) : 0;
     bar.style.width = pct + "%";
-    const chip = $("#readProgress .reader__pct"); if (chip) chip.textContent = pct + "%";
+    const chip = $("#readProgress .reader__pct");
+    if (chip) {
+      const words = chapterWordCount();
+      const left = words > 120 && pct < 100 ? Math.max(1, Math.ceil(words * (100 - pct) / 100 / 230)) : 0;
+      chip.textContent = pct + "%" + (left ? " · " + left + " min left" : "");
+    }
     // Persist the real position, throttled, so the resume card reflects it. The
     // initial render saves percent 0; this climbs it as the reader scrolls.
     if (window.WispDB && WispDB.signedIn && readingCtx && WispDB.saveProgress && Math.abs(pct - lastProgPct) >= 3) {
@@ -4419,12 +4437,62 @@
   function bodyZoneHTML(bodyHTML) {
     return editorFormat === "comic" ? comicZoneHTML() : proseZoneHTML(bodyHTML == null ? editorProseHTML : bodyHTML);
   }
+  // Everything a fresh #we-body needs. The prose zone is rebuilt whenever the
+  // writer switches between prose and comic, so this must be re-runnable: it
+  // wires the new node from scratch (listeners on the old one die with it).
+  function wireEditorBody(ed) {
+    ["input", "keyup", "paste", "cut", "focus", "blur"].forEach(ev =>
+      ed.addEventListener(ev, () => setTimeout(updateEditorEmpty, 0)));
+    ed.addEventListener("input", updateWordCountSoon);
+    // Images carry their own controls: scale presets, drag-to-resize, remove.
+    decorateEditorImages();
+    // Video/map/audio embeds become non-editable, each with a paragraph after.
+    decorateEditorEmbeds();
+    wireFigResize(ed);
+    // Live spelling and grammar squiggles (the toolbar button toggles them).
+    gcAttach();
+    ed.addEventListener("click", (e) => {
+      if (gcHandleEditorClick(e)) { e.preventDefault(); return; }
+      const sz = e.target.closest("[data-img-size]");
+      if (sz) { applyFigWidth(sz.closest("figure.embed--img"), sz.dataset.imgSize); markEditorDirty(); e.preventDefault(); return; }
+      const del = e.target.closest("[data-img-del]");
+      if (del) { const fig = del.closest("figure.embed--img"); if (fig) fig.remove(); updateEditorEmpty(); markEditorDirty(); e.preventDefault(); return; }
+      // The same width and remove controls for rich embeds (video, doc, site, ...).
+      const esz = e.target.closest("[data-embed-size]");
+      if (esz) { applyFigWidth(esz.closest("figure.embed--rich"), esz.dataset.embedSize); markEditorDirty(); e.preventDefault(); return; }
+      const edel = e.target.closest("[data-embed-del]");
+      if (edel) { const fig = edel.closest("figure.embed--rich"); if (fig) fig.remove(); updateEditorEmpty(); markEditorDirty(); e.preventDefault(); return; }
+      const fig = e.target.closest("figure.embed--img");
+      if (fig) { fig.classList.toggle("is-active"); }
+    });
+  }
+  // A quiet live word count under the save flag: words and an honest reading
+  // time for prose, a page count for comics. Embeds and captions don't count.
+  let wordCountT = 0;
+  function updateWordCountSoon() { clearTimeout(wordCountT); wordCountT = setTimeout(updateWordCount, 350); }
+  function updateWordCount() {
+    const el = $("#we-wordcount"); if (!el) return;
+    if (editorFormat === "comic") {
+      const n = editorPages.length;
+      el.textContent = n ? n + (n === 1 ? " page" : " pages") : "";
+      return;
+    }
+    const ed = $("#we-body");
+    if (!ed) { el.textContent = ""; return; }
+    const clone = ed.cloneNode(true);
+    clone.querySelectorAll("figure, iframe").forEach(f => f.remove());
+    const words = (clone.textContent || "").trim().split(/\s+/).filter(Boolean).length;
+    el.textContent = words
+      ? words.toLocaleString() + (words === 1 ? " word" : " words") + (words >= 120 ? " · " + Math.max(1, Math.round(words / 230)) + " min read" : "")
+      : "";
+  }
   function refreshBodyZone() {
     const z = $("#we-body-zone");
     if (!z) return;
     z.innerHTML = bodyZoneHTML();
     wireBodyZone();
-    if (editorFormat !== "comic") { const ed = $("#we-body"); if (ed) { ["input", "keyup", "paste", "cut", "focus", "blur"].forEach(ev => ed.addEventListener(ev, () => setTimeout(updateEditorEmpty, 0))); updateEditorEmpty(); gcAttach(); ed.addEventListener("click", (e) => { if (gcHandleEditorClick(e)) e.preventDefault(); }); } }
+    if (editorFormat !== "comic") { const ed = $("#we-body"); if (ed) { wireEditorBody(ed); updateEditorEmpty(); } }
+    updateWordCount();
   }
   function wireBodyZone() {
     if (editorFormat !== "comic") return;
@@ -4627,7 +4695,10 @@
               ${st ? `<span class="ms-status"><span class="pip pip--${st.pip}"></span>${st.t}</span>` : "<span>Not published yet</span>"}
             </div>
           </div>
-          <div class="save-flag" id="we-saveflag" aria-live="polite">${icon("check",14)} ${isNew ? "Not saved yet" : "Saved"}</div>
+          <div class="write-status">
+            <div class="save-flag" id="we-saveflag" aria-live="polite">${icon("check",14)} ${isNew ? "Not saved yet" : "Saved"}</div>
+            <div class="write-count" id="we-wordcount"></div>
+          </div>
         </div>
 
         <div class="writer">
@@ -4822,31 +4893,10 @@
     // writer types, pastes, or clears everything back out.
     const bodyEd = $("#we-body");
     if (bodyEd) {
-      ["input", "keyup", "paste", "cut", "focus", "blur"].forEach(ev =>
-        bodyEd.addEventListener(ev, () => setTimeout(updateEditorEmpty, 0)));
-      // Images carry their own controls: scale presets, drag-to-resize, remove.
-      decorateEditorImages();
-      // Video/map/audio embeds become non-editable, each with a paragraph after.
-      decorateEditorEmbeds();
-      wireFigResize(bodyEd);
-      // Live spelling and grammar squiggles (the toolbar button toggles them).
-      gcAttach();
-      bodyEd.addEventListener("click", (e) => {
-        if (gcHandleEditorClick(e)) { e.preventDefault(); return; }
-        const sz = e.target.closest("[data-img-size]");
-        if (sz) { applyFigWidth(sz.closest("figure.embed--img"), sz.dataset.imgSize); markEditorDirty(); e.preventDefault(); return; }
-        const del = e.target.closest("[data-img-del]");
-        if (del) { const fig = del.closest("figure.embed--img"); if (fig) fig.remove(); updateEditorEmpty(); markEditorDirty(); e.preventDefault(); return; }
-        // The same width and remove controls for rich embeds (video, doc, site, ...).
-        const esz = e.target.closest("[data-embed-size]");
-        if (esz) { applyFigWidth(esz.closest("figure.embed--rich"), esz.dataset.embedSize); markEditorDirty(); e.preventDefault(); return; }
-        const edel = e.target.closest("[data-embed-del]");
-        if (edel) { const fig = edel.closest("figure.embed--rich"); if (fig) fig.remove(); updateEditorEmpty(); markEditorDirty(); e.preventDefault(); return; }
-        const fig = e.target.closest("figure.embed--img");
-        if (fig) { fig.classList.toggle("is-active"); }
-      });
+      wireEditorBody(bodyEd);
       updateEditorEmpty();
     }
+    updateWordCount();
     // Autosave: any edit to the body or the side fields marks the draft dirty and
     // schedules a debounced write, so a chapter is never lost by navigating away.
     const writerRoot = $("#screen-write");
@@ -10590,9 +10640,32 @@
     }
     return ed;
   }
-  // Wrap the current selection in an inline tag+class (highlight, font size).
-  // Toggles off if the selection already carries it, stays inside one paragraph,
-  // and never leaves an empty wrapper behind (those were the stray colored bars).
+  // Split a selection into per-paragraph slices so an inline wrapper can be
+  // applied block by block: one <mark> per paragraph, however many paragraphs
+  // the selection covers, without ever swallowing block elements or embeds.
+  function blockSlicesOf(range, root, blockSel, skipSel) {
+    const blocks = [];
+    root.querySelectorAll(blockSel).forEach(b => {
+      try { if (range.intersectsNode(b)) blocks.push(b); } catch (e) {}
+    });
+    // Innermost blocks only (an LI, not the whole list; a P, not a wrapper DIV).
+    const inner = blocks.filter(b => !blocks.some(o => o !== b && b.contains(o)));
+    const out = [];
+    inner.forEach(b => {
+      if (skipSel && b.closest(skipSel)) return;
+      const r = document.createRange();
+      r.selectNodeContents(b);
+      if (b.contains(range.startContainer)) r.setStart(range.startContainer, range.startOffset);
+      if (b.contains(range.endContainer)) r.setEnd(range.endContainer, range.endOffset);
+      if ((r.toString() || "").trim()) out.push(r);
+    });
+    return out;
+  }
+  const EDITOR_BLOCK_SEL = "p, div, h1, h2, h3, h4, h5, h6, li, blockquote, pre";
+  // Wrap the current selection in an inline tag+class (the highlighter). Works
+  // across any number of paragraphs by wrapping each paragraph's slice in its
+  // own element; recolours existing highlights in place; never leaves an empty
+  // wrapper behind (those were the stray colored bars).
   function wrapSelectionInline(tag, cls, sameBlockMsg, opts) {
     opts = opts || {};
     const ed = $("#we-body"); if (!ed) return;
@@ -10602,32 +10675,47 @@
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || !sel.toString().trim()) { toast("Select some text first."); return; }
     const range = sel.getRangeAt(0);
-    if (editorBlockOf(range.startContainer, ed) !== editorBlockOf(range.endContainer, ed)) { toast(sameBlockMsg || "Format one paragraph at a time."); return; }
-    let anc = range.commonAncestorContainer; if (anc && anc.nodeType === 3) anc = anc.parentNode;
     // Match an existing wrapper by the FIRST class only (so a coloured highlight
     // "hl hl--pink" is still recognised as an "hl").
     const firstCls = cls ? cls.split(/\s+/)[0] : "";
     const sel1 = tag + (firstCls ? "." + firstCls : "");
-    const existing = anc && anc.closest ? anc.closest(sel1) : null;
+    const unwrap = (el) => {
+      const parent = el.parentNode; if (!parent) return;
+      while (el.firstChild) parent.insertBefore(el.firstChild, el);
+      parent.removeChild(el);
+    };
     try {
-      if (existing) {
-        // Recolour in place when asked (yellow -> pink just restyles the mark);
-        // otherwise, or when removing, unwrap it.
-        if (opts.recolor && !opts.remove && existing.className !== cls) {
-          existing.className = cls;
-        } else {
-          const parent = existing.parentNode;
-          while (existing.firstChild) parent.insertBefore(existing.firstChild, existing);
-          parent.removeChild(existing);
-        }
-      } else if (!opts.remove) {
-        const el = document.createElement(tag); if (cls) el.className = cls;
-        el.appendChild(range.extractContents()); range.insertNode(el);
+      if (opts.remove) {
+        // Clear every matching wrapper the selection touches, across paragraphs.
+        ed.querySelectorAll(sel1).forEach(m => {
+          try { if (range.intersectsNode(m)) unwrap(m); } catch (e) {}
+        });
+      } else {
+        const slices = blockSlicesOf(range, ed, EDITOR_BLOCK_SEL, "figure");
+        // Loose text straight under the editor has no paragraph yet; wrap the
+        // raw range as before.
+        const targets = slices.length ? slices : [range];
+        targets.forEach(r => {
+          let anc = r.commonAncestorContainer; if (anc && anc.nodeType === 3) anc = anc.parentNode;
+          const existing = anc && anc.closest ? anc.closest(sel1) : null;
+          if (existing && ed.contains(existing)) {
+            // The slice sits wholly inside a highlight already: recolour it in
+            // place (yellow -> pink just restyles), or toggle it off when the
+            // same colour is applied again to a single paragraph.
+            if (opts.recolor && existing.className !== cls) existing.className = cls;
+            else if (targets.length === 1) unwrap(existing);
+          } else {
+            const el = document.createElement(tag); if (cls) el.className = cls;
+            el.appendChild(r.extractContents()); r.insertNode(el);
+          }
+        });
       }
-    } catch (e) { toast(sameBlockMsg || "Try selecting within one paragraph."); }
-    // Sweep any empty inline wrappers so no thin colored slivers are left behind.
+    } catch (e) { toast(sameBlockMsg || "That selection could not be formatted."); }
+    // Sweep any empty inline wrappers so no thin colored slivers are left behind,
+    // and dissolve a highlight accidentally nested inside another.
+    ed.querySelectorAll("mark.hl mark.hl").forEach(unwrap);
     ed.querySelectorAll("mark.hl, span.fs-lg, span.fs-sm, u").forEach(m => {
-      if (!(m.textContent || "").trim()) { const p = m.parentNode; if (!p) return; while (m.firstChild) p.insertBefore(m.firstChild, m); p.removeChild(m); }
+      if (!(m.textContent || "").trim()) unwrap(m);
     });
     if (ed.normalize) ed.normalize();
     sel.removeAllRanges();
@@ -10638,10 +10726,10 @@
   // an hl--<name> class and round-trip through Markdown as ==name|text==.
   const HL_COLORS = ["yellow", "green", "pink", "blue", "orange", "purple"];
   function applyHighlight(color) {
-    if (color === "" || color === "none") { wrapSelectionInline("mark", "hl", "Highlight one paragraph at a time.", { remove: true }); return; }
+    if (color === "" || color === "none") { wrapSelectionInline("mark", "hl", "Select highlighted text to clear it.", { remove: true }); return; }
     color = HL_COLORS.indexOf(color) >= 0 ? color : "yellow";
     const cls = color === "yellow" ? "hl" : "hl hl--" + color;
-    wrapSelectionInline("mark", cls, "Highlight one paragraph at a time.", { recolor: true });
+    wrapSelectionInline("mark", cls, "That selection could not be highlighted.", { recolor: true });
   }
 
   // The editor's live selection is easy to lose the moment a toolbar button
@@ -11300,6 +11388,16 @@
     // Esc closes overlays.
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") { closeModal(); closeTheme(); closeSheet(); }
+    });
+
+    // Ctrl/Cmd+S in the Writing Station saves the draft instead of opening the
+    // browser's save dialog. Works from the body, the title, anywhere on the desk.
+    document.addEventListener("keydown", (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || (e.key !== "s" && e.key !== "S")) return;
+      if (!$("#screen-write .writer")) return;   // only while actually writing
+      e.preventDefault();
+      if (autosaveTimer) flushAutosave(); else autosaveNow();
+      toast(window.WispDB && WispDB.enabled && WispDB.signedIn ? "Draft saved." : "Draft kept on this device.");
     });
 
     // Owner-only admin panel: hold Shift and press S and D together.
