@@ -13114,11 +13114,22 @@ window.WISP_WIDGET_CONTENT = (function () {
     try { localStorage.setItem("wisp.widgets.state", JSON.stringify(MW.state)); } catch (e) {}
   }
   let mwRemoteTimer = null;
+  // Only the station's own member may upload it. The guard runs again when
+  // the debounce fires, because on a phone the sign-in sync can still be in
+  // flight when a widget is tapped: without the re-check, the previous
+  // member's sticky notes upload into the new member's account, and from
+  // then on every device faithfully syncs the leak.
+  function mwMayPush() {
+    if (!(window.WispDB && WispDB.enabled && WispDB.signedIn && WispDB.saveWidgets && WispDB.profile)) return false;
+    let owner = null; try { owner = localStorage.getItem("wisp.widgets.owner"); } catch (e) {}
+    return owner === WispDB.profile.id;
+  }
   function mwPersistRemote() {
-    if (!(window.WispDB && WispDB.enabled && WispDB.signedIn && WispDB.saveWidgets)) return;
+    if (!mwMayPush()) return;
     if (mwRemoteTimer) clearTimeout(mwRemoteTimer);
     mwRemoteTimer = setTimeout(() => {
       mwRemoteTimer = null;
+      if (!mwMayPush()) return;
       const payload = { installed: MW.installed, state: MW.state };
       if (window.WispCompanion && WispCompanion.getPrefs) payload.companion = WispCompanion.getPrefs();
       try { WispDB.saveWidgets(payload); } catch (e) {}
@@ -13307,10 +13318,14 @@ window.WISP_WIDGET_CONTENT = (function () {
     let owner = null; try { owner = localStorage.getItem("wisp.widgets.owner"); } catch (e) {}
     const foreign = owner && owner !== pid;
     const remote = WispDB.getWidgets ? WispDB.getWidgets() : null;
-    const hasWidgets = remote && typeof remote === "object" &&
-      ((Array.isArray(remote.installed) && remote.installed.length) || (remote.state && Object.keys(remote.state).length));
-    const hasCompanion = remote && typeof remote === "object" && remote.companion && typeof remote.companion === "object";
-    if (hasWidgets) {
+    // An account that has EVER saved a station is authoritative, even when the
+    // saved station is empty: widgets removed on the laptop must not be
+    // resurrected by a phone's stale local copy. Only an account with no
+    // saved blob at all can be seeded from the device.
+    const hasBlob = !!(remote && typeof remote === "object");
+    const hasWidgetKeys = hasBlob && (("installed" in remote) || ("state" in remote));
+    const hasCompanion = hasBlob && remote.companion && typeof remote.companion === "object";
+    if (hasWidgetKeys) {
       MW.installed = Array.isArray(remote.installed) ? remote.installed.slice() : [];
       MW.state = (remote.state && typeof remote.state === "object") ? remote.state : {};
       mwPersistLocal();
@@ -13326,10 +13341,25 @@ window.WISP_WIDGET_CONTENT = (function () {
     }
     // The reading companion (Lucky) rides in the same synced blob.
     if (hasCompanion && window.WispCompanion && WispCompanion.applyPrefs) WispCompanion.applyPrefs(remote.companion);
-    if (!hasWidgets && !hasCompanion && !foreign) mwPersistRemote();   // first sign-in from this device: upload its state
+    // This account now owns whatever the device shows; stamp that BEFORE any
+    // push so the upload guard has the truth.
     try { localStorage.setItem("wisp.widgets.owner", pid); } catch (e) {}
+    // First sign-in from this device, account never saved a station: keep
+    // what was built here (a guest station survives creating the account).
+    if (!hasWidgetKeys && !hasCompanion && !foreign) mwPersistRemote();
   }
-  try { window.__wispMW = { sync: mwSyncFromAccount, reset: function () { mwSyncedFor = null; } }; } catch (e) {}   // console debugging handle
+  // Signing out takes the station off the screen: sticky notes are someone's
+  // notes, and whoever is at this device next starts from the shelf, not from
+  // them. The owner marker stays, so the same member signing back in is not a
+  // stranger, and the pull brings their station straight back.
+  function mwHandleSignOut() {
+    if (mwRemoteTimer) { clearTimeout(mwRemoteTimer); mwRemoteTimer = null; }   // a push scheduled while signed in dies with the session
+    MW.installed = []; MW.state = {};
+    mwPersistLocal();
+    mwSyncedFor = null;
+    try { applyAmbientWidgetState(); renderWidgetsEverywhere(); } catch (e) {}
+  }
+  try { window.__wispMW = { sync: mwSyncFromAccount, reset: function () { mwSyncedFor = null; }, signOut: mwHandleSignOut }; } catch (e) {}   // console debugging handle
   // Reflect ambient toggles (petals, focus mode) after a cross-device sync.
   function applyAmbientWidgetState() {
     const installed = new Set(MW.installed);
@@ -18120,7 +18150,7 @@ window.WISP_WIDGET_CONTENT = (function () {
     $("#themeScrim").addEventListener("click", (e) => { if (e.target.id === "themeScrim") closeTheme(); });
     const doSignInOut = () => {
       if (!window.WispDB || !WispDB.enabled) { toast("Sign out isn't wired up in demo mode. Connect Supabase to enable accounts."); return; }
-      if (WispDB.signedIn) WispDB.signOut().then(() => { guestBrowsing = false; toast("Signed out."); updateAuthGate(); });
+      if (WispDB.signedIn) WispDB.signOut().then(() => { guestBrowsing = false; mwHandleSignOut(); toast("Signed out."); updateAuthGate(); });
       else openAuth("in");
     };
     $("#signOutBtn").addEventListener("click", doSignInOut);
