@@ -43,7 +43,7 @@
     "seal-gold.png": [141, 141], "seal-silver.png": [155, 155], "shield-gold.png": [139, 149],
     "star-1.png": [270, 49], "star-2.png": [262, 47], "star-3.png": [281, 51],
     "star-4.png": [266, 48], "star-5.png": [271, 47],
-    "star-black.png": [170, 162], "star-burst.png": [238, 253], "star-gold.png": [155, 147],
+    "star-black.png": [170, 162], "star-burst.png": [238, 253], "star-gold.png": [340, 311],
     "target-gold.png": [236, 239], "top-1-banner.png": [337, 153],
     "top-5-medal.png": [284, 283], "top-10-medal.png": [273, 271],
     "winner-gold.png": [149, 59],
