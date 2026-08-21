@@ -7404,8 +7404,11 @@
       applyAmbientWidgetState();
       renderWidgetsEverywhere();
     }
-    // The reading companion (Lucky) rides in the same synced blob.
+    // The reading companion (Lucky) rides in the same synced blob. A
+    // different member with no saved cat of their own gets the shelf cat,
+    // never the previous member's (their name for him included).
     if (hasCompanion && window.WispCompanion && WispCompanion.applyPrefs) WispCompanion.applyPrefs(remote.companion);
+    else if (foreign && window.WispCompanion && WispCompanion.resetPrefs) WispCompanion.resetPrefs();
     // This account now owns whatever the device shows; stamp that BEFORE any
     // push so the upload guard has the truth.
     try { localStorage.setItem("wisp.widgets.owner", pid); } catch (e) {}
@@ -7423,6 +7426,8 @@
     mwPersistLocal();
     mwSyncedFor = null;
     try { applyAmbientWidgetState(); renderWidgetsEverywhere(); } catch (e) {}
+    // The cat's identity is account state too: back to the shelf cat.
+    try { if (window.WispCompanion && WispCompanion.resetPrefs) WispCompanion.resetPrefs(); } catch (e) {}
   }
   try { window.__wispMW = { sync: mwSyncFromAccount, reset: function () { mwSyncedFor = null; }, signOut: mwHandleSignOut }; } catch (e) {}   // console debugging handle
   // Reflect ambient toggles (petals, focus mode) after a cross-device sync.
