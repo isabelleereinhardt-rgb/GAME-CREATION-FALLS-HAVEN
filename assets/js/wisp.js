@@ -2835,8 +2835,44 @@
   // --- rules, and inline **bold**, *italic*, `code`, and [links](https://...).
   const MD_CA = String.fromCharCode(0xE000), MD_CB = String.fromCharCode(0xE001);
 
+  // Heal inline-token damage in saved chapters. Older saves let a highlight or
+  // a font size wrap a line break, and the block splitter then tore the token
+  // pair across paragraphs: one block ends up holding "}}==" with nothing open,
+  // the next holds "==purple|{{12|" that never closes, and both render as raw
+  // junk. Within one block: an orphan closer disappears, an unclosed opener is
+  // closed at the end, and the text renders the way the writer meant it.
+  function mdRepairInline(s) {
+    if (!/==|\{\{|\}\}|\+\+/.test(s)) return s;
+    const TOK = /(\{\{\d{1,3}(?:\.\d)?\|)|(\}\})|(==(?:yellow|green|pink|blue|orange|purple)\|)|(==)|(\+\+)/g;
+    let out = "", last = 0, m;
+    let sizes = 0, hls = 0, us = 0;
+    while ((m = TOK.exec(s))) {
+      out += s.slice(last, m.index);
+      last = m.index + m[0].length;
+      if (m[1]) { sizes++; out += m[0]; }                    // {{12|  opener
+      else if (m[2]) { if (sizes > 0) { sizes--; out += m[0]; } }   // }} closer, else orphan
+      else if (m[3]) { hls++; out += m[0]; }                 // ==purple|  opener
+      else if (m[4]) {                                       // bare ==
+        if (hls > 0) { hls--; out += m[0]; }
+        // A plain ==text== pair only counts when a later BARE == exists to
+        // close it; a following ==color| is its own opener, not a partner.
+        else if (/==(?!(?:yellow|green|pink|blue|orange|purple)\|)/.test(s.slice(last))) { hls++; out += m[0]; }
+        // else: orphan closer from a torn pair; drop it
+      }
+      else if (m[5]) {                                       // ++
+        if (us > 0) { us--; out += m[0]; }
+        else if (s.indexOf("++", last) >= 0) { us++; out += m[0]; }
+        // else orphan; drop
+      }
+    }
+    out += s.slice(last);
+    // Close what is still open, sized-then-underline-then-highlight, matching
+    // the order the inline rules unwrap in.
+    out += "}}".repeat(sizes) + "++".repeat(us) + "==".repeat(hls);
+    return out;
+  }
   function mdInline(text) {
-    let s = esc(String(text == null ? "" : text));
+    let s = mdRepairInline(esc(String(text == null ? "" : text)));
     const codes = [];
     s = s.replace(/`([^`]+)`/g, (_, c) => { codes.push(c); return MD_CA + (codes.length - 1) + MD_CB; });
     // Inline image, before the link rule so the leading ! is not left behind.
@@ -3043,13 +3079,18 @@
       if (tag === "br") { out += "\n"; return; }
       if (tag === "img") { const src = n.getAttribute("src") || ""; const alt = n.getAttribute("alt") || ""; out += src ? `![${alt}](${src})` : ""; return; }
       const inner = inlineToMd(n);
-      if (tag === "strong" || tag === "b") out += inner.trim() ? `**${inner}**` : inner;
-      else if (tag === "em" || tag === "i") out += inner.trim() ? `*${inner}*` : inner;
-      else if (tag === "u" || tag === "ins") out += inner.trim() ? `++${inner}++` : inner;
-      else if (tag === "mark") { if (inner.trim()) { const cm = (n.className || "").toString().match(/hl--(yellow|green|pink|blue|orange|purple)/); out += cm ? `==${cm[1]}|${inner}==` : `==${inner}==`; } else out += inner; }
-      else if (tag === "span" && n.style && n.style.fontSize) { const px = Math.round(parseFloat(n.style.fontSize)); out += (inner.trim() && px) ? `{{${px}|${inner}}}` : inner; }
-      else if (tag === "span" && n.classList && n.classList.contains("fs-lg")) out += inner.trim() ? `{+${inner}+}` : inner;
-      else if (tag === "span" && n.classList && n.classList.contains("fs-sm")) out += inner.trim() ? `{-${inner}-}` : inner;
+      // An inline wrapper holding line breaks must close before each break and
+      // reopen after it: a token pair straddling a newline gets torn apart by
+      // the block splitter on reload and shows up as raw ==purple|{{12| junk.
+      const wrapLines = (open, close) => inner.split("\n")
+        .map(seg => seg.trim() ? open + seg + close : seg).join("\n");
+      if (tag === "strong" || tag === "b") out += inner.trim() ? wrapLines("**", "**") : inner;
+      else if (tag === "em" || tag === "i") out += inner.trim() ? wrapLines("*", "*") : inner;
+      else if (tag === "u" || tag === "ins") out += inner.trim() ? wrapLines("++", "++") : inner;
+      else if (tag === "mark") { if (inner.trim()) { const cm = (n.className || "").toString().match(/hl--(yellow|green|pink|blue|orange|purple)/); out += cm ? wrapLines(`==${cm[1]}|`, "==") : wrapLines("==", "=="); } else out += inner; }
+      else if (tag === "span" && n.style && n.style.fontSize) { const px = Math.round(parseFloat(n.style.fontSize)); out += (inner.trim() && px) ? wrapLines(`{{${px}|`, "}}") : inner; }
+      else if (tag === "span" && n.classList && n.classList.contains("fs-lg")) out += inner.trim() ? wrapLines("{+", "+}") : inner;
+      else if (tag === "span" && n.classList && n.classList.contains("fs-sm")) out += inner.trim() ? wrapLines("{-", "-}") : inner;
       else if (tag === "code") out += "`" + inner + "`";
       else if (tag === "a") {
         const href = n.getAttribute("href") || "";
@@ -3475,7 +3516,7 @@
       </div>`;
 
     mountReaderTools();
-    if (ch) { wireLiveReading(w, ch); wireLiveHighlights(w, ch); wireReadingGlobalsOnce(); }
+    if (ch) { wireLiveReading(w, ch); wireLiveHighlights(w, ch); wireReadingGlobalsOnce(); paintSavedHighlights(w, ch); }
     if (ch && isComic && paras.length) wireComicReader(paras.length);
     // Track this work/chapter so scroll progress saves against it, and record
     // that the work was opened, for history + Continue reading.
@@ -3558,14 +3599,74 @@
     } catch (e) {}
     return made;
   }
+  // Find a saved snippet in the prose again, tolerant of whitespace changes:
+  // returns a Range over the first match, or null if the text is gone (the
+  // author edited the chapter). Used to repaint saved highlights on load.
+  function findProseText(prose, text) {
+    const segs = []; let full = "";
+    (function walk(n) {
+      if (n.nodeType === 3) { segs.push({ node: n, start: full.length }); full += n.nodeValue; return; }
+      if (n.nodeType !== 1) return;
+      if (/^(FIGURE|IFRAME|SCRIPT|STYLE)$/.test(n.nodeName) ||
+          (n.classList && (n.classList.contains("thread-slot") || n.classList.contains("para__marker") ||
+                           n.classList.contains("embed") || n.classList.contains("embed-block")))) { full += "\n"; return; }
+      for (let c = n.firstChild; c; c = c.nextSibling) walk(c);
+      full += "\n";   // block edges separate words
+    })(prose);
+    const needle = String(text || "").replace(/\s+/g, " ").trim();
+    if (!needle) return null;
+    // Normalize the prose the same way, keeping a map back to real offsets.
+    let norm = ""; const map = []; let lastSpace = true;
+    for (let i = 0; i < full.length; i++) {
+      if (/\s/.test(full[i])) { if (!lastSpace) { norm += " "; map.push(i); lastSpace = true; } }
+      else { norm += full[i]; map.push(i); lastSpace = false; }
+    }
+    const at = norm.indexOf(needle);
+    if (at < 0) return null;
+    const fs = map[at], fe = map[at + needle.length - 1] + 1;
+    let sn = null, so = 0, en = null, eo = 0;
+    for (const seg of segs) {
+      const len = seg.node.nodeValue.length;
+      if (!sn && fs >= seg.start && fs < seg.start + len) { sn = seg.node; so = fs - seg.start; }
+      if (fe > seg.start && fe <= seg.start + len) { en = seg.node; eo = fe - seg.start; }
+    }
+    if (!sn || !en) return null;
+    try { const r = document.createRange(); r.setStart(sn, so); r.setEnd(en, eo); return r; } catch (e) { return null; }
+  }
+  // Repaint this chapter's saved highlights when it loads, so a passage marked
+  // yesterday is still yellow today. Each repainted mark carries its saved row
+  // id, so tapping it can remove both the color and the copy in Things.
+  async function paintSavedHighlights(w, ch) {
+    if (!window.WispDB || !WispDB.signedIn || !WispDB.myHighlights || !w) return;
+    let rows = [];
+    try { rows = await WispDB.myHighlights(); } catch (e) { return; }
+    const prose = document.getElementById("prose");
+    if (!prose || !prose.isConnected) return;
+    rows.filter(r => r.work_id === w.id && (!r.chapter_id || !ch || !ch.id || r.chapter_id === ch.id) && (r.text || "").trim())
+      .forEach(r => {
+        const range = findProseText(prose, r.text);
+        if (!range) return;   // the passage changed since it was saved
+        try { safeHighlightRange(range).forEach(m => { m.dataset.hlId = r.id; }); } catch (e) {}
+      });
+  }
+  try { window.__wispReader = { findProseText, paintSavedHighlights }; } catch (e) {}   // console debugging handle
   // The marks a tap or a selection is touching, and the unwrap that removes
   // them: how a reader takes a highlight back without a trip to the Library.
   function highlightMarksAt(prose, target, range) {
+    let hit;
     if (range && !range.collapsed) {
-      return Array.from(prose.querySelectorAll("mark.hl")).filter(m => { try { return range.intersectsNode(m); } catch (e) { return false; } });
+      hit = Array.from(prose.querySelectorAll("mark.hl")).filter(m => { try { return range.intersectsNode(m); } catch (e) { return false; } });
+    } else {
+      const m = target && target.closest ? target.closest("mark.hl") : null;
+      hit = m && prose.contains(m) ? [m] : [];
     }
-    const m = target && target.closest ? target.closest("mark.hl") : null;
-    return m && prose.contains(m) ? [m] : [];
+    // A highlight painted across paragraphs is one saved row wearing several
+    // marks; touching any piece gathers all of its siblings.
+    const rowIds = new Set(hit.map(m => m.dataset && m.dataset.hlId).filter(Boolean));
+    if (rowIds.size) prose.querySelectorAll("mark.hl").forEach(m => {
+      if (m.dataset.hlId && rowIds.has(m.dataset.hlId) && hit.indexOf(m) < 0) hit.push(m);
+    });
+    return hit;
   }
   function removeHighlightMarks(marks) {
     const ids = new Set();
@@ -3607,12 +3708,6 @@
       const kind = b.dataset.lhl, text = lastText;
       if (kind === "copy") { navigator.clipboard && navigator.clipboard.writeText(text); toast("Copied."); hide(); window.getSelection().removeAllRanges(); return; }
       if (kind === "un") {
-        // A highlight painted across paragraphs is one saved row wearing
-        // several marks; removing any piece removes all of its siblings too.
-        const rowIds = new Set(lastMarks.map(m => m.dataset && m.dataset.hlId).filter(Boolean));
-        if (rowIds.size) prose.querySelectorAll("mark.hl").forEach(m => {
-          if (m.dataset.hlId && rowIds.has(m.dataset.hlId) && lastMarks.indexOf(m) < 0) lastMarks.push(m);
-        });
         const ids = removeHighlightMarks(lastMarks); lastMarks = [];
         hide(); window.getSelection().removeAllRanges();
         if (ids.length && WispDB.signedIn && WispDB.deleteHighlight) {
@@ -4987,6 +5082,8 @@
     });
     // Set the initial flag honestly: a loaded work is saved; a new one is not yet.
     setSaveFlag((liveEditor && liveEditor.work) ? "saved" : "idle");
+    // A fresh desk offers back whatever a signed-out session left behind.
+    if (!(liveEditor && liveEditor.work)) restoreLocalDraft();
     // Line spacing while writing (a comfort setting; readers keep their own).
     const lineSel = $("#we-linespace");
     if (lineSel) lineSel.addEventListener("change", () => {
@@ -10830,6 +10927,9 @@
     if (ed.normalize) ed.normalize();
     sel.removeAllRanges();
     updateEditorEmpty();
+    // Highlights change the chapter without firing an input event; without
+    // this, an autosave never ran and a refresh silently dropped them.
+    markEditorDirty();
   }
   // Highlight the selection in one of a few marker colours (yellow is the plain
   // default), recolour an existing highlight, or remove it. Colours are held as
@@ -10954,6 +11054,7 @@
     }
     const inp = $("#we-fontsize"); if (inp) inp.value = px;
     updateEditorEmpty();
+    markEditorDirty();     // size changes must reach the autosave too
     gcScheduleScan(200);   // squiggles follow the reflowed lines
   }
   // Nudge the current selection (or word) up/down a point, keeping it selected.
@@ -11228,10 +11329,40 @@
     setSaveFlag("dirty");
     scheduleAutosave();
   }
+  // Signed out (or no backend), drafts really are kept on this device, so the
+  // flag that says so tells the truth: the newest unsaved work waits in
+  // localStorage and comes back when the editor next opens.
+  const LOCAL_DRAFT_KEY = "wisp.draft.local";
+  function saveLocalDraft() {
+    if (editorFormat === "comic") return;
+    const val = (id) => { const e = $(id); return e ? e.value : ""; };
+    const ed = $("#we-body"); if (!ed) return;
+    const body = editorHtmlToMd(ed);
+    try {
+      if (!body.trim() && !val("#we-title").trim()) { localStorage.removeItem(LOCAL_DRAFT_KEY); return; }
+      localStorage.setItem(LOCAL_DRAFT_KEY, JSON.stringify({ title: val("#we-title"), chTitle: val("#we-chtitle"), body, at: Date.now() }));
+    } catch (e) {}
+  }
+  function clearLocalDraft() { try { localStorage.removeItem(LOCAL_DRAFT_KEY); } catch (e) {} }
+  function restoreLocalDraft() {
+    let d = null;
+    try { d = JSON.parse(localStorage.getItem(LOCAL_DRAFT_KEY) || "null"); } catch (e) {}
+    if (!d || !(d.body || "").trim()) return;
+    const ed = $("#we-body");
+    if (!ed || (ed.textContent || "").trim()) return;   // never clobber real content
+    const tEl = $("#we-title"), cEl = $("#we-chtitle");
+    if (tEl && !tEl.value.trim()) tEl.value = d.title || "";
+    if (cEl && !cEl.value.trim()) cEl.value = d.chTitle || "";
+    ed.innerHTML = mdToHtmlBlocks(d.body).join("");
+    decorateEditorImages(); decorateEditorEmbeds();
+    updateEditorEmpty(); updateWordCount(); gcScheduleScan(400);
+    setSaveFlag("local");
+    toast("Restored your unsaved draft from this device.");
+  }
   async function autosaveNow() {
     if (autosaveBusy) { scheduleAutosave(400); return; }        // a write is in flight; retry soon
     if (!$("#screen-write .writer")) return;                    // left the editor
-    if (!window.WispDB || !WispDB.enabled || !WispDB.signedIn) { setSaveFlag("local"); return; }
+    if (!window.WispDB || !WispDB.enabled || !WispDB.signedIn) { saveLocalDraft(); setSaveFlag("local"); return; }
     autosaveBusy = true;
     try { await persistEditor("draft", null, { silent: true }); }
     finally { autosaveBusy = false; }
@@ -11358,6 +11489,7 @@
         }
       }
       if (!silent && kind === "publish") recordPublish();   // feed the Rising Star cadence
+      clearLocalDraft();   // the account now holds this work; the device copy retires
       if (silent) { setSaveFlag("saved"); }
       else { liveEditor = null; editorCover = null; navigate("write"); }
     } catch (e) {
