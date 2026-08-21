@@ -898,7 +898,7 @@ a.list-card__title:hover { color: var(--rose-ink); }
   max-width: calc(var(--measure, 66) * 1ch + 80px);
   margin: 0 auto; padding: 30px 40px 120px;
   font-size: var(--read-size, 19px);
-  transition: max-width .2s ease, font-size .12s ease;
+  transition: max-width .2s ease, font-size .25s ease;
 }
 .reader__crumbs { font-size: 13px; color: var(--ink3); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 18px; }
 .reader__title { font: 600 34px/1.15 var(--font-display); color: var(--ink); margin-bottom: 6px; }
@@ -924,7 +924,12 @@ a.list-card__title:hover { color: var(--rose-ink); }
 .prose p, .reader-para {
   position: relative; margin: 0 0 var(--read-gap, 1.15em);
   line-height: var(--read-leading, 1.75);
+  /* The A- / A+ steps glide instead of jumping (the paragraphs read their
+     size from a variable, so the size change lands on them directly). */
+  transition: font-size .25s ease;
 }
+/* While two fingers are on the page the size must track them exactly. */
+.prose.is-pinching, .prose.is-pinching p, .prose.is-pinching .reader-para { transition: none; }
 .prose[data-justify="on"] p { text-align: justify; }
 .prose[data-hyphen="on"] p  { hyphens: auto; }
 
