@@ -901,9 +901,11 @@ a.list-card__title:hover { color: var(--rose-ink); }
   position: sticky; top: 0; height: 4px; background: color-mix(in srgb, var(--rose) 12%, transparent); z-index: 8;
 }
 .reader__progress > i { display: block; height: 100%; width: 0; background: var(--rose); transition: width .12s linear; }
-/* A small live percent chip in the corner of the reader. */
+/* A small live chip riding the progress bar: percent and minutes left. It
+   hangs just below the sticky bar (a fixed top corner sat underneath the app
+   header, where nobody ever saw it). */
 .reader__pct {
-  position: fixed; top: 10px; right: 12px; z-index: 9;
+  position: absolute; top: 8px; right: 12px; z-index: 9;
   background: var(--surface); color: var(--ink2); border: 1px solid var(--line);
   border-radius: 999px; padding: 2px 9px; font: 600 11.5px var(--font-text);
   font-variant-numeric: tabular-nums; box-shadow: 0 2px 8px var(--shadow); opacity: .92;
@@ -8670,6 +8672,7 @@ window.WISP_WIDGET_CONTENT = (function () {
         <div class="hl-pop" id="hlPop">
           <button data-hl="mark">Highlight</button>
           <button data-hl="note">Note</button>
+          <button data-hl="un" hidden>Remove highlight</button>
           <button data-hl="copy">Copy</button>
         </div>
 
@@ -9330,6 +9333,7 @@ window.WISP_WIDGET_CONTENT = (function () {
         <div class="hl-pop" id="hlPopLive">
           <button data-lhl="mark">Highlight</button>
           <button data-lhl="note">Note</button>
+          <button data-lhl="un" hidden>Remove highlight</button>
           <button data-lhl="copy">Copy</button>
         </div>
         ${readerToolsHTML()}
@@ -9403,22 +9407,40 @@ window.WISP_WIDGET_CONTENT = (function () {
   function safeHighlightRange(range) {
     if (!range) return false;
     const UNSAFE = "p,div,figure,img,iframe,video,audio,blockquote,pre,h1,h2,h3,h4,h5,h6,hr,ul,ol,li,table,button,.para__marker,.thread-slot,.embed,.embed-block";
+    const made = [];
     const wrapOne = (r) => {
       const frag = r.cloneContents();
-      if (frag.querySelector && frag.querySelector(UNSAFE)) return false;
-      if (!(frag.textContent || "").trim()) return false;   // nothing but whitespace: no sliver
+      if (frag.querySelector && frag.querySelector(UNSAFE)) return;
+      if (!(frag.textContent || "").trim()) return;   // nothing but whitespace: no sliver
       const mk = document.createElement("mark"); mk.className = "hl";
       mk.appendChild(r.extractContents()); r.insertNode(mk);
-      return true;
+      made.push(mk);
     };
     try {
       const prose = document.getElementById("prose");
       const slices = prose ? blockSlicesOf(range, prose, "p, li, blockquote, h1, h2, h3, h4, h5, h6, pre", "figure, .embed, .embed-block, .thread-slot") : [];
-      if (!slices.length) return wrapOne(range);
-      let any = false;
-      slices.forEach(r => { try { if (wrapOne(r)) any = true; } catch (e) {} });
-      return any;
-    } catch (e) { return false; }
+      (slices.length ? slices : [range]).forEach(r => { try { wrapOne(r); } catch (e) {} });
+    } catch (e) {}
+    return made;
+  }
+  // The marks a tap or a selection is touching, and the unwrap that removes
+  // them: how a reader takes a highlight back without a trip to the Library.
+  function highlightMarksAt(prose, target, range) {
+    if (range && !range.collapsed) {
+      return Array.from(prose.querySelectorAll("mark.hl")).filter(m => { try { return range.intersectsNode(m); } catch (e) { return false; } });
+    }
+    const m = target && target.closest ? target.closest("mark.hl") : null;
+    return m && prose.contains(m) ? [m] : [];
+  }
+  function removeHighlightMarks(marks) {
+    const ids = new Set();
+    marks.forEach(m => {
+      if (m.dataset && m.dataset.hlId) ids.add(m.dataset.hlId);
+      const p = m.parentNode; if (!p) return;
+      while (m.firstChild) p.insertBefore(m.firstChild, m);
+      p.removeChild(m);
+    });
+    return Array.from(ids);
   }
 
   // Text-selection highlight popover for real works: saves to the highlights
@@ -9426,14 +9448,21 @@ window.WISP_WIDGET_CONTENT = (function () {
   function wireLiveHighlights(w, ch) {
     const pop = $("#hlPopLive"), prose = $("#prose");
     if (!pop || !prose) return;
-    let lastText = "", lastRange = null;
+    let lastText = "", lastRange = null, lastMarks = [];
     const hide = () => { pop.style.display = "none"; };
-    prose.addEventListener("mouseup", () => {
+    prose.addEventListener("mouseup", (e) => {
       const sel = window.getSelection();
-      if (!sel || sel.isCollapsed || !sel.toString().trim()) { hide(); return; }
-      lastText = sel.toString().trim();
-      lastRange = sel.getRangeAt(0);
-      const rect = lastRange.getBoundingClientRect();
+      const selected = sel && !sel.isCollapsed && sel.toString().trim();
+      const range = selected ? sel.getRangeAt(0) : null;
+      // A tap on an existing highlight (no selection) offers to remove it.
+      lastMarks = highlightMarksAt(prose, e.target, range);
+      if (!selected && !lastMarks.length) { hide(); return; }
+      lastText = selected ? sel.toString().trim() : lastMarks.map(m => m.textContent).join(" ");
+      lastRange = range;
+      pop.querySelector('[data-lhl="mark"]').hidden = !selected;
+      pop.querySelector('[data-lhl="note"]').hidden = !selected;
+      pop.querySelector('[data-lhl="un"]').hidden = !lastMarks.length;
+      const rect = (range || (() => { const r = document.createRange(); r.selectNode(lastMarks[0]); return r; })()).getBoundingClientRect();
       const host = $("#screen-reading").getBoundingClientRect();
       pop.style.display = "flex";
       pop.style.left = Math.max(8, rect.left - host.left + rect.width / 2 - 70) + "px";
@@ -9442,12 +9471,35 @@ window.WISP_WIDGET_CONTENT = (function () {
     pop.querySelectorAll("[data-lhl]").forEach(b => b.addEventListener("click", async () => {
       const kind = b.dataset.lhl, text = lastText;
       if (kind === "copy") { navigator.clipboard && navigator.clipboard.writeText(text); toast("Copied."); hide(); window.getSelection().removeAllRanges(); return; }
+      if (kind === "un") {
+        // A highlight painted across paragraphs is one saved row wearing
+        // several marks; removing any piece removes all of its siblings too.
+        const rowIds = new Set(lastMarks.map(m => m.dataset && m.dataset.hlId).filter(Boolean));
+        if (rowIds.size) prose.querySelectorAll("mark.hl").forEach(m => {
+          if (m.dataset.hlId && rowIds.has(m.dataset.hlId) && lastMarks.indexOf(m) < 0) lastMarks.push(m);
+        });
+        const ids = removeHighlightMarks(lastMarks); lastMarks = [];
+        hide(); window.getSelection().removeAllRanges();
+        if (ids.length && WispDB.signedIn && WispDB.deleteHighlight) {
+          Promise.all(ids.map(id => WispDB.deleteHighlight(id).catch(() => {})))
+            .then(() => toast("Highlight removed, here and from your Things."));
+        } else {
+          toast(ids.length ? "Highlight removed." : "Highlight removed here. Its saved copy stays in Library, under Things.");
+        }
+        return;
+      }
       if (!WispDB.signedIn) { openAuth("in"); hide(); return; }
       if (!text) { hide(); return; }
-      safeHighlightRange(lastRange);
+      const made = safeHighlightRange(lastRange);
       hide(); window.getSelection().removeAllRanges();
       if (kind === "note") { openNoteDialog(w, ch, text); return; }
-      try { await WispDB.saveHighlight({ work_id: w.id, chapter_id: ch.id, text }); toast("Highlighted. Find it in Library, under Things."); }
+      try {
+        const row = await WispDB.saveHighlight({ work_id: w.id, chapter_id: ch.id, text });
+        // Remember which saved row these marks belong to, so removing the
+        // highlight later also deletes it from Things.
+        if (row && row.id) made.forEach(m => { m.dataset.hlId = row.id; });
+        toast("Highlighted. Find it in Library, under Things.");
+      }
       catch (e) { toast((e && e.message) || "Could not save the highlight."); }
     }));
   }
@@ -9789,9 +9841,7 @@ window.WISP_WIDGET_CONTENT = (function () {
     if (!prose) return 0;
     if (prose !== proseWordsEl) {
       proseWordsEl = prose;
-      const clone = prose.cloneNode(true);
-      clone.querySelectorAll("figure, iframe, .thread-slot, .para__marker, .embed, .embed-block").forEach(x => x.remove());
-      proseWords = (clone.textContent || "").trim().split(/\s+/).filter(Boolean).length;
+      proseWords = countWordsIn(prose, "figure, iframe, .thread-slot, .para__marker, .embed, .embed-block");
     }
     return proseWords;
   }
@@ -9867,14 +9917,23 @@ window.WISP_WIDGET_CONTENT = (function () {
       }
     }));
 
-    // Highlight popover on text selection.
+    // Highlight popover on text selection; a tap on an existing highlight
+    // offers to remove it, right here in the reader.
     const pop = $("#hlPop");
-    let lastRange = null;
-    $("#prose").addEventListener("mouseup", () => {
+    const proseEl = $("#prose");
+    let lastRange = null, lastMarks = [], lastText = "";
+    proseEl.addEventListener("mouseup", (e) => {
       const sel = window.getSelection();
-      if (!sel || sel.isCollapsed || !sel.toString().trim()) { pop.style.display = "none"; return; }
-      const r = sel.getRangeAt(0); lastRange = r;
-      const rect = r.getBoundingClientRect();
+      const selected = sel && !sel.isCollapsed && sel.toString().trim();
+      const range = selected ? sel.getRangeAt(0) : null;
+      lastMarks = highlightMarksAt(proseEl, e.target, range);
+      if (!selected && !lastMarks.length) { pop.style.display = "none"; return; }
+      lastRange = range;
+      lastText = selected ? sel.toString().trim() : lastMarks.map(m => m.textContent).join(" ");
+      pop.querySelector('[data-hl="mark"]').hidden = !selected;
+      pop.querySelector('[data-hl="note"]').hidden = !selected;
+      pop.querySelector('[data-hl="un"]').hidden = !lastMarks.length;
+      const rect = (range || (() => { const r = document.createRange(); r.selectNode(lastMarks[0]); return r; })()).getBoundingClientRect();
       const host = $("#screen-reading").getBoundingClientRect();
       pop.style.display = "flex";
       pop.style.left = Math.max(8, rect.left - host.left + rect.width / 2 - 70) + "px";
@@ -9882,7 +9941,8 @@ window.WISP_WIDGET_CONTENT = (function () {
     });
     pop.querySelectorAll("[data-hl]").forEach(b => b.addEventListener("click", () => {
       const kind = b.dataset.hl;
-      if (kind === "copy") { navigator.clipboard && navigator.clipboard.writeText(String(window.getSelection())); toast("Copied."); }
+      if (kind === "copy") { navigator.clipboard && navigator.clipboard.writeText(lastText || String(window.getSelection())); toast("Copied."); }
+      else if (kind === "un") { removeHighlightMarks(lastMarks); lastMarks = []; toast("Highlight removed."); }
       else if (lastRange) {
         safeHighlightRange(lastRange);
         toast(kind === "note" ? "Saved to your highlights. Add a note in Library." : "Highlighted. Find it in Library, under Things.");
@@ -10329,6 +10389,21 @@ window.WISP_WIDGET_CONTENT = (function () {
       if (fig) { fig.classList.toggle("is-active"); }
     });
   }
+  // Count the words in an element, block-aware: element boundaries count as
+  // spaces, so the last word of one paragraph never fuses with the first word
+  // of the next (plain textContent concatenates them and undercounts).
+  function countWordsIn(root, stripSel) {
+    const clone = root.cloneNode(true);
+    if (stripSel) clone.querySelectorAll(stripSel).forEach(x => x.remove());
+    const parts = [];
+    (function walk(n) {
+      for (let c = n.firstChild; c; c = c.nextSibling) {
+        if (c.nodeType === 3) parts.push(c.nodeValue);
+        else if (c.nodeType === 1) { walk(c); parts.push(" "); }
+      }
+    })(clone);
+    return parts.join(" ").trim().split(/\s+/).filter(Boolean).length;
+  }
   // A quiet live word count under the save flag: words and an honest reading
   // time for prose, a page count for comics. Embeds and captions don't count.
   let wordCountT = 0;
@@ -10342,9 +10417,7 @@ window.WISP_WIDGET_CONTENT = (function () {
     }
     const ed = $("#we-body");
     if (!ed) { el.textContent = ""; return; }
-    const clone = ed.cloneNode(true);
-    clone.querySelectorAll("figure, iframe").forEach(f => f.remove());
-    const words = (clone.textContent || "").trim().split(/\s+/).filter(Boolean).length;
+    const words = countWordsIn(ed, "figure, iframe");
     el.textContent = words
       ? words.toLocaleString() + (words === 1 ? " word" : " words") + (words >= 120 ? " · " + Math.max(1, Math.round(words / 230)) + " min read" : "")
       : "";
@@ -15932,7 +16005,12 @@ window.WISP_WIDGET_CONTENT = (function () {
     if (/^[A-Z]/.test(orig)) return fix.charAt(0).toUpperCase() + fix.slice(1);
     return fix;
   }
-  const GC_WORD_RE = /[A-Za-z][A-Za-z']*/g;
+  // Words may carry straight OR curly apostrophes: phones type didn’t with a
+  // smart quote, and treating ’ as a word break split it into "didn" + "t",
+  // which then drew a red squiggle with useless suggestions.
+  const GC_WORD_RE = /[A-Za-z][A-Za-z'’]*/g;
+  // The dictionary speaks straight apostrophes; check and suggest with this.
+  function gcNorm(w) { return w.replace(/’/g, "'"); }
 
   /* ---- The live checker ----------------------------------------------------
      Rewritten to work the way a word processor does:
@@ -15999,10 +16077,14 @@ window.WISP_WIDGET_CONTENT = (function () {
       // (file:// pages cannot spawn workers; skip straight to the fallback.)
       try {
         if (location.protocol === "file:") throw new Error("file: page");
-        const glue = "\n;var __dict=null;self.onmessage=function(ev){var m=ev.data;try{" +
+        const glue = "\n;var __dict=null;" +
+          // The obvious fix first: a missing apostrophe (didnt, youre, wasnt)
+          // repairs by trying ' at every position, far better than edit-distance.
+          "function __apos(w){var out=[];if(!__dict||w.indexOf(\"'\")>=0)return out;for(var i=1;i<w.length;i++){var c=w.slice(0,i)+\"'\"+w.slice(i);if(__dict.check(c))out.push(c);}return out;}" +
+          "self.onmessage=function(ev){var m=ev.data;try{" +
           "if(m.t==='init'){__dict=new Typo('en_US',m.aff,m.dic,{platform:'any'});self.postMessage({t:'ready'});}" +
           "else if(m.t==='check'){var bad=[];if(__dict)for(var i=0;i<m.words.length;i++){if(!__dict.check(m.words[i]))bad.push(m.words[i]);}self.postMessage({t:'check',id:m.id,bad:bad});}" +
-          "else if(m.t==='suggest'){var s=__dict?(__dict.suggest(m.word,6)||[]):[];self.postMessage({t:'suggest',word:m.word,sugg:s});}" +
+          "else if(m.t==='suggest'){var s=__apos(m.word);var h=__dict?(__dict.suggest(m.word,6)||[]):[];for(var j=0;j<h.length;j++){if(s.indexOf(h[j])<0)s.push(h[j]);}self.postMessage({t:'suggest',word:m.word,sugg:s});}" +
           "}catch(err){self.postMessage({t:'fail',id:m.id,word:m.word});}};";
         const worker = new Worker(URL.createObjectURL(new Blob([typoSrc + glue], { type: "text/javascript" })));
         const pending = new Map(); let seq = 0;
@@ -16035,9 +16117,19 @@ window.WISP_WIDGET_CONTENT = (function () {
       try {
         if (!window.Typo) (0, eval)(typoSrc);   // indirect eval: defines the global Typo
         const dict = new window.Typo("en_US", aff, dic, { platform: "any" });
+        const apos = (w) => {
+          const out = [];
+          if (w.indexOf("'") >= 0) return out;
+          for (let i = 1; i < w.length; i++) { const c = w.slice(0, i) + "'" + w.slice(i); if (dict.check(c)) out.push(c); }
+          return out;
+        };
         return {
           check(words) { return Promise.resolve(new Set(words.filter(w => !dict.check(w)))); },
-          suggest(word) { return Promise.resolve(dict.suggest(word, 6) || []); }
+          suggest(word) {
+            const s = apos(word);
+            (dict.suggest(word, 6) || []).forEach(h => { if (s.indexOf(h) < 0) s.push(h); });
+            return Promise.resolve(s);
+          }
         };
       } catch (e) { return null; }
     })();
@@ -16077,15 +16169,23 @@ window.WISP_WIDGET_CONTENT = (function () {
   function gcSpellCandidates(text, out) {
     GC_WORD_RE.lastIndex = 0; let m;
     while ((m = GC_WORD_RE.exec(text))) {
-      const w = m[0];
+      let w = m[0], s = m.index, e = s + w.length;
+      // A trailing apostrophe is punctuation (a quote, a possessive plural),
+      // not part of the word.
+      while (w.length && (w.endsWith("'") || w.endsWith("’"))) { w = w.slice(0, -1); e--; }
       if (w.length < 3) continue;
       if (/^[A-Z]{2,4}$/.test(w)) continue;                    // short all-caps: an acronym
-      const before = text.slice(0, m.index);
+      const before = text.slice(0, s);
       const sentenceStart = !/\S/.test(before) || /[.!?\n]["')\]]?\s*$/.test(before);
       if (/^[A-Z][a-z]/.test(w) && !sentenceStart) continue;   // proper noun mid-sentence
-      const lower = w.toLowerCase();
-      if (gcState.userDict.has(lower) || gcState.ignoredWords.has(lower)) continue;
-      out.push({ s: m.index, e: m.index + w.length, orig: w });
+      const norm = gcNorm(w), lower = norm.toLowerCase();
+      const known = (x) => gcState.userDict.has(x) || gcState.ignoredWords.has(x);
+      if (known(lower)) continue;
+      // "Orcus's" and "Orcuses" stay quiet once "Orcus" is in the dictionary:
+      // possessives and plain plurals inherit their base word's standing.
+      const poss = lower.replace(/'s$/, ""), plur = lower.replace(/e?s$/, "");
+      if ((poss !== lower && known(poss)) || (plur !== lower && known(plur))) continue;
+      out.push({ s: s, e: e, orig: w, norm: norm });
     }
   }
   function gcRuleIssues(text) {
@@ -16157,14 +16257,14 @@ window.WISP_WIDGET_CONTENT = (function () {
       const todo = gcBlocksOf(edNow).map(b => ({ block: b, c: gcState.cache.get(b) }))
         .filter(x => x.c && !x.c.spellDone);
       const wordSet = new Set();
-      todo.forEach(x => (x.c.words || []).forEach(w => wordSet.add(w.orig)));
+      todo.forEach(x => (x.c.words || []).forEach(w => wordSet.add(w.norm)));
       let bad = new Set();
       if (backend && wordSet.size) {
         try { bad = await backend.check(Array.from(wordSet)); } catch (e) { bad = new Set(); }
       }
       let repaint = false;
       todo.forEach(x => {
-        const spell = (x.c.words || []).filter(w => bad.has(w.orig)).map(w => ({ s: w.s, e: w.e, orig: w.orig, kind: "spell" }));
+        const spell = (x.c.words || []).filter(w => bad.has(w.norm)).map(w => ({ s: w.s, e: w.e, orig: w.orig, norm: w.norm, kind: "spell" }));
         x.c.spellDone = true;
         if (spell.length) { x.c.issues = gcResolve((x.c.rules || []).concat(spell)); repaint = true; }
       });
@@ -16240,8 +16340,9 @@ window.WISP_WIDGET_CONTENT = (function () {
     gcBlocksOf(ed).forEach(block => {
       const c = gcState.cache.get(block);
       if (c) c.issues.forEach(i => {
-        if (i.kind === "spell" && !gcState.suggCache.has(i.orig.toLowerCase()) && !seen.has(i.orig.toLowerCase())) {
-          seen.add(i.orig.toLowerCase()); q.push(i.orig);
+        const key = (i.norm || i.orig).toLowerCase();
+        if (i.kind === "spell" && !gcState.suggCache.has(key) && !seen.has(key)) {
+          seen.add(key); q.push(i.norm || i.orig);
         }
       });
     });
@@ -16259,7 +16360,8 @@ window.WISP_WIDGET_CONTENT = (function () {
         if (gcState.suggCache.has(key)) continue;
         let sugg = [];
         try { sugg = await backend.suggest(word) || []; } catch (e) { sugg = []; }
-        const near = sugg.filter(x => x && x.toLowerCase() !== key && levDist(word, x) <= 2).slice(0, 4);
+        const near = sugg.filter(x => x && x.toLowerCase() !== key &&
+          (x.replace(/'/g, "") === word.replace(/'/g, "") || levDist(word, x) <= 2)).slice(0, 4);
         gcState.suggCache.set(key, near);
         if (gcState.suggCache.size > 600) gcState.suggCache.delete(gcState.suggCache.keys().next().value);
         gcCardRefresh(word);
@@ -16285,9 +16387,12 @@ window.WISP_WIDGET_CONTENT = (function () {
   }
   function gcAltsFor(issue) {
     if (issue.kind !== "spell") return issue.fix ? [issue.fix] : [];
-    const near = gcState.suggCache.get(issue.orig.toLowerCase());
+    const near = gcState.suggCache.get((issue.norm || issue.orig).toLowerCase());
     if (near == null) return null;   // still thinking
-    return near.map(x => matchCase(issue.orig, x));
+    // Suggestions wear the writer's own apostrophe style: a phone's curly
+    // quote stays curly when the fix goes in.
+    const styled = /’/.test(issue.orig) ? near.map(x => x.replace(/'/g, "\u2019")) : near;
+    return styled.map(x => matchCase(issue.orig, x));
   }
   function gcCardHTML(issue) {
     const spell = issue.kind === "spell";
@@ -16305,11 +16410,12 @@ window.WISP_WIDGET_CONTENT = (function () {
       <div class="gc-card__fixes">${mid}</div>
       <div class="gc-card__foot">
         <button class="gc-card__link" data-gc-ignore>Ignore</button>
-        ${spell ? `<button class="gc-card__link" data-gc-ignore-all>Ignore all</button><button class="gc-card__link" data-gc-add>Add to dictionary</button>` : ""}
+        <button class="gc-card__link" data-gc-ignore-all>Ignore all</button>
+        ${spell ? `<button class="gc-card__link" data-gc-add>Add to dictionary</button>` : ""}
       </div>`;
   }
   function gcCardRefresh(word) {
-    if (!gcCard || !gcCardCtx || gcCardCtx.issue.orig.toLowerCase() !== word.toLowerCase()) return;
+    if (!gcCard || !gcCardCtx || (gcCardCtx.issue.norm || gcCardCtx.issue.orig).toLowerCase() !== word.toLowerCase()) return;
     gcCard.innerHTML = gcCardHTML(gcCardCtx.issue);
     gcCardWire();
   }
@@ -16319,20 +16425,25 @@ window.WISP_WIDGET_CONTENT = (function () {
     gcCard.querySelectorAll("[data-gc-apply]").forEach(b => b.addEventListener("click", () => {
       gcApplyFix(block, issue, b.getAttribute("data-gc-apply"));
     }));
+    // Ignore dismisses exactly THIS underline; the rest of the page keeps its
+    // squiggles. (It returns if the paragraph is edited, which is the honest
+    // behavior: the text changed, so it gets re-checked.)
     const ig = gcCard.querySelector("[data-gc-ignore]");
     if (ig) ig.addEventListener("click", () => {
-      if (issue.kind === "spell") gcState.ignoredWords.add(issue.orig.toLowerCase());
-      else gcState.ignoredRules.add(issue.orig.toLowerCase());
-      closeGrammarPop(); gcInvalidateAll(); gcScheduleScan(0);
+      const c = gcState.cache.get(block);
+      if (c) c.issues = c.issues.filter(i => i !== issue);
+      closeGrammarPop(); gcRender();
     });
+    // Ignore all quiets this exact word (or phrase) everywhere, and nothing else.
     const igAll = gcCard.querySelector("[data-gc-ignore-all]");
     if (igAll) igAll.addEventListener("click", () => {
-      gcState.ignoredWords.add(issue.orig.toLowerCase());
+      if (issue.kind === "spell") gcState.ignoredWords.add((issue.norm || issue.orig).toLowerCase());
+      else gcState.ignoredRules.add(issue.orig.toLowerCase());
       closeGrammarPop(); gcInvalidateAll(); gcScheduleScan(0);
     });
     const add = gcCard.querySelector("[data-gc-add]");
     if (add) add.addEventListener("click", () => {
-      gcState.userDict.add(issue.orig.toLowerCase()); gcSaveUserDict();
+      gcState.userDict.add((issue.norm || issue.orig).toLowerCase()); gcSaveUserDict();
       toast(`"${issue.orig}" saved to your dictionary.`);
       closeGrammarPop(); gcInvalidateAll(); gcScheduleScan(0);
     });
@@ -16353,8 +16464,9 @@ window.WISP_WIDGET_CONTENT = (function () {
     top = Math.max(8, Math.min(top, window.innerHeight - ph - 8));
     gcCard.style.left = left + "px"; gcCard.style.top = top + "px";
     // Suggestions may still be on their way for this word; bump it to the front.
-    if (hit.issue.kind === "spell" && !gcState.suggCache.has(hit.issue.orig.toLowerCase())) {
-      gcState.suggQueue = [hit.issue.orig].concat(gcState.suggQueue.filter(w => w !== hit.issue.orig));
+    if (hit.issue.kind === "spell" && !gcState.suggCache.has((hit.issue.norm || hit.issue.orig).toLowerCase())) {
+      const w0 = hit.issue.norm || hit.issue.orig;
+      gcState.suggQueue = [w0].concat(gcState.suggQueue.filter(w => w !== w0));
       gcPumpSuggestions();
     }
   }
@@ -16644,6 +16756,15 @@ window.WISP_WIDGET_CONTENT = (function () {
     restoreEditorSelection();
     const sel = window.getSelection();
     if (!ed || !sel || !sel.anchorNode || !ed.contains(sel.anchorNode)) return fallback;
+    // A selection that already holds a sized span steps from that span's size,
+    // so nudging a resized run keeps climbing instead of resetting to the body.
+    if (!sel.isCollapsed && sel.rangeCount) {
+      try {
+        const frag = sel.getRangeAt(0).cloneContents();
+        const sp = frag.querySelector && frag.querySelector("span[style*='font-size']");
+        if (sp) { const v = Math.round(parseFloat(sp.style.fontSize)); if (v) return v; }
+      } catch (e) {}
+    }
     let n = sel.anchorNode; if (n.nodeType === 3) n = n.parentNode;
     if (!n || !ed.contains(n)) return fallback;
     const fs = parseFloat(getComputedStyle(n).fontSize);
@@ -16661,26 +16782,44 @@ window.WISP_WIDGET_CONTENT = (function () {
     if (sel.isCollapsed) expandSelectionToWord(sel, ed);
     if (sel.isCollapsed || !sel.toString().trim()) { toast("Place your cursor in a word, or select text, to resize."); return; }
     const range = sel.getRangeAt(0);
-    if (editorBlockOf(range.startContainer, ed) !== editorBlockOf(range.endContainer, ed)) { toast("Resize within one paragraph at a time."); return; }
-    let anc = range.commonAncestorContainer; if (anc && anc.nodeType === 3) anc = anc.parentNode;
-    const existing = anc && anc.closest ? anc.closest("span[style*='font-size']") : null;
-    let target = null;
-    try {
-      if (existing && (existing.textContent || "") === sel.toString()) {
-        existing.style.fontSize = px + "px"; target = existing;
+    // Resize one slice at a time, paragraph by paragraph, so a selection that
+    // spans blocks resizes all of it and never swallows an embed.
+    const slices = blockSlicesOf(range, ed, EDITOR_BLOCK_SEL, "figure");
+    const targets = [];
+    const sizeOne = (r) => {
+      // The slice covers exactly one already-sized span: restyle it in place,
+      // so repeated nudges step the same span instead of nesting new ones.
+      if (r.startContainer === r.endContainer && r.startContainer.nodeType === 1 && r.endOffset - r.startOffset === 1) {
+        const only = r.startContainer.childNodes[r.startOffset];
+        if (only && only.nodeType === 1 && only.matches("span[style*='font-size']")) {
+          only.style.fontSize = px + "px"; targets.push(only); return;
+        }
+      }
+      let anc = r.commonAncestorContainer; if (anc && anc.nodeType === 3) anc = anc.parentNode;
+      const existing = anc && anc.closest ? anc.closest("span[style*='font-size']") : null;
+      if (existing && ed.contains(existing) && (existing.textContent || "") === r.toString()) {
+        existing.style.fontSize = px + "px"; targets.push(existing);
       } else {
         const span = document.createElement("span"); span.style.fontSize = px + "px";
-        span.appendChild(range.extractContents()); range.insertNode(span); target = span;
+        span.appendChild(r.extractContents()); r.insertNode(span); targets.push(span);
       }
-    } catch (e) { toast("Try selecting within one paragraph."); return; }
+    };
+    try { (slices.length ? slices : [range]).forEach(sizeOne); }
+    catch (e) { toast("That selection could not be resized."); return; }
     ed.querySelectorAll("span[style*='font-size']").forEach(s => { if (!(s.textContent || "").trim()) { const p = s.parentNode; if (!p) return; while (s.firstChild) p.insertBefore(s.firstChild, s); p.removeChild(s); } });
     if (ed.normalize) ed.normalize();
     // Reselect the resized text so the next nudge lands on the same words.
-    if (target && target.parentNode) {
-      try { const r2 = document.createRange(); r2.selectNodeContents(target); sel.removeAllRanges(); sel.addRange(r2); rememberEditorSelection(); } catch (e) {}
+    const live = targets.filter(t => t.isConnected);
+    if (live.length) {
+      try {
+        const r2 = document.createRange();
+        r2.setStartBefore(live[0]); r2.setEndAfter(live[live.length - 1]);
+        sel.removeAllRanges(); sel.addRange(r2); rememberEditorSelection();
+      } catch (e) {}
     }
     const inp = $("#we-fontsize"); if (inp) inp.value = px;
     updateEditorEmpty();
+    gcScheduleScan(200);   // squiggles follow the reflowed lines
   }
   // Nudge the current selection (or word) up/down a point, keeping it selected.
   function nudgeFontSize(delta) {
@@ -17261,6 +17400,33 @@ window.WISP_WIDGET_CONTENT = (function () {
       e.preventDefault();
       if (autosaveTimer) flushAutosave(); else autosaveNow();
       toast(window.WispDB && WispDB.enabled && WispDB.signedIn ? "Draft saved." : "Draft kept on this device.");
+    });
+    // Ctrl/Cmd+K makes a link from the selection, the shortcut every editor
+    // shares.
+    document.addEventListener("keydown", (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || (e.key !== "k" && e.key !== "K")) return;
+      const ed = $("#we-body");
+      if (!ed) return;
+      const sel = window.getSelection();
+      if (!sel || !sel.anchorNode || !ed.contains(sel.anchorNode)) return;
+      e.preventDefault();
+      applyFormat("link");
+    });
+    // In the reader, the left and right arrows turn chapters, the way every
+    // e-reader does. Ignored while typing anywhere.
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      const t = e.target;
+      if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+      const screen = $("#screen-reading");
+      if (!screen || screen.hidden) return;
+      const nav = screen.querySelector(".chapter-nav");
+      if (!nav) return;
+      // The nav's edges are Previous and Next when they exist (a spacer span
+      // stands in otherwise); only real chapter links respond.
+      const edge = e.key === "ArrowRight" ? nav.lastElementChild : nav.firstElementChild;
+      if (edge && edge.matches && edge.matches("button[data-read]")) { e.preventDefault(); edge.click(); }
     });
 
     // Owner-only admin panel: hold Shift and press S and D together.
@@ -17897,7 +18063,8 @@ window.WISP_WIDGET_CONTENT = (function () {
 
   function summary() {
     var coat = (SKINS.find(function (s) { return s[0] === state.skin; }) || SKINS[0]);
-    return name() + " — " + coat[2].toLowerCase() + (state.walks ? "" : " (resting)");
+    // House style: colons carry the weight; no em dashes in copy.
+    return name() + ": " + coat[2].toLowerCase() + (state.walks ? "" : " (resting)");
   }
 
   /* ---------- boot ---------- */

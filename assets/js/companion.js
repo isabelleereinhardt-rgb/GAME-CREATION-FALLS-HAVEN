@@ -580,7 +580,8 @@
 
   function summary() {
     var coat = (SKINS.find(function (s) { return s[0] === state.skin; }) || SKINS[0]);
-    return name() + " — " + coat[2].toLowerCase() + (state.walks ? "" : " (resting)");
+    // House style: colons carry the weight; no em dashes in copy.
+    return name() + ": " + coat[2].toLowerCase() + (state.walks ? "" : " (resting)");
   }
 
   /* ---------- boot ---------- */
