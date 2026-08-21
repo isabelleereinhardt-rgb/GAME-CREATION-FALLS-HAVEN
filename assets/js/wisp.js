@@ -12335,6 +12335,11 @@
         if (!WispDB.enabled) hideAuthGate();
         // Catch a recovery event that fired during init, before the subscription.
         if (WispDB.enabled && WispDB.pendingRecovery) openSetNewPassword();
+        // The first route can win the race against this connection and paint
+        // the "can't reach its server" screen; on a slow phone connection
+        // that used to stick until a manual retry. Now that the backend is
+        // actually up, render the current screen again with live data.
+        if (WispDB.enabled) route();
       });
     }
   }
