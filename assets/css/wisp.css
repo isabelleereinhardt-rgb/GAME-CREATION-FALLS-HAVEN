@@ -1888,6 +1888,18 @@ mark.hl--purple { background: rgba(190, 130, 255, 0.42); }
 .reset-note { margin-top: 20px; font-size: 12.5px; color: var(--ink3); line-height: 1.6; }
 
 /* Toast. */
+/* A newer deploy is ready: one tap steps this tab onto it. */
+.update-chip {
+  position: fixed; top: 62px; left: 50%; transform: translateX(-50%);
+  z-index: 80; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--card); color: var(--ink2); padding: 9px 16px;
+  font: 500 13px var(--font-text); box-shadow: 0 10px 26px var(--shadow-lg);
+  cursor: pointer; animation: chip-in .25s ease;
+}
+.update-chip b { color: var(--rose-ink); font-weight: 600; }
+@keyframes chip-in { from { opacity: 0; transform: translate(-50%, -8px); } }
+:root[data-motion="reduce"] .update-chip { animation: none; }
+
 .toast {
   position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%) translateY(20px);
   background: var(--ink); color: var(--paper); padding: 11px 18px; border-radius: 999px;
