@@ -1924,7 +1924,7 @@ mark.hl--purple { background: rgba(190, 130, 255, 0.42); }
   .page { padding: 22px 18px 60px; }
   .home-tab { font-size: 22px; }
   .work-grid { grid-template-columns: 1fr 1fr; gap: 14px; }
-  .reader__wrap { padding: 22px 34px 120px; font-size: 18px; }
+  .reader__wrap { padding: 22px 34px 120px; font-size: var(--read-size, 18px); }
   .para__marker { left: -28px; }
   .chapter-nav { flex-wrap: wrap; }
   .chapter-nav .btn, .chapter-nav .btn--link { flex: 1 1 auto; }
@@ -1937,10 +1937,16 @@ mark.hl--purple { background: rgba(190, 130, 255, 0.42); }
   .reader-tools button { width: 34px; height: 34px; }
 }
 
-/* Touch devices have no hover: keep the conversation markers faintly visible so
-   a new margin thread can be started on any line. */
+/* Touch devices have no hover: keep the conversation markers faintly visible
+   so a new margin thread can be started on any line. The hover reveal must be
+   a no-op here (same opacity both ways): iPhones spend the first tap applying
+   :hover when it changes something, which made the marker need two taps.
+   The bigger padded hit area brings the tiny bubble up to a thumb-sized
+   target without changing how it looks. */
 @media (hover: none), (pointer: coarse) {
-  .para__marker { opacity: .5; }
+  .para__marker, .para:hover .para__marker { opacity: .55; }
+  .para.has-thread .para__marker, .para.is-open .para__marker { opacity: 1; }
+  .para__marker { left: -34px; top: 0; width: 34px; min-height: 40px; padding: 6px 6px 6px 2px; }
 }
 
 /* Mobile nav sheet (hidden on desktop). */
