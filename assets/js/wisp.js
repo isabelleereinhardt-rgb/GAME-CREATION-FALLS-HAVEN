@@ -2945,13 +2945,43 @@
     });
     s = s.replace(/\+\+([^+]+?)\+\+/g, "<u>$1</u>");
     // Per-word font size: {{18|exact point size}}, plus older {+bigger+}/{-smaller-}.
-    s = s.replace(/\{\{(\d{1,3}(?:\.\d)?)\|([^{}]+?)\}\}/g, (m, n, t) => `<span style="font-size:${Math.max(8, Math.min(96, Math.round(+n)))}px">${t}</span>`);
+    // Size tokens can sit inside each other, both legitimately (a bigger word
+    // inside a resized sentence) and from stacked resizes of the same run, so
+    // unwrap repeatedly from the innermost out. A single pass left the outer
+    // tokens of a stack sitting in the page as literal {{38|{{19| text.
+    for (let depth = 0; depth < 10 && /\{\{\d{1,3}(?:\.\d)?\|/.test(s); depth++) {
+      const before = s;
+      s = s.replace(/\{\{(\d{1,3}(?:\.\d)?)\|([^{}]*?)\}\}/g, (m, n, t) =>
+        t.trim() ? `<span style="font-size:${Math.max(8, Math.min(96, Math.round(+n)))}px">${t}</span>` : t);
+      if (s === before) break;   // remaining braces are plain text, not tokens
+    }
     s = s.replace(/\{\+([^{}]+?)\+\}/g, '<span class="fs-lg">$1</span>');
     s = s.replace(/\{-([^{}]+?)-\}/g, '<span class="fs-sm">$1</span>');
     s = s.replace(/(^|[^*\w])\*(?!\s)([^*]+?)\*(?!\*)/g, "$1<em>$2</em>")
          .replace(/(^|[^_\w])_(?!\s)([^_]+?)_(?!_)/g, "$1<em>$2</em>");
     s = s.replace(new RegExp(MD_CA + "(\\d+)" + MD_CB, "g"), (_, i) => `<code>${codes[+i]}</code>`);
     return s;
+  }
+
+  // Stacked resizes saved by older versions render as size spans wrapped
+  // around nothing but another size span. The outermost one is the size the
+  // writer chose last, so dissolve the inner wrappers into it. Real partial
+  // styling (a bigger word inside a resized sentence) has text alongside the
+  // inner span and is left alone.
+  function collapseSizeChains(root) {
+    if (!root || !root.querySelectorAll) return;
+    for (let guard = 0; guard < 10; guard++) {
+      let changed = false;
+      root.querySelectorAll("span[style*='font-size'] > span[style*='font-size']").forEach(inner => {
+        const outer = inner.parentElement; if (!outer) return;
+        const sole = Array.from(outer.childNodes).every(n => n === inner || (n.nodeType === 3 && !n.textContent.trim()));
+        if (!sole) return;
+        while (inner.firstChild) outer.insertBefore(inner.firstChild, inner);
+        outer.removeChild(inner);
+        changed = true;
+      });
+      if (!changed) break;
+    }
   }
 
   function splitBlocks(body) {
@@ -3701,7 +3731,7 @@
         try { safeHighlightRange(range).forEach(m => { m.dataset.hlId = r.id; }); } catch (e) {}
       });
   }
-  try { window.__wispReader = { findProseText, paintSavedHighlights, chapterHeading, chapterFullLabel, chTitleStandsAlone, speechChunks: (t) => speechChunks(t) }; } catch (e) {}   // console debugging handle
+  try { window.__wispReader = { findProseText, paintSavedHighlights, chapterHeading, chapterFullLabel, chTitleStandsAlone, speechChunks: (t) => speechChunks(t), mdInline, mdToHtmlBlocks, collapseSizeChains, editorHtmlToMd: (el) => editorHtmlToMd(el), applyFontSize: (px) => applyFontSize(px) }; } catch (e) {}   // console debugging handle
   // The marks a tap or a selection is touching, and the unwrap that removes
   // them: how a reader takes a highlight back without a trip to the Library.
   function highlightMarksAt(prose, target, range) {
@@ -4094,6 +4124,7 @@
 
   let speaking = false, speakRun = 0, speakDelayT = null, speakUtter = null;
   function mountReaderTools() {
+    collapseSizeChains(document.getElementById("prose"));
     $$("#screen-reading [data-tool]").forEach(b => {
       b.addEventListener("click", () => {
         const t = b.dataset.tool;
@@ -4195,6 +4226,9 @@
     const b = btn || $("#listenBtn");
     if (b) { b.classList.remove("is-on"); b.setAttribute("title", "Read aloud"); }
   }
+  // Closing or leaving the page must silence the voice: some browsers keep a
+  // queued utterance speaking after the tab that started it is gone.
+  window.addEventListener("pagehide", () => { if (speaking) stopListen(); });
   function toggleListen(btn) {
     if (!("speechSynthesis" in window)) { toast("Read-aloud is not available in this browser."); return; }
     if (speaking) { stopListen(btn); toast("Stopped reading."); return; }
@@ -4220,7 +4254,9 @@
     const begin = () => {
       if (run !== speakRun) return;
       speakNext();
-      toast("Reading aloud.");
+      // Say how to stop: the browser generates this voice outside the tab's
+      // own audio, so the tab mute button cannot silence it; this button can.
+      toast("Reading aloud. Tap the same button to stop.");
       // If nothing has audibly started, point at the usual phone culprits
       // instead of leaving the silence a mystery.
       setTimeout(() => { if (run === speakRun && speaking && !heard) toast("No sound? Check the silent switch and media volume."); }, 3000);
@@ -7198,19 +7234,31 @@
     try { console.warn("[wisp] Settings cannot follow accounts between devices: the user_state table is missing. Run supabase/migrations/032_user_state.sql in the Supabase SQL editor."); } catch (e) {}
     if (WispDB.isAdmin) toast("Settings aren't syncing between devices yet: run database migration 032 in Supabase.");
   }
+  function pushStateNow() {
+    statePushT = 0;
+    const dict = (window.__wispGC && window.__wispGC.userDict) ? Array.from(window.__wispGC.userDict) : [];
+    // The row carries the local change-time, not "now": a push of old,
+    // untouched state must never outrank another device's real edits.
+    WispDB.saveUserState({ settings: settings, dictionary: dict, extras: collectStateExtras(), updated_at: new Date(localStateStamp() || 1).toISOString() })
+      .then(ok => { if (!ok) surfaceStateSyncHealth(); })
+      .catch(() => {});
+  }
   function schedulePushState() {
     if (stateApplying) return;   // applying a pulled state must not echo it back
     if (!(window.WispDB && WispDB.enabled && WispDB.signedIn && WispDB.saveUserState)) return;
     clearTimeout(statePushT);
-    statePushT = setTimeout(() => {
-      const dict = (window.__wispGC && window.__wispGC.userDict) ? Array.from(window.__wispGC.userDict) : [];
-      // The row carries the local change-time, not "now": a push of old,
-      // untouched state must never outrank another device's real edits.
-      WispDB.saveUserState({ settings: settings, dictionary: dict, extras: collectStateExtras(), updated_at: new Date(localStateStamp() || 1).toISOString() })
-        .then(ok => { if (!ok) surfaceStateSyncHealth(); })
-        .catch(() => {});
-    }, 1200);
+    statePushT = setTimeout(pushStateNow, 1200);
   }
+  // A theme picked moments before the phone locks or the tab closes must not
+  // die in the debounce: when the site stops being visible, fire any pending
+  // push right away so the other devices actually receive it.
+  function flushPendingStatePush() {
+    if (!statePushT) return;
+    clearTimeout(statePushT);
+    pushStateNow();
+  }
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushPendingStatePush(); });
+  window.addEventListener("pagehide", flushPendingStatePush);
   async function syncStateFromAccount() {
     if (!(window.WispDB && WispDB.enabled && WispDB.signedIn && WispDB.profile && WispDB.getUserState)) { stateSyncedFor = null; return; }
     const pid = WispDB.profile.id;
@@ -7256,6 +7304,7 @@
     // by a device that never really changed anything ("age unknown"), and
     // that must never overwrite a device someone actually set up.
     const remoteReal = remoteAt > 86400000;
+    let dictGrew = false;
     if (hasRemote && (foreign || fresh || (remoteReal && remoteAt > localStateStamp()))) {
       stateApplying = true;
       try {
@@ -7267,8 +7316,14 @@
         applySettings();
         syncSafeMode();
         if (Array.isArray(remote.dictionary) && window.__wispGC) {
-          window.__wispGC.userDict = new Set(remote.dictionary.map(String));
-          try { localStorage.setItem("wisp.dict.user", JSON.stringify(remote.dictionary.map(String))); } catch (e) {}
+          // Union, not replace, for the same account: a word added on the
+          // phone and another added on the laptop both survive the meeting.
+          // A different account starts from its own list alone.
+          const merged = foreign ? new Set() : new Set(Array.from(window.__wispGC.userDict || []));
+          remote.dictionary.forEach(w => merged.add(String(w)));
+          dictGrew = !foreign && merged.size > remote.dictionary.length;
+          window.__wispGC.userDict = merged;
+          try { localStorage.setItem("wisp.dict.user", JSON.stringify(Array.from(merged))); } catch (e) {}
         }
         const ex = remote.extras || {};
         if (ex.editorLineSpace) { editorLineSpace = String(ex.editorLineSpace); try { localStorage.setItem("wisp.editorLineSpace", editorLineSpace); } catch (e) {} }
@@ -7279,6 +7334,9 @@
         touchLocalStateStamp(remoteAt);
       } finally { stateApplying = false; }
       syncDrawer();
+      // The union added local words the account did not have yet: send the
+      // combined list up so the other devices gain them too.
+      if (dictGrew) schedulePushState();
     } else if (!hasRemote || localStateStamp() > remoteAt) {
       // Account empty, or genuinely older than this device: upload what is
       // here. Matching timestamps mean both sides already agree.
@@ -7292,6 +7350,13 @@
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;
     if (!statePulledAt || Date.now() - statePulledAt < 60000) return;
+    stateSyncedFor = null; mwSyncedFor = null;
+    try { syncStateFromAccount(); } catch (e) {}
+    try { mwSyncFromAccount(); } catch (e) {}   // the widget station freshens too
+  });
+  // Coming back online after a dead spot: catch up with the account.
+  window.addEventListener("online", () => {
+    if (!statePulledAt || Date.now() - statePulledAt < 15000) return;
     stateSyncedFor = null;
     try { syncStateFromAccount(); } catch (e) {}
   });
@@ -11445,22 +11510,32 @@
     // spans blocks resizes all of it and never swallows an embed.
     const slices = blockSlicesOf(range, ed, EDITOR_BLOCK_SEL, "figure");
     const targets = [];
+    // Setting a size REPLACES any sizes underneath it, the way a word
+    // processor does: sized spans inside the host dissolve into it. Stacked
+    // wrappers were what serialized into nested {{38|{{19| tokens.
+    const dissolveInner = (host) => {
+      host.querySelectorAll("span[style*='font-size']").forEach(spn => {
+        const p = spn.parentNode; if (!p) return;
+        while (spn.firstChild) p.insertBefore(spn.firstChild, spn);
+        p.removeChild(spn);
+      });
+    };
     const sizeOne = (r) => {
       // The slice covers exactly one already-sized span: restyle it in place,
       // so repeated nudges step the same span instead of nesting new ones.
       if (r.startContainer === r.endContainer && r.startContainer.nodeType === 1 && r.endOffset - r.startOffset === 1) {
         const only = r.startContainer.childNodes[r.startOffset];
         if (only && only.nodeType === 1 && only.matches("span[style*='font-size']")) {
-          only.style.fontSize = px + "px"; targets.push(only); return;
+          only.style.fontSize = px + "px"; dissolveInner(only); targets.push(only); return;
         }
       }
       let anc = r.commonAncestorContainer; if (anc && anc.nodeType === 3) anc = anc.parentNode;
       const existing = anc && anc.closest ? anc.closest("span[style*='font-size']") : null;
       if (existing && ed.contains(existing) && (existing.textContent || "") === r.toString()) {
-        existing.style.fontSize = px + "px"; targets.push(existing);
+        existing.style.fontSize = px + "px"; dissolveInner(existing); targets.push(existing);
       } else {
         const span = document.createElement("span"); span.style.fontSize = px + "px";
-        span.appendChild(r.extractContents()); r.insertNode(span); targets.push(span);
+        span.appendChild(r.extractContents()); dissolveInner(span); r.insertNode(span); targets.push(span);
       }
     };
     try { (slices.length ? slices : [range]).forEach(sizeOne); }
@@ -11778,6 +11853,9 @@
     if (tEl && !tEl.value.trim()) tEl.value = d.title || "";
     if (cEl && !cEl.value.trim()) cEl.value = d.chTitle || "";
     ed.innerHTML = mdToHtmlBlocks(d.body).join("");
+    // Chapters saved with stacked resizes come back as nested size spans;
+    // flatten them now so the next save writes clean tokens.
+    collapseSizeChains(ed);
     decorateEditorImages(); decorateEditorEmbeds();
     updateEditorEmpty(); updateWordCount(); gcScheduleScan(400);
     setSaveFlag("local");
