@@ -46,6 +46,14 @@ Supabase's free tier.
 10. Run [`supabase/migrations/008_comment_edit.sql`](supabase/migrations/008_comment_edit.sql)
     to let readers edit their own comments (delete already works). Run new
     migration files in order as they are added.
+11. Keep going through every numbered file in
+    [`supabase/migrations/`](supabase/migrations/), in order: each one adds a
+    feature the site already knows how to use. Two recent ones worth calling
+    out: `031_contest_top_awards.sql` lets bigger contests hand out the Top
+    Five and Top Ten badges, and `032_user_state.sql` is what makes settings,
+    muted tags, blocked authors, and the personal spelling dictionary follow
+    an account between phone and laptop. Without 032 the site still works;
+    those preferences just stay per-device.
 
 All of these are safe to re-run if you ever need to.
 

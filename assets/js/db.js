@@ -1567,6 +1567,28 @@ window.WispDB = (function () {
     const { error } = await client.from("reading_list_items").delete().eq("list_id", listId).eq("work_id", workId);
     if (error) throw error;
   }
+  /* ---- cross-device account state (settings, dictionary, extras) --------
+     The private half of what follows an account between devices: the whole
+     preferences blob (theme, typography, reading comfort, safe mode, muted
+     tags, blocked authors), the writer's personal spelling dictionary, and
+     small editor extras. Owner-only by row-level security (migration 032).
+     Both fail softly when the table has not been migrated yet. */
+  async function getUserState() {
+    if (!user) return null;
+    try {
+      const { data, error } = await client.from("user_state").select("*").eq("user_id", user.id).maybeSingle();
+      if (error) return null;
+      return data || null;
+    } catch (e) { return null; }
+  }
+  async function saveUserState(patch) {
+    if (!user) return false;
+    try {
+      const row = Object.assign({ user_id: user.id, updated_at: new Date().toISOString() }, patch || {});
+      const { error } = await client.from("user_state").upsert(row, { onConflict: "user_id" });
+      return !error;
+    } catch (e) { return false; }
+  }
   async function myHighlights() {
     if (!user) return [];
     const { data } = await client.from("highlights").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
@@ -1693,6 +1715,7 @@ window.WispDB = (function () {
     getWorksByIds, myBookmarks, myHistory, clearHistory,
     myLists, createList, deleteList, listContents, addToList, removeFromList,
     myHighlights, saveHighlight, deleteHighlight, submitReport, saveProgress, latestProgress, readingStats,
+    getUserState, saveUserState,
     toCard: toUi, fmtCount, relTime
   };
 })();

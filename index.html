@@ -3,6 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- Content security policy: scripts only from this site; styles from here and
+       Google Fonts; network calls only to Supabase; embeds stay https and are
+       further allowlisted and sandboxed in code; the spellcheck worker runs from
+       a blob. (The one-file build strips this tag: file:// needs its own rules.) -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data: blob:; media-src https: blob:; frame-src https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://fonts.googleapis.com https://fonts.gstatic.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="description" content="Wisp: read stories together instead of alone. Talk line by line, follow the writers you love, keep control of what you see, and never meet an ad.">
   <meta name="theme-color" content="#f4efe4">
   <title>Wisp</title>

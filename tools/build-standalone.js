@@ -33,6 +33,13 @@ function textSafe(src, name) {
 
 let html = read("index.html");
 
+// 0. The site's CSP meta assumes files served from an origin; the one-file
+//    build runs from file:// with everything inlined (scripts, fonts, data
+//    blocks) and its spellcheck falls back to eval, so the policy would break
+//    it. Strip the tag; the referrer meta stays.
+html = html.replace(/[ \t]*<!-- Content security policy[\s\S]*?-->\s*\n/, "")
+           .replace(/[ \t]*<meta http-equiv="Content-Security-Policy"[^>]*>\s*\n/, "");
+
 // 1. Fonts: swap the Google Fonts tags for the embedded faces.
 const fontsCss = read("assets/fonts/embedded-fonts.css");
 html = html
