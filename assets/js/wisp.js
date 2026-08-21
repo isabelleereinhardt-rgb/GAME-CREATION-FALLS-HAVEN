@@ -58,10 +58,23 @@
     catch (e) { return Object.assign({}, DEFAULTS, { typography: typographyDefaults() }); }
   }
   function save() {
-    try { localStorage.setItem("wisp.settings", JSON.stringify(settings)); } catch (e) {}
+    try {
+      const blob = JSON.stringify(settings);
+      localStorage.setItem("wisp.settings", blob);
+      // A real local change (not a boot re-apply, not a pulled state being
+      // written down) marks this device's state as freshly changed, so the
+      // cross-device newer-wins comparison reflects when a person actually
+      // touched their settings rather than when a device last happened to
+      // push.
+      if (blob !== save._last) {
+        save._last = blob;
+        if (!stateApplying) touchLocalStateStamp();
+      }
+    } catch (e) {}
     // Signed in, every settings change follows the account across devices.
     try { schedulePushState(); } catch (e) {}
   }
+  try { save._last = JSON.stringify(settings); } catch (e) {}
 
   /* ---- small view helpers ------------------------------------------------ */
   const RATE = { G:"General", T:"Teen", M:"Mature", E:"Explicit" };
@@ -2518,6 +2531,25 @@
   /* ======================================================================= */
   /*  SCREEN: WORK DETAIL                                                     */
   /* ======================================================================= */
+  // Chapters titled "Prologue", "Epilogue", "Interlude", and the like stand on
+  // their own: readers see that name by itself, because "Chapter 1: Prologue"
+  // misnumbers a story that opens before chapter one. An optional numeral is
+  // allowed ("Interlude II", "Prologue 2").
+  const CH_STANDALONE_RE = /^(prologue|prolog|epilogue|epilog|prelude|interlude|intermission|preface|foreword|afterword|postscript|introduction|coda|finale|author['’]?s\s+notes?)(\s+(?:[ivxlcdm]+|\d+))?$/i;
+  function chTitleStandsAlone(title) {
+    const t = String(title || "").trim().replace(/[\s.:!–—-]+$/, "");
+    return !!t && CH_STANDALONE_RE.test(t);
+  }
+  // "Chapter 3" or "Prologue": the short heading above the chapter body.
+  function chapterHeading(number, title) {
+    return chTitleStandsAlone(title) ? String(title).trim() : "Chapter " + number;
+  }
+  // "Chapter 3: The Storm" or "Prologue": the full label for lists and exports.
+  function chapterFullLabel(number, title) {
+    const t = String(title || "").trim();
+    return chTitleStandsAlone(t) ? t : "Chapter " + number + (t ? ": " + t : "");
+  }
+
   function renderWork(id) {
     const w = activeById(id) || W.byId.amber;
     // Safe mode checks age before opening a mature or explicit work's page too,
@@ -2532,7 +2564,7 @@
       const upcoming = (LIVE.upcoming[w.id] || []).slice().sort((a, b) => a.number - b.number);
       const releasedRows = released.map(c => `<button class="chapter-row" data-read="${w.id}/${c.number}">
           <span class="chapter-row__n">${c.number}</span>
-          <span class="chapter-row__title">Chapter ${c.number}${c.title ? ": " + esc(c.title) : ""} <span class="ch-lock ch-lock--open" title="Released">${icon("unlock",13)}</span></span>
+          <span class="chapter-row__title">${esc(chapterFullLabel(c.number, c.title))} <span class="ch-lock ch-lock--open" title="Released">${icon("unlock",13)}</span></span>
           <span class="chapter-row__when">posted ${WispDB.relTime(c.published_at || c.scheduled_for || c.created_at)}</span>
         </button>`).join("");
       const lockedRows = upcoming.map(u => `<div class="chapter-row chapter-row--locked" aria-label="Chapter ${u.number}, scheduled">
@@ -2547,7 +2579,7 @@
         const n = i + 1;
         return `<button class="chapter-row" data-read="${w.id}">
           <span class="chapter-row__n">${n}</span>
-          <span class="chapter-row__title">Chapter ${n}${n === 1 ? ": The First Cold Morning" : ""}</span>
+          <span class="chapter-row__title">${esc(chapterFullLabel(n, n === 1 ? "The First Cold Morning" : ""))}</span>
           <span class="chapter-row__when">posted ${["3mo","2mo","6w","1mo","3w","2w","1w","9h"][i] || ""}</span>
         </button>`;
       }).join("");
@@ -2791,12 +2823,12 @@
       <div class="reader">
         <div class="reader__progress" id="readProgress"><i></i><span class="reader__pct" aria-hidden="true">0%</span></div>
         <div class="reader__wrap" id="readerWrap">
-          <div class="reader__crumbs"><a href="#/work/${w.id}">${esc(c.title)}</a> ${icon("chev",12)} <span>Chapter ${c.chapterNo} of ${c.chapterCount}</span></div>
+          <div class="reader__crumbs"><a href="#/work/${w.id}">${esc(c.title)}</a> ${icon("chev",12)} <span>${esc(chapterHeading(c.chapterNo, c.chapterTitle))}${chTitleStandsAlone(c.chapterTitle) ? "" : " of " + c.chapterCount}</span></div>
           <h1 class="reader__title">${esc(c.title)}</h1>
           <div class="reader__by">by <a href="#/profile">${esc(c.author)}</a></div>
 
-          <div class="reader__chapter">Chapter ${c.chapterNo}</div>
-          <div class="reader__chapter-title">${esc(c.chapterTitle)}</div>
+          <div class="reader__chapter">${esc(chapterHeading(c.chapterNo, c.chapterTitle))}</div>
+          ${chTitleStandsAlone(c.chapterTitle) ? "" : `<div class="reader__chapter-title">${esc(c.chapterTitle)}</div>`}
 
           <details class="note" open>
             <summary>Author's note</summary>
@@ -3349,7 +3381,7 @@
 
   function buildWorkHtml(work, chapters) {
     const chHtml = chapters.map(c =>
-      `<section class="ch"><h2>Chapter ${c.number}${c.title ? ": " + esc(c.title) : ""}</h2>\n${mdToHtmlBlocks(c.body).join("\n")}</section>`
+      `<section class="ch"><h2>${esc(chapterFullLabel(c.number, c.title))}</h2>\n${mdToHtmlBlocks(c.body).join("\n")}</section>`
     ).join("\n");
     return `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
       `<meta name="viewport" content="width=device-width,initial-scale=1">` +
@@ -3362,7 +3394,7 @@
 
   function buildPlainText(work, chapters) {
     const header = `${work.title}\nby ${work.author}\n`;
-    const body = chapters.map(c => `\n\nChapter ${c.number}${c.title ? ": " + c.title : ""}\n\n${mdToPlainText(c.body)}`).join("");
+    const body = chapters.map(c => `\n\n${chapterFullLabel(c.number, c.title)}\n\n${mdToPlainText(c.body)}`).join("");
     return header + body.trim() + "\n\nSaved from Wisp.\n";
   }
 
@@ -3377,8 +3409,8 @@
       `<?xml version="1.0" encoding="UTF-8"?>\n<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">\n <rootfiles>\n  <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>\n </rootfiles>\n</container>` });
     const chFiles = chapters.map(c => ({
       id: `ch${c.number}`, href: `chapter-${c.number}.xhtml`,
-      title: `Chapter ${c.number}${c.title ? ": " + c.title : ""}`,
-      xhtml: `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en"><head><meta charset="utf-8"/><title>${esc(c.title || ("Chapter " + c.number))}</title></head><body><h2>Chapter ${c.number}${c.title ? ": " + esc(c.title) : ""}</h2>\n${xhtmlBlocks(c.body)}</body></html>`
+      title: chapterFullLabel(c.number, c.title),
+      xhtml: `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en"><head><meta charset="utf-8"/><title>${esc(c.title || ("Chapter " + c.number))}</title></head><body><h2>${esc(chapterFullLabel(c.number, c.title))}</h2>\n${xhtmlBlocks(c.body)}</body></html>`
     }));
     chFiles.forEach(cf => files.push({ name: `OEBPS/${cf.href}`, data: cf.xhtml }));
     const uid = "urn:wisp:" + String(work.id || work.title).replace(/[^a-z0-9]/gi, "");
@@ -3502,10 +3534,10 @@
       <div class="reader${isComic ? " reader--comic" : ""}">
         <div class="reader__progress" id="readProgress"><i></i><span class="reader__pct" aria-hidden="true">0%</span></div>
         <div class="reader__wrap" id="readerWrap">
-          <div class="reader__crumbs"><a href="#/work/${w.id}">${esc(w.title)}</a> ${icon("chev",12)} <span>Chapter ${ch ? ch.number : 1}${readable.length > 1 ? " of " + readable.length : ""}</span></div>
+          <div class="reader__crumbs"><a href="#/work/${w.id}">${esc(w.title)}</a> ${icon("chev",12)} <span>${ch ? esc(chapterHeading(ch.number, ch.title)) : "Chapter 1"}${readable.length > 1 && !(ch && chTitleStandsAlone(ch.title)) ? " of " + readable.length : ""}</span></div>
           <h1 class="reader__title">${esc(w.title)}</h1>
           <div class="reader__by">by <a href="#/${w.authorId ? "user/" + (w.authorHandle || w.authorId) : "work/" + w.id}">${esc(w.author)}</a></div>
-          ${ch ? `<div class="reader__chapter">Chapter ${ch.number}</div>${ch.title ? `<div class="reader__chapter-title">${esc(ch.title)}</div>` : ""}` : ""}
+          ${ch ? `<div class="reader__chapter">${esc(chapterHeading(ch.number, ch.title))}</div>${ch.title && !chTitleStandsAlone(ch.title) ? `<div class="reader__chapter-title">${esc(ch.title)}</div>` : ""}` : ""}
           ${isComic && paras.length ? `<div class="comic-bar">
             <div class="seg seg--sm" role="group" aria-label="Reading mode">
               <button data-comic-mode="strip" class="${comicMode === "strip" ? "is-on" : ""}" aria-pressed="${comicMode === "strip"}">Long strip</button>
@@ -3669,7 +3701,7 @@
         try { safeHighlightRange(range).forEach(m => { m.dataset.hlId = r.id; }); } catch (e) {}
       });
   }
-  try { window.__wispReader = { findProseText, paintSavedHighlights }; } catch (e) {}   // console debugging handle
+  try { window.__wispReader = { findProseText, paintSavedHighlights, chapterHeading, chapterFullLabel, chTitleStandsAlone, speechChunks: (t) => speechChunks(t) }; } catch (e) {}   // console debugging handle
   // The marks a tap or a selection is touching, and the unwrap that removes
   // them: how a reader takes a highlight back without a trip to the Library.
   function highlightMarksAt(prose, target, range) {
@@ -3996,35 +4028,71 @@
       <button data-tool="settings" title="More reading settings">${icon("gear",16)}</button>
     </div>`;
   }
-  // Hands-free reading: tap to cycle off / slow / medium / fast.
-  const AUTO_SPEEDS = [0, 0.5, 1.1, 2.1];
-  let autoScrollState = 0, autoScrollTimer = null;
+  // Hands-free reading: tap to cycle off / slow / medium / fast. The scroll
+  // rides requestAnimationFrame with time-based fractional steps, so every
+  // speed glides at the display's own rhythm; the old fixed 16 ms interval
+  // stepped visibly and fought the 120 Hz screens most phones have now. It
+  // also holds still while a finger is on the page or the wheel is turning,
+  // so backing up to re-read a line never fights the auto-scroll.
+  const AUTO_SPEEDS = [0, 30, 66, 126];   // pixels per second
+  const AUTO_NAMES = ["off", "slow", "medium", "fast"];
+  let autoScrollState = 0, autoScrollRaf = null, autoScrollLast = 0, autoScrollCarry = 0, autoScrollHoldUntil = 0;
   // Whichever element actually scrolls the reader (the app shell or the window).
   function readerScroller() {
     const m = $("#main");
     if (m && m.scrollHeight > m.clientHeight + 4) return m;
     return document.scrollingElement || document.documentElement;
   }
-  function tickAutoScroll() {
-    const el = readerScroller(); const px = AUTO_SPEEDS[autoScrollState] || 0;
-    if (!el || px <= 0) { stopAutoScroll(); return; }
-    el.scrollTop += px;
-    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 2) { stopAutoScroll(); toast("You reached the end of the page."); }
+  function tickAutoScroll(now) {
+    autoScrollRaf = null;
+    const el = readerScroller(), pps = AUTO_SPEEDS[autoScrollState] || 0;
+    if (!el || pps <= 0) { stopAutoScroll(); return; }
+    const dt = Math.min(0.1, Math.max(0, (now - autoScrollLast) / 1000));
+    autoScrollLast = now;
+    if (now >= autoScrollHoldUntil) {
+      autoScrollCarry += pps * dt;
+      const px = Math.floor(autoScrollCarry);
+      if (px > 0) {
+        autoScrollCarry -= px;
+        el.scrollTop += px;
+        if (el.scrollTop + el.clientHeight >= el.scrollHeight - 2) { stopAutoScroll(); toast("You reached the end of the page."); return; }
+      }
+    }
+    autoScrollRaf = requestAnimationFrame(tickAutoScroll);
   }
-  function stopAutoScroll() { autoScrollState = 0; if (autoScrollTimer) clearInterval(autoScrollTimer); autoScrollTimer = null; updateAutoScrollBtn(); }
+  function stopAutoScroll() {
+    autoScrollState = 0;
+    if (autoScrollRaf) cancelAnimationFrame(autoScrollRaf);
+    autoScrollRaf = null;
+    updateAutoScrollBtn();
+  }
   function cycleAutoScroll() {
     autoScrollState = (autoScrollState + 1) % AUTO_SPEEDS.length;
-    if (autoScrollTimer) { clearInterval(autoScrollTimer); autoScrollTimer = null; }
-    if (autoScrollState > 0) { autoScrollTimer = setInterval(tickAutoScroll, 16); toast("Auto-scroll: " + ["off", "slow", "medium", "fast"][autoScrollState]); }
+    if (autoScrollRaf) { cancelAnimationFrame(autoScrollRaf); autoScrollRaf = null; }
+    if (autoScrollState > 0) {
+      autoScrollLast = performance.now(); autoScrollCarry = 0; autoScrollHoldUntil = 0;
+      autoScrollRaf = requestAnimationFrame(tickAutoScroll);
+      toast("Auto-scroll: " + AUTO_NAMES[autoScrollState]);
+    }
     updateAutoScrollBtn();
   }
   function updateAutoScrollBtn() {
     const b = $("#autoScrollBtn"); if (!b) return;
     b.classList.toggle("is-on", autoScrollState > 0);
-    b.setAttribute("title", autoScrollState === 0 ? "Auto-scroll" : "Auto-scroll: " + ["off", "slow", "medium", "fast"][autoScrollState]);
+    b.setAttribute("title", autoScrollState === 0 ? "Auto-scroll" : "Auto-scroll: " + AUTO_NAMES[autoScrollState]);
   }
+  // A touch or a wheel turn pauses the glide, and for a beat afterwards, so
+  // momentum scrolling settles before it resumes on its own.
+  function holdAutoScroll(ms) {
+    const until = performance.now() + ms;
+    if (until > autoScrollHoldUntil) autoScrollHoldUntil = until;
+    autoScrollCarry = 0;
+  }
+  document.addEventListener("touchstart", () => { if (autoScrollState) holdAutoScroll(700); }, { passive: true });
+  document.addEventListener("touchmove", () => { if (autoScrollState) holdAutoScroll(700); }, { passive: true });
+  document.addEventListener("wheel", () => { if (autoScrollState) holdAutoScroll(1000); }, { passive: true });
 
-  let speaking = false;
+  let speaking = false, speakRun = 0, speakDelayT = null, speakUtter = null;
   function mountReaderTools() {
     $$("#screen-reading [data-tool]").forEach(b => {
       b.addEventListener("click", () => {
@@ -4039,6 +4107,42 @@
         else if (t === "top") { const el = readerScroller(); if (el && el.scrollTo) el.scrollTo({ top: 0, behavior: "smooth" }); else if (el) el.scrollTop = 0; stopAutoScroll(); }
       });
     });
+    wireProsePinch();
+  }
+  // Pinch on the page to resize the text, the way phone reading apps do. The
+  // size tracks the fingers live (the smoothing transition is suspended so it
+  // feels glued to the gesture) and settles into settings when they lift.
+  function wireProsePinch() {
+    const prose = $("#prose"); if (!prose || prose.dataset.pinchWired) return;
+    prose.dataset.pinchWired = "1";
+    let startDist = 0, startSize = 0, liveSize = 0, pinching = false, raf = null;
+    const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    prose.addEventListener("touchstart", (e) => {
+      if (e.touches.length === 2) {
+        pinching = true; startDist = dist(e.touches) || 1; startSize = liveSize = settings.size;
+        prose.classList.add("is-pinching");
+      }
+    }, { passive: true });
+    prose.addEventListener("touchmove", (e) => {
+      if (!pinching || e.touches.length !== 2) return;
+      e.preventDefault();   // this pinch is ours, not the browser zoom's
+      const next = Math.max(15, Math.min(26, Math.round(startSize * dist(e.touches) / startDist)));
+      if (next !== liveSize) {
+        liveSize = next;
+        if (!raf) raf = requestAnimationFrame(() => {
+          raf = null;
+          document.documentElement.style.setProperty("--read-size", liveSize + "px");
+        });
+      }
+    }, { passive: false });
+    const endPinch = () => {
+      if (!pinching) return;
+      pinching = false; prose.classList.remove("is-pinching");
+      if (liveSize !== settings.size) { settings.size = liveSize; applySettings(); }
+      else document.documentElement.style.setProperty("--read-size", settings.size + "px");
+    };
+    prose.addEventListener("touchend", endPinch, { passive: true });
+    prose.addEventListener("touchcancel", endPinch, { passive: true });
   }
   function syncReaderThemeButtons() {
     $$("#screen-reading [data-tool^='theme-']").forEach(b => {
@@ -4063,17 +4167,72 @@
     });
     return parts.join(" ");
   }
+  // Read-aloud speaks the chapter a sentence-sized piece at a time, chained
+  // through onend, instead of as one giant utterance: iPhones go quiet
+  // partway through long utterances and Android's Chrome stops speaking near
+  // the 15-second mark, so short pieces are the only shape that reads a whole
+  // chapter reliably on a phone.
+  function speechChunks(text) {
+    const out = [];
+    const sentences = text.match(/[^.!?…]+[.!?…]+[\s"'”’)\]]*|[^.!?…]+\s*$/g) || [text];
+    let cur = "";
+    const push = () => { const t = cur.trim(); if (t) out.push(t); cur = ""; };
+    sentences.forEach(s => {
+      while (s.length > 240) {                 // one unbroken monster sentence
+        let cut = s.lastIndexOf(" ", 240); if (cut < 60) cut = 240;
+        push(); cur = s.slice(0, cut); push(); s = s.slice(cut);
+      }
+      if (cur && cur.length + s.length > 200) push();
+      cur += s;
+    });
+    push();
+    return out;
+  }
+  function stopListen(btn) {
+    speakRun++; speaking = false; speakUtter = null;
+    if (speakDelayT) { clearTimeout(speakDelayT); speakDelayT = null; }
+    try { window.speechSynthesis.cancel(); } catch (e) {}
+    const b = btn || $("#listenBtn");
+    if (b) { b.classList.remove("is-on"); b.setAttribute("title", "Read aloud"); }
+  }
   function toggleListen(btn) {
     if (!("speechSynthesis" in window)) { toast("Read-aloud is not available in this browser."); return; }
-    if (speaking) { window.speechSynthesis.cancel(); speaking = false; btn.classList.remove("is-on"); btn.innerHTML = icon("play",16); return; }
+    if (speaking) { stopListen(btn); toast("Stopped reading."); return; }
     const text = readerText().replace(/["“”]/g, "").trim();
     if (!text) { toast("Nothing to read on this page yet."); return; }
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = 0.98; u.pitch = 1;
-    u.onend = () => { speaking = false; btn.classList.remove("is-on"); btn.innerHTML = icon("play",16); };
-    window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
-    speaking = true; btn.classList.add("is-on"); btn.innerHTML = icon("play",16);
-    toast("Reading aloud.");
+    const syn = window.speechSynthesis;
+    const chunks = speechChunks(text);
+    const run = ++speakRun;
+    let i = 0, heard = false;
+    speaking = true; btn.classList.add("is-on"); btn.setAttribute("title", "Stop reading");
+    const speakNext = () => {
+      if (run !== speakRun) return;
+      if (i >= chunks.length) { stopListen(btn); return; }
+      const u = new SpeechSynthesisUtterance(chunks[i++]);
+      u.rate = 0.98; u.pitch = 1;
+      u.onstart = () => { heard = true; };
+      u.onend = () => { if (run === speakRun) speakNext(); };
+      u.onerror = () => { if (run === speakRun) speakNext(); };   // skip a bad piece rather than fall silent
+      speakUtter = u;   // held so the browser can't garbage-collect it mid-speech, which silences onend
+      syn.speak(u);
+      try { syn.resume(); } catch (e) {}   // wakes an engine left paused by a screen lock or tab switch
+    };
+    const begin = () => {
+      if (run !== speakRun) return;
+      speakNext();
+      toast("Reading aloud.");
+      // If nothing has audibly started, point at the usual phone culprits
+      // instead of leaving the silence a mystery.
+      setTimeout(() => { if (run === speakRun && speaking && !heard) toast("No sound? Check the silent switch and media volume."); }, 3000);
+    };
+    if (syn.speaking || syn.pending) {
+      // iPhones drop a speak() issued in the same breath as a cancel(), so
+      // clear first and start a moment later.
+      try { syn.cancel(); } catch (e) {}
+      speakDelayT = setTimeout(() => { speakDelayT = null; begin(); }, 250);
+    } else {
+      begin();   // straight away, inside the tap, which iOS requires of the first speak
+    }
   }
 
   // Persistent document/#main listeners are wired exactly once; they read the
@@ -5109,7 +5268,7 @@
     if (lineSel) lineSel.addEventListener("change", () => {
       editorLineSpace = lineSel.value;
       try { localStorage.setItem("wisp.editorLineSpace", editorLineSpace); } catch (e) {}
-      try { schedulePushState(); } catch (e) {}
+      try { markStateChanged(); } catch (e) {}
       if (bodyEd) bodyEd.style.lineHeight = lineSpaceValue(editorLineSpace);
       gcRenderSoon();   // the squiggles follow the reflowed lines
     });
@@ -7011,12 +7170,33 @@
      blocked authors), the personal spelling dictionary, and small editor
      extras. Newer side wins on sign-in; every later change pushes, debounced.
      ---------------------------------------------------------------------- */
-  let stateSyncedFor = null, statePushT = 0, stateApplying = false;
+  let stateSyncedFor = null, statePushT = 0, stateApplying = false, stateFreshLogin = false, statePulledAt = 0;
+  // One stamp, meaning "when the state this device holds last truly changed":
+  // bumped by real local edits, set to the server's clock when a pulled state
+  // is applied, and sent along with every push as the row's updated_at.
+  // Comparing change-times (never push-times) is what lets a phone that has
+  // sat untouched for a month adopt the laptop's newer look, instead of
+  // shouting its own stale defaults over it just because it pushed later.
   function localStateStamp() { try { return +localStorage.getItem("wisp.sync.at") || 0; } catch (e) { return 0; } }
-  function touchLocalStateStamp(t) { try { localStorage.setItem("wisp.sync.at", String(t || Date.now())); } catch (e) {} }
+  function touchLocalStateStamp(t) { try { localStorage.setItem("wisp.sync.at", String(t == null ? Date.now() : t)); } catch (e) {} }
+  // For user actions stored outside the settings blob (the personal
+  // dictionary, editor line spacing, the grammar toggle): stamp and push.
+  function markStateChanged() { touchLocalStateStamp(); schedulePushState(); }
   function collectStateExtras() {
     let gl = true; try { gl = localStorage.getItem("wisp.grammar.live") !== "off"; } catch (e) {}
     return { editorLineSpace: editorLineSpace, grammarLive: gl };
+  }
+  // Surfaced once per session: the operator forgot migration 032, so nothing
+  // can follow the account between devices. Members are not nagged; the
+  // drawer's sync line goes quiet and the owner gets the actionable note.
+  let stateSyncWarned = false;
+  function surfaceStateSyncHealth() {
+    if (!(window.WispDB && WispDB.stateTableMissing)) return;
+    syncDrawer();
+    if (stateSyncWarned) return;
+    stateSyncWarned = true;
+    try { console.warn("[wisp] Settings cannot follow accounts between devices: the user_state table is missing. Run supabase/migrations/032_user_state.sql in the Supabase SQL editor."); } catch (e) {}
+    if (WispDB.isAdmin) toast("Settings aren't syncing between devices yet: run database migration 032 in Supabase.");
   }
   function schedulePushState() {
     if (stateApplying) return;   // applying a pulled state must not echo it back
@@ -7024,16 +7204,20 @@
     clearTimeout(statePushT);
     statePushT = setTimeout(() => {
       const dict = (window.__wispGC && window.__wispGC.userDict) ? Array.from(window.__wispGC.userDict) : [];
-      WispDB.saveUserState({ settings: settings, dictionary: dict, extras: collectStateExtras() })
-        .then(ok => { if (ok) touchLocalStateStamp(); })
+      // The row carries the local change-time, not "now": a push of old,
+      // untouched state must never outrank another device's real edits.
+      WispDB.saveUserState({ settings: settings, dictionary: dict, extras: collectStateExtras(), updated_at: new Date(localStateStamp() || 1).toISOString() })
+        .then(ok => { if (!ok) surfaceStateSyncHealth(); })
         .catch(() => {});
     }, 1200);
   }
   async function syncStateFromAccount() {
     if (!(window.WispDB && WispDB.enabled && WispDB.signedIn && WispDB.profile && WispDB.getUserState)) { stateSyncedFor = null; return; }
     const pid = WispDB.profile.id;
-    if (stateSyncedFor === pid) return;
+    const fresh = stateFreshLogin; stateFreshLogin = false;
+    if (stateSyncedFor === pid && !fresh) return;
     stateSyncedFor = pid;
+    statePulledAt = Date.now();
     // A different account than the one this device's state belongs to: their
     // saved state applies whatever the local timestamp says, and if they have
     // none saved they begin from defaults, never from the previous member's
@@ -7042,6 +7226,7 @@
     const foreign = owner && owner !== pid;
     try { localStorage.setItem("wisp.state.owner", pid); } catch (e) {}
     const remote = await WispDB.getUserState().catch(() => null);
+    surfaceStateSyncHealth();
     const remoteAt = remote && remote.updated_at ? new Date(remote.updated_at).getTime() : 0;
     const hasRemote = !!(remote && remote.settings && Object.keys(remote.settings).length);
     if (foreign && !hasRemote) {
@@ -7064,7 +7249,14 @@
       schedulePushState();
       return;
     }
-    if (hasRemote && (foreign || remoteAt > localStateStamp())) {
+    // A fresh sign-in adopts whatever the account has saved, full stop: the
+    // person just asked this device to become that account, the way it works
+    // on any reading site. A restored session only adopts a state that is
+    // genuinely newer than its own; a row stamped near the epoch was pushed
+    // by a device that never really changed anything ("age unknown"), and
+    // that must never overwrite a device someone actually set up.
+    const remoteReal = remoteAt > 86400000;
+    if (hasRemote && (foreign || fresh || (remoteReal && remoteAt > localStateStamp()))) {
       stateApplying = true;
       try {
         settings = Object.assign({}, DEFAULTS, remote.settings);
@@ -7086,12 +7278,24 @@
         }
         touchLocalStateStamp(remoteAt);
       } finally { stateApplying = false; }
-    } else {
-      // Account empty (or older than this device): upload what is here.
+      syncDrawer();
+    } else if (!hasRemote || localStateStamp() > remoteAt) {
+      // Account empty, or genuinely older than this device: upload what is
+      // here. Matching timestamps mean both sides already agree.
       schedulePushState();
     }
   }
-  try { window.__wispSync = { push: schedulePushState, pull: syncStateFromAccount, reset: function () { stateSyncedFor = null; } }; } catch (e) {}   // console debugging handle
+  // A phone tab woken from the home screen days later still wears whatever it
+  // had: re-check the account's state whenever the site comes back into view.
+  // The change-time comparison makes a re-check that finds nothing newer a
+  // no-op, so this costs one small read.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    if (!statePulledAt || Date.now() - statePulledAt < 60000) return;
+    stateSyncedFor = null;
+    try { syncStateFromAccount(); } catch (e) {}
+  });
+  try { window.__wispSync = { push: schedulePushState, pull: syncStateFromAccount, reset: function () { stateSyncedFor = null; }, freshLogin: function () { stateFreshLogin = true; }, stamp: localStateStamp }; } catch (e) {}   // console debugging handle
   function mwSyncFromAccount() {
     if (!(window.WispDB && WispDB.enabled && WispDB.signedIn && WispDB.profile)) { mwSyncedFor = null; return; }
     const pid = WispDB.profile.id;
@@ -7942,6 +8146,17 @@
     set("#optDyslexia", settings.dyslexia); set("#optMotion", settings.motion);
     set("#optJustify", settings.justify); set("#optMargins", settings.margins);
     set("#optSound", soundOn());
+    // The drawer's opening line tells the truth about where these settings
+    // live right now, instead of promising a sync that may not be happening.
+    const sn = $("#syncStatusNote");
+    if (sn) {
+      const db = window.WispDB;
+      sn.textContent = (db && db.enabled && db.signedIn)
+        ? (db.stateTableMissing
+            ? "These settings stay on this device for now, and only change your own view."
+            : "These settings follow your account across your devices, and only change your own view.")
+        : "These settings stay on this device until you sign in, and only change your own view.";
+    }
     syncReaderThemeButtons();
   }
 
@@ -8592,6 +8807,8 @@
   function route() {
     flushAutosave();   // leaving the editor: write any pending draft before its DOM is torn down
     finalizeReadSession();   // leaving a chapter: fold the elapsed read into the reading-pace average
+    if (speaking) stopListen();      // leaving the page stops read-aloud
+    if (autoScrollState) stopAutoScroll();   // and the auto-scroll with it
     const hash = location.hash.replace(/^#\/?/, "");
     const parts = hash.split("/");
     const seg = parts[0], arg = parts[1], arg2 = parts[2];
@@ -9117,6 +9334,9 @@
       const btn = q('[data-af="submit"]'); btn.disabled = true; btn.textContent = isUp ? "Creating..." : "Signing in...";
       err.style.display = "none";
       try {
+        // Signing in by hand means "make this device that account": the sync
+        // pull that follows adopts the account's saved look unconditionally.
+        stateFreshLogin = true;
         if (isUp) {
           const r = await WispDB.signUp(email, pw, name);
           if (!r.session) { onSuccess({ needsConfirm: true }); toast("Account created. Check your email to confirm, then sign in."); return; }
@@ -9125,6 +9345,7 @@
         }
         onSuccess({}); toast(isUp ? "Welcome to Wisp." : "Signed in.");
       } catch (ex) {
+        stateFreshLogin = false;
         err.textContent = (ex && ex.message) || "Something went wrong."; err.style.display = "block";
         btn.disabled = false; btn.textContent = isUp ? "Create account" : "Sign in";
       }
@@ -10481,7 +10702,7 @@
   };
   function gcSaveUserDict() {
     try { localStorage.setItem(GC_DICT_KEY, JSON.stringify(Array.from(gcState.userDict))); } catch (e) {}
-    try { schedulePushState(); } catch (e) {}
+    try { markStateChanged(); } catch (e) {}
   }
   try { window.__wispGC = gcState; } catch (e) {}   // console debugging handle
 
@@ -10955,7 +11176,7 @@
   function gcToggle() {
     gcState.enabled = !gcState.enabled;
     try { localStorage.setItem(GC_PREF_KEY, gcState.enabled ? "on" : "off"); } catch (e) {}
-    try { schedulePushState(); } catch (e) {}
+    try { markStateChanged(); } catch (e) {}
     const ed = $("#we-body"); if (ed) ed.spellcheck = !gcState.enabled;
     closeGrammarPop();
     if (gcState.enabled) {

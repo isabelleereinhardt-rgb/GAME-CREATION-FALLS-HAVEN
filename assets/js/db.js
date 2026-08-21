@@ -1587,11 +1587,15 @@ window.WispDB = (function () {
      tags, blocked authors), the writer's personal spelling dictionary, and
      small editor extras. Owner-only by row-level security (migration 032).
      Both fail softly when the table has not been migrated yet. */
+  // Remembered so the app can say, once, why nothing follows the account
+  // between devices (the operator has not run migration 032 yet).
+  let stateTableMissing = false;
   async function getUserState() {
     if (!user) return null;
     try {
       const { data, error } = await client.from("user_state").select("*").eq("user_id", user.id).maybeSingle();
-      if (error) return null;
+      if (error) { if (missingTable(error)) stateTableMissing = true; return null; }
+      stateTableMissing = false;
       return data || null;
     } catch (e) { return null; }
   }
@@ -1600,6 +1604,7 @@ window.WispDB = (function () {
     try {
       const row = Object.assign({ user_id: user.id, updated_at: new Date().toISOString() }, patch || {});
       const { error } = await client.from("user_state").upsert(row, { onConflict: "user_id" });
+      if (error && missingTable(error)) stateTableMissing = true;
       return !error;
     } catch (e) { return false; }
   }
@@ -1730,6 +1735,7 @@ window.WispDB = (function () {
     myLists, createList, deleteList, listContents, addToList, removeFromList,
     myHighlights, saveHighlight, deleteHighlight, submitReport, saveProgress, latestProgress, readingStats,
     getUserState, saveUserState,
+    get stateTableMissing() { return stateTableMissing; },
     toCard: toUi, fmtCount, relTime
   };
 })();
