@@ -34,6 +34,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Stamp this deploy's version into the page and publish it next to the
+      # site. Open tabs compare the two and step themselves onto a new deploy
+      # (no more closing every tab to get an update), and the ?v= queries make
+      # a refreshed page always fetch matching assets instead of cached ones.
+      - name: Stamp release version
+        run: |
+          REV="${GITHUB_SHA::12}"
+          sed -i "s/__WISP_REV__/${REV}/" index.html
+          sed -i -E "s#(src=\"assets/js/[^\"?]+\.js)\"#\1?v=${REV}\"#g" index.html
+          sed -i -E "s#(href=\"assets/css/wisp\.css)\"#\1?v=${REV}\"#g" index.html
+          printf '{"rev":"%s"}\n' "${REV}" > version.json
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 

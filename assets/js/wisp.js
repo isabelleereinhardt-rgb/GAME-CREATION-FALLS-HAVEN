@@ -12034,6 +12034,64 @@
   // Pull-to-refresh: pull down at the top of the page (touch) or overscroll up
   // on a trackpad to reload, so readers never have to close the tab. Disabled in
   // the reader (its own scrolling comes first) and while the sign-in wall is up.
+  /* ---- Self-updating tabs -------------------------------------------------
+     A deploy stamps its version into the page (the wisp-rev meta) and into
+     version.json published next to the site. Long-lived tabs, above all a
+     phone that never closes anything, compare the two whenever they wake,
+     come back online, or every quarter hour. A calm screen steps onto the
+     new version by itself; mid-chapter or mid-draft it becomes a small
+     tap-to-refresh chip so nothing is ever interrupted. */
+  function wireUpdateWatch() {
+    const meta = document.querySelector('meta[name="wisp-rev"]');
+    const myRev = ((meta && meta.content) || "").trim();
+    if (!myRev || myRev.indexOf("__") === 0) return;   // undeployed copy (local dev, one-file build)
+    let checkedAt = 0, wokeAt = Date.now();
+    const refreshTo = (rev) => {
+      try { flushAutosave(); } catch (e) {}
+      location.replace(location.pathname + "?u=" + encodeURIComponent(rev) + location.hash);
+    };
+    function showUpdateChip(rev) {
+      if (document.getElementById("updateChip")) return;
+      const b = document.createElement("button");
+      b.id = "updateChip"; b.className = "update-chip";
+      b.innerHTML = "A newer Wisp is ready &middot; <b>Tap to refresh</b>";
+      b.addEventListener("click", () => refreshTo(rev));
+      document.body.appendChild(b);
+    }
+    async function check(woke) {
+      const now = Date.now();
+      if (now - checkedAt < 30000) return;
+      checkedAt = now;
+      let rev = "";
+      try {
+        const r = await fetch("version.json?u=" + now, { cache: "no-store" });
+        if (r.ok) rev = String(((await r.json()) || {}).rev || "").trim();
+      } catch (e) { return; }   // offline or unreachable: try again next round
+      if (!rev || rev === myRev) return;
+      // Step quietly onto the new version at a calm moment: the tab just
+      // woke and nobody is mid-chapter or mid-draft. One try per version,
+      // so a deploy still rolling out can never cause a reload loop.
+      let tried = "";
+      try { tried = sessionStorage.getItem("wisp.autoupdate") || ""; } catch (e) {}
+      const calm = currentScreen !== "reading" && currentScreen !== "write";
+      if (woke && calm && tried !== rev && Date.now() - wokeAt < 5000) {
+        try { sessionStorage.setItem("wisp.autoupdate", rev); } catch (e) {}
+        refreshTo(rev);
+        return;
+      }
+      showUpdateChip(rev);
+    }
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") { wokeAt = Date.now(); check(true); }
+    });
+    window.addEventListener("pageshow", (e) => { if (e.persisted) { wokeAt = Date.now(); check(true); } });
+    window.addEventListener("online", () => check(false));
+    setInterval(() => { if (document.visibilityState === "visible") check(false); }, 15 * 60 * 1000);
+    // The boot check: a tab restored from the disk cache may already be behind.
+    setTimeout(() => check(true), 3500);
+    try { window.__wispUpdate = { check: check, reset: function () { checkedAt = 0; } }; } catch (e) {}   // console debugging handle
+  }
+
   function wirePullToRefresh() {
     const main = $("#main"), ptr = $("#ptr");
     if (!main || !ptr) return;
@@ -12213,6 +12271,7 @@
     window.addEventListener("pagehide", flushAutosave);
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushAutosave(); });
     wirePullToRefresh();
+    wireUpdateWatch();
     wireRailToggles();
     // Dismiss the grammar suggestion card on an outside tap, Escape, or scroll.
     document.addEventListener("click", (e) => { if (gcCard && !e.target.closest(".gc-card") && !e.target.closest("#we-body")) closeGrammarPop(); }, true);
