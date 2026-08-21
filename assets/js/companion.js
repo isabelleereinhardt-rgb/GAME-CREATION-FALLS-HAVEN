@@ -43,6 +43,11 @@
   }
   function getPrefs() { var o = {}; for (var k in DEF) o[k] = state[k]; return o; }
   function applyPrefs(p) { if (!p || typeof p !== "object") return; for (var k in DEF) if (p[k] !== undefined) state[k] = p[k]; try { localStorage.setItem(LS, JSON.stringify(state)); } catch (e) {} render(); }
+  // Back to the shelf cat. A device changing hands must not keep the previous
+  // member's cat — their name for him included. Deliberately quiet: no sync
+  // event fires, so a reset never uploads; the next member's own cat arrives
+  // with their account pull.
+  function resetPrefs() { applyPrefs(JSON.parse(JSON.stringify(DEF))); }
 
   var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
 
@@ -598,7 +603,7 @@
     init: init, openSettings: openSettings, stroll: stroll, summary: summary,
     render: render, setWalks: function (on) { state.walks = !!on; save(); mount(); render(); },
     walking: function () { return !!state.walks; },
-    getPrefs: getPrefs, applyPrefs: applyPrefs
+    getPrefs: getPrefs, applyPrefs: applyPrefs, resetPrefs: resetPrefs
   };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
