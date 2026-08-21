@@ -81,48 +81,11 @@
     ["prawn", "Prawn", "Fancy"],
     ["catnip", "Catnip sprig", "Chaotic"]
   ];
-  var TREAT_NAME = { sardine: "sardine", cream: "saucer of cream", biscuit: "butter biscuit", prawn: "prawn", catnip: "sprig of catnip" };
 
-  // Personalities colour the voice, never the facts. Tips are about reading and
-  // writing on Wisp — no app shortcuts, no AI.
-  var PERSONAS = {
-    sweet: { name: "Sweetheart", glyph: "❀", mood: "Content",
-      moodLine: "He curls a little closer every day you write.",
-      treat: "A treat! For me?", thanks: "He purrs so hard he has to sit down.",
-      tips: ["Read the chapter you've been saving. It's still there.", "Finished a chapter? The author would love to hear one thing you liked.",
-        "Bookmark it now, find it later. That's the whole trick.", "Tea first. The chapter will keep.",
-        "Every work here was written by a real person. Be kind in the margins.", "Follow a tag you love, and your home fills up with it."] },
-    grumpy: { name: "Grumpy", glyph: "✗", mood: "Unimpressed",
-      moodLine: "He will deny enjoying any of this. He is lying.",
-      treat: "Finally. Put it down there.", thanks: "He is purring. He would like that stricken from the record.",
-      tips: ["Still reading. Good. Don't make it weird.", "You have a bookmark button and you're still scrolling. Astonishing.",
-        "That work was better than you'll admit. Heart it.", "Back to the draft. It won't finish itself.",
-        "Fine. Leave a comment. The author will pretend not to care, like me."] },
-    regal: { name: "Regal", glyph: "♛", mood: "Gracious",
-      moodLine: "He considers your desk a throne and you its steward.",
-      treat: "Tribute. Acceptable.", thanks: "The court is satisfied. You may rise.",
-      tips: ["The court awaits your next chapter. Do not keep it waiting.", "Finished a work? Heart it. That is the whole fee the author asks.",
-        "Sit up. Posture is half of prose.", "Name a fandom, follow its hub, and let the realm come to you.",
-        "Your library is a collection worth curating. Tend it."] },
-    sleepy: { name: "Sleepy", glyph: "☾", mood: "Drowsy",
-      moodLine: "He is mostly asleep, but he is asleep near you.",
-      treat: "Mmh. Treat. Thank you.", thanks: "He carries it off to the warm spot and forgets about it.",
-      tips: ["There is no hurry. The story keeps perfectly well overnight.", "One chapter counts. Rest is part of it.",
-        "Everything saves itself. Close the tab whenever you like.", "A short read before bed is still a read."] },
-    gremlin: { name: "Gremlin", glyph: "☓", mood: "Feral",
-      moodLine: "Something was knocked off the desk. No witnesses. No suspects.",
-      treat: "MINE. I am taking this under the sofa.", thanks: "Gone. Under the sofa. It lives there now.",
-      tips: ["I walked across your keyboard and invented a new character. You're welcome.", "Write the unhinged version first. Be respectable in the second draft.",
-        "Heart it. Heart it again. It is very satisfying.", "Comment something feral and supportive. Those are the best kind.",
-        "Delete nothing in anger. I've seen you. Sleep on it."] },
-    scholar: { name: "Scholar", glyph: "✎", mood: "Studious",
-      moodLine: "He has read your canon twice and has notes.",
-      treat: "Thank you. I shall record this in the ledger.", thanks: "Duly noted, dated, and filed under Provisions.",
-      tips: ["Tag your work well. A reader two years from now will thank you.", "Consistency isn't the same as quality, but it's cheaper to fix.",
-        "Leave a real comment: the specific kind, about one line.", "Regularity beats inspiration. The record shows it.",
-        "Read something outside your fandom now and then. It shows in your own writing."] }
-  };
-  function persona() { return PERSONAS[state.personality] || PERSONAS.sweet; }
+  // He is a wordless cat now, by the owner's choice: no tip bubble, no
+  // dialogue. The walk, the petting, the treats, and his little walking
+  // companions carry the whole charm. (The personality and tips keys stay in
+  // DEF so older synced blobs keep their shape; nothing reads them.)
 
   /* ---------- coat palettes ---------- */
   // --paw / --paw-line: the cream tips of his tail and paws get their own
@@ -245,7 +208,6 @@
       re(".lucky-leg", "lucky-leg", ".62s", "ease-in-out", "infinite") +
       re(".lucky-tail", "lucky-tail", "1.6s", "ease-in-out", "infinite") +
       re(".lucky-eye", "lucky-blink", "4.2s", "ease-in-out", "infinite") +
-      re(".lucky-tip", "tip-window", "var(--pace,34s)", "linear", "infinite") +
       re(".lucky-pal", "lucky-bob", ".62s", "ease-in-out", "infinite") +
       /* the treat dance: the hop, the treat itself, its bounce, the notes
          and sparks — none of these were re-enabled, so five pets under
@@ -284,16 +246,6 @@
     '@keyframes lucky-hopaway{0%,58%{transform:translateX(0)}100%{transform:translateX(calc(-1 * var(--exit,92vw)))}}' +
     '.lucky-walk.treating{animation:lucky-hopaway 4.6s ease-in forwards}' +
     '.lucky-walk.treating .lucky-bob{animation:lucky-hop .62s ease-in-out 3}' +
-    '.lucky-tip{position:absolute;bottom:58px;left:34px;width:250px;background:var(--card);border:1px solid var(--amber);border-radius:12px;box-shadow:0 12px 28px var(--shadow-lg);padding:9px 12px;pointer-events:none;opacity:0;animation:tip-window var(--pace,34s) linear infinite}' +
-    '.lucky-tip:after{content:"";position:absolute;left:24px;bottom:-6px;width:10px;height:10px;background:var(--card);border-right:1px solid var(--amber);border-bottom:1px solid var(--amber);transform:rotate(45deg)}' +
-    '.lt-head{display:flex;align-items:center;gap:7px;margin-bottom:5px}' +
-    '.lt-glyph{color:var(--rose)}.lt-who{font:italic 600 14px var(--font-display);color:var(--ink)}' +
-    '.lt-mood{font:9px var(--font-text);letter-spacing:.18em;text-transform:uppercase;color:var(--amber);margin-left:auto}' +
-    '.lucky-tip-text{font:14px/1.45 var(--font-text);color:var(--ink2)}' +
-    '.lt-foot{display:flex;align-items:center;justify-content:space-between;margin-top:7px}' +
-    '.pet-meter{color:var(--rose);letter-spacing:.3em;font-size:9px}' +
-    '.pet-hint{font:9px var(--font-text);letter-spacing:.16em;text-transform:uppercase;color:var(--ink3)}' +
-    '@keyframes tip-window{0%,24%{opacity:0}30%,64%{opacity:1}70%,100%{opacity:0}}' +
     '.lucky-notes,.lucky-sparks{position:absolute;bottom:52px;left:44px;pointer-events:none;opacity:0}' +
     '.lucky-notes span,.lucky-sparks span{position:absolute;font-size:14px;opacity:0}' +
     '.lucky-notes span{color:var(--rose)}.lucky-sparks{left:-18px;bottom:34px}.lucky-sparks span{color:var(--amber);font-size:11px}' +
@@ -384,20 +336,6 @@
     stageEl = document.createElement("div"); stageEl.className = "lucky-stage"; stageEl.id = "luckyStage";
     document.body.appendChild(stageEl);
   }
-  function petsBar() {
-    if (!state.treatsOn) return "";
-    var pets = state.pets || 0, dots = "";
-    for (var i = 0; i < 5; i++) dots += (i < pets ? "●" : "○");
-    return '<div class="lt-foot"><span class="pet-meter">' + dots + '</span><span class="pet-hint">Pet me</span></div>';
-  }
-  function bubbleHtml() {
-    var p = persona();
-    var tips = p.tips || [], line = tips.length ? tips[tipIdx % tips.length] : p.moodLine;
-    return '<div class="lucky-tip"><div class="lt-head"><span class="lt-glyph">' + p.glyph + '</span>' +
-      '<span class="lt-who">' + esc(name()) + '</span><span class="lt-mood">' + esc(p.mood) + '</span></div>' +
-      '<div class="lucky-tip-text">' + esc(line) + '</div>' + petsBar() + '</div>';
-  }
-  var tipIdx = 0;
   function name() { return (state.name || "Lucky").trim() || "Lucky"; }
   function render() {
     if (!stageEl) return;
@@ -407,7 +345,6 @@
     var pace = (+state.pace >= 8 && +state.pace <= 200) ? +state.pace : 34;
     stageEl.innerHTML =
       '<div class="lucky-walk" id="luckyWalk" title="Pet ' + esc(name()) + '" style="--pace:' + pace + 's">' +
-        (state.tips ? bubbleHtml() : "") +
         '<div class="lucky-bob">' + walkerSvg() + '</div>' +
         companionSvg() + treatSvg() +
         '<div class="lucky-notes" aria-hidden="true"><span>&#9834;</span><span>&#9835;</span><span>&#9834;</span></div>' +
@@ -415,7 +352,6 @@
       '</div>';
     var walk = stageEl.querySelector("#luckyWalk");
     walk.onclick = function () { pet(walk); };
-    walk.addEventListener("animationiteration", function (e) { if (e.animationName === "lucky-walk") { tipIdx++; var t = stageEl.querySelector(".lucky-tip-text"); if (t) { var p = persona(); var tips = p.tips || []; t.textContent = tips.length ? tips[tipIdx % tips.length] : p.moodLine; } } });
   }
   // A soft, happy little sound for when Lucky earns his treat: a two-note chirp
   // over a brief low purr, built with the Web Audio API (no sound files). It
@@ -452,8 +388,8 @@
   }
   function pet(walk) {
     var n = (state.pets || 0) + 1;
-    if (!state.treatsOn) { state.pets = n % 5; save(); paintPets(); return; }
-    if (n < 5) { state.pets = n; save(); paintPets(); return; }
+    if (!state.treatsOn) { state.pets = n % 5; save(); return; }
+    if (n < 5) { state.pets = n; save(); return; }
     // fifth pet: a treat, a little dance, a happy sound, and off he trots
     state.pets = 0; state.treatsGiven = (state.treatsGiven || 0) + 1; save();
     if (window.WispSound && window.WispSound.treat) window.WispSound.treat(); else luckySound();
@@ -461,28 +397,15 @@
     walk.style.left = Math.round(box.left) + "px";
     walk.style.setProperty("--exit", Math.round(box.left + box.width + 40) + "px");
     walk.classList.add("treating");
-    var p = persona();
-    var txt = stageEl.querySelector(".lucky-tip-text");
-    if (txt) txt.textContent = p.treat + " A " + (TREAT_NAME[state.treat] || "sardine") + ".";
-    var thanksAt = setTimeout(function () { var t = stageEl.querySelector(".lucky-tip-text"); if (t && p.thanks) t.textContent = p.thanks; }, 2100);
     if (petTimer) clearTimeout(petTimer);
     petTimer = setTimeout(function () {
-      clearTimeout(thanksAt);
       walk.classList.remove("treating");
       walk.style.removeProperty("left"); walk.style.removeProperty("--exit");
-      tipIdx++; render();
+      render();
       var el = stageEl.querySelector("#luckyWalk");
       if (el && el.getAnimations) el.getAnimations({ subtree: true }).forEach(function (a) { try { a.cancel(); a.play(); } catch (e) {} });
     }, 4900);
   }
-  function paintPets() {
-    if (!stageEl) return;
-    var meter = stageEl.querySelector(".pet-meter"); if (!meter) return;
-    var pets = state.pets || 0, dots = "";
-    for (var i = 0; i < 5; i++) dots += (i < pets ? "●" : "○");
-    meter.textContent = dots;
-  }
-
   // Hide him only on the immersive reading surface (out of the way while you
   // read). He strolls everywhere else, the writing station included, so writers
   // still get his company while they work.
@@ -540,15 +463,12 @@
         '<input class="lucky-name-in" id="luckyNameIn" value="' + esc(state.name) + '" maxlength="24" aria-label="Name">' +
         '<div class="lm-eyebrow">What he\'s wearing</div>' +
         '<div class="lucky-chipwrap" data-group="acc">' + ACCESSORIES.map(function (a) { return '<button class="lucky-chip' + (state.acc === a[0] ? " is-on" : "") + '" data-lucky="acc" data-val="' + a[0] + '">' + esc(a[1]) + '</button>'; }).join("") + '</div>' +
-        '<div class="lm-eyebrow">How he talks</div>' +
-        '<div class="lucky-grid" data-group="personality">' + Object.keys(PERSONAS).map(function (k) { var p = PERSONAS[k]; return optCard("personality", k, p.name, p.moodLine, state.personality === k); }).join("") + '</div>' +
         '<div class="lm-eyebrow">Who walks with him</div>' +
         '<div class="lucky-grid" data-group="companion">' + COMPANIONS.map(function (c) { return optCard("companion", c[0], c[1], c[2], state.companion === c[0]); }).join("") + '</div>' +
         '<div class="lm-eyebrow">What he gets after five pets</div>' +
         '<div class="lucky-grid" data-group="treat">' + TREATS.map(function (t) { return optCard("treat", t[0], t[1], t[2], state.treat === t[0]); }).join("") + '</div>' +
         '<div class="lm-eyebrow">His habits</div>' +
         habitRow("walks", "Walk across the screen", "Turn it off for a completely still page.") +
-        habitRow("tips", "Show his little notes", "The bubble he carries as he passes.") +
         habitRow("treatsOn", "Treats after five pets", "Off means he just enjoys being petted.") +
         '<div class="lm-eyebrow">How often he strolls past</div>' +
         '<div class="lucky-pace"><input type="range" id="luckyPace" min="0" max="' + (PACES.length - 1) + '" step="1" value="' + paceIndex() + '"><span class="lp-read" id="luckyPaceRead">' + esc(PACES[paceIndex()][1]) + '</span></div>' +
