@@ -7687,8 +7687,22 @@ window.WISP_WIDGET_CONTENT = (function () {
   let lastAuthUid;           // last signed-in user id, so we re-render only on real identity changes
   let profileShownFor = null; // uid whose loaded profile the current render reflects
   function isLive() { return !!(window.WispDB && WispDB.enabled); }
-  function activeWorks() { return isLive() ? LIVE.works : W.WORKS; }
-  function activeById(id) { return LIVE.byId[id] || W.byId[id]; }   // live wins; demo fills curated links
+  // The bundled demo only ever stands in when NO backend is configured. A
+  // configured site that cannot reach its server must say so, not quietly
+  // show fictional works by fictional authors: those "randomly appearing"
+  // stories cannot be blocked or muted because they are not real.
+  function demoAllowed() { return !(window.WispDB && WispDB.configured); }
+  function activeWorks() { return isLive() ? LIVE.works : (demoAllowed() ? W.WORKS : []); }
+  function activeById(id) { return LIVE.byId[id] || (demoAllowed() ? W.byId[id] : null); }
+  // The reader's own mutes and blocks, applied to any list of works. Every
+  // surface that shows works runs through this: home, browse, staff picks,
+  // the resume card, tag and hub pages.
+  function applyReaderFilters(list) {
+    let out = list || [];
+    if (userState.mutedTags.size) out = out.filter(w => w && !userState.mutedTags.has(w.source) && !(w.tags || []).some(t => userState.mutedTags.has(t)));
+    if (userState.blockedUsers.size) out = out.filter(w => w && !userState.blockedUsers.has(w.author));
+    return out;
+  }
   function loadingScreen(sel) {
     const el = $(sel); if (el) el.innerHTML = `<div class="page"><p style="text-align:center;padding:80px 0;color:var(--ink3)">Loading&hellip;</p></div>`;
   }
@@ -7873,7 +7887,9 @@ window.WISP_WIDGET_CONTENT = (function () {
   }
   function renderHomeLive() {
     const following = liveHomeTab === "following";
-    const works = following ? (LIVE.followingWorks || []) : (LIVE.works || []);
+    const works = applyReaderFilters(following ? (LIVE.followingWorks || []) : (LIVE.works || []));
+    if (LIVE.featured) LIVE.featured = applyReaderFilters(LIVE.featured);
+    if (LIVE.resume && LIVE.resume.work && !applyReaderFilters([LIVE.resume.work]).length) LIVE.resume = null;
     const gridOf = (ws) => settings.view === "list"
       ? `<div class="stack-list">${ws.map(cardList).join("")}</div>`
       : `<div class="work-grid">${ws.map(cardGallery).join("")}</div>`;
@@ -11671,7 +11687,7 @@ window.WISP_WIDGET_CONTENT = (function () {
     try {
       const detail = await WispDB.hubDetail(id);
       if (!detail) { renderHubNotFound(); return; }
-      const works = await WispDB.worksInHub(detail.hub).catch(() => []);
+      const works = applyReaderFilters(await WispDB.worksInHub(detail.hub).catch(() => []));
       const widgets = await WispDB.listHubWidgets(id).catch(() => []);
       const polls = {};
       await Promise.all(widgets.filter(w => w.kind === "poll").map(async w => {
@@ -12050,7 +12066,7 @@ window.WISP_WIDGET_CONTENT = (function () {
   }
   function renderTagPage() {
     const tp = LIVE.tagPage; if (!tp) return;
-    const works = tp.works || [];
+    const works = applyReaderFilters(tp.works || []);
     const grid = works.length
       ? (settings.view === "list" ? `<div class="stack-list">${works.map(cardList).join("")}</div>` : `<div class="work-grid" style="margin-top:18px">${works.map(cardGallery).join("")}</div>`)
       : `<div style="text-align:center;padding:64px 0;color:var(--ink3)"><p style="font-size:16px;color:var(--ink2)">Nothing tagged &ldquo;${esc(tp.name)}&rdquo; yet.</p><p style="font-size:14px">As works pick up this tag, they'll gather here.</p></div>`;
@@ -14496,6 +14512,7 @@ window.WISP_WIDGET_CONTENT = (function () {
     closeModal();
 
     const live = isLive();
+    if (!live && !demoAllowed()) { renderOffline(screen); return; }
     if (screen === "reading") {
       if (live) { loadReading(arg || "", arg2); return; }
       const id = arg || "amber"; const w = W.byId[id];
@@ -14526,6 +14543,19 @@ window.WISP_WIDGET_CONTENT = (function () {
   }
 
   function navigate(to) { location.hash = "#/" + to; }
+  // A configured site that could not reach its server: say so and offer a
+  // retry, instead of quietly showing the bundled demo stories.
+  function renderOffline(screen) {
+    const el = $("#screen-" + (screen || "home")); if (!el) return;
+    el.innerHTML = `
+      <div class="page">
+        <div class="editorial" style="text-align:center;padding:70px 20px">
+          <p class="soft" style="font-size:17px;margin-bottom:8px">Wisp can't reach its server right now.</p>
+          <p class="muted" style="font-size:13.5px;margin-bottom:18px">Check your connection, then try again.</p>
+          <button class="btn btn--primary" onclick="location.reload()">Try again</button>
+        </div>
+      </div>`;
+  }
 
   /* ======================================================================= */
   /*  GLOBAL WIRING                                                           */
@@ -16189,6 +16219,44 @@ window.WISP_WIDGET_CONTENT = (function () {
     // "your" before these reads as "you are".
     { re: /\byour\s+(welcome|going|gonna|awesome|amazing|kidding|joking|invited|fired|hired|so|too|not|always|never|still)\b/gi,
       fix: (m) => (/^Y/.test(m[0]) ? "You're " : "you're ") + m[1] },
+    // ---- Real-word slips: spelled right, still the wrong word --------------
+    // "a new king of magic" is nearly always "kind of"; but kings rule fantasy
+    // prose, so only clearly non-royal frames trip (never "the king of Gondor").
+    { re: /\b(a|another) (new|different|whole new|special|certain|strange|rare|weird|odd) king(s)? of\b/gi,
+      fix: (m) => m[1] + " " + m[2] + " kind" + (m[3] || "") + " of" },
+    { re: /\b(some|what|whatever) king of\b/gi, fix: (m) => m[1] + " kind of" },
+    gcPhrase("the hole time", "the whole time"), gcPhrase("the hole thing", "the whole thing"),
+    gcPhrase("the hole point", "the whole point"), gcPhrase("the hole story", "the whole story"),
+    gcPhrase("a hole new", "a whole new"),
+    gcPhrase("weather or not", "whether or not"),
+    gcPhrase("accept for", "except for"),
+    gcPhrase("a part from", "apart from"), gcPhrase("apart of", "a part of"),
+    { re: /\b(was|were|is|am|are|been|being) suppose to\b/gi, fix: (m) => m[1] + " supposed to" },
+    { re: /\b(I|we|they|he|she|you) use to\b/gi, fix: (m) => m[1] + " used to" },
+    { re: /\b(I|he|she|it|we|they|you) where\b/gi, fix: (m) => m[1] + " were" },
+    { re: /\bto by (a|an|the|some|it|them|one|more|new|another)\b/gi, fix: (m) => "to buy " + m[1] },
+    { re: /\b(I|we|they|you) no (that|what|how|why|where|it|him|her|if|about)\b/gi, fix: (m) => m[1] + " know " + m[2] },
+    { re: /\b(don't|doesn't|didn't|won't|wouldn't|can't) no\b/gi, fix: (m) => m[1] + " know" },
+    { re: /\b(I|we|they|he|she|you) new (that|what|how|about|it|him|her|them)\b/gi, fix: (m) => m[1] + " knew " + m[2] },
+    gcPhrase("quite down", "quiet down"), gcPhrase("peace and quite", "peace and quiet"),
+    gcPhrase("quite as a mouse", "quiet as a mouse"),
+    { re: /\b(to|will|would|might|could|gonna|don't|didn't|not) loose\b/gi, fix: (m) => m[1] + " lose" },
+    { re: /\b(to|can't|couldn't|barely|hardly) breath\b/gi, fix: (m) => m[1] + " breathe" },
+    { re: /\b(came|come|comes|coming|away|different|suffer|suffers|suffering|made|hear|heard|far) form\b/gi, fix: (m) => m[1] + " from" },
+    { re: /\bit's (own|way|place|head|eyes|hands|name|tail|wings|feet|back|side|heart|mouth|claws|paws)\b/gi, fix: (m) => "its " + m[1] },
+    { re: /\byou're (own|name|hand|hands|head|eyes|face|life|heart|way|family|friend|friends|mother|father|brother|sister|book|story|work|room|fault|majesty|highness)\b/gi, fix: (m) => "your " + m[1] },
+    { re: /\bthey're (own|way|hands|eyes|heads|lives|hearts|faces|backs)\b/gi, fix: (m) => "their " + m[1] },
+    { re: /\b(their|they're) (is|are|was|were)\b/gi, fix: (m) => "there " + m[2] },
+    gcPhrase("an then", "and then"),
+    { re: /\b(walked|ran|drove|flew|went|rushed|moved|brushed|pushed|slipped|stormed) passed\b/gi, fix: (m) => m[1] + " past" },
+    { re: /\b(has|have|had|she|he|they|we|I|you) past (away|out)\b/gi, fix: (m) => m[1] + " passed " + m[2] },
+    { re: /\b(not|isn't|aren't|wasn't|weren't|be|been|being) aloud\b/gi, fix: (m) => m[1] + " allowed" },
+    gcPhrase("bare with me", "bear with me"),
+    { re: /\b(can't|couldn't|cannot) bare\b/gi, fix: (m) => m[1] + " bear" },
+    { re: /\b(too|so|very|felt|feel|feels|feeling|grew|growing) week\b/gi, fix: (m) => m[1] + " weak" },
+    { re: /\b(can|can't|could|couldn't|didn't|don't|won't|to) here (you|me|him|her|them|us|it|the|a|an|what|anything|something|nothing)\b/gi, fix: (m) => m[1] + " hear " + m[2] },
+    gcPhrase("a peace of", "a piece of"),
+    { re: /\b(web|camp|construction) sight\b/gi, fix: (m) => m[1] + " site" },
     gcPhrase("i seen", "I saw"), gcPhrase("less people", "fewer people"),
     gcPhrase("supposably", "supposedly"), gcPhrase("irregardless", "regardless"),
     gcPhrase("for all intensive purposes", "for all intents and purposes"),
@@ -16239,8 +16307,11 @@ window.WISP_WIDGET_CONTENT = (function () {
     "um", "uh", "oh", "ho", "blah", "hear", "knock", "tick", "choo", "bang", "beep", "tap",
     "run", "go", "chop", "very", "really", "hush", "now", "there", "who"]);
 
-  // Preserve the original capitalization for a respelling fix (Teh -> The).
+  // Preserve the original capitalization for a respelling fix: Teh -> The,
+  // and an all-caps original (a shouted line, a title) keeps its caps.
   function gcApplyCase(original, fix) {
+    if (original && original.length > 1 && original === original.toUpperCase() && /[A-Z]/.test(original))
+      return fix.toUpperCase();
     if (original && original[0] === original[0].toUpperCase() && original[0] !== original[0].toLowerCase())
       return fix.charAt(0).toUpperCase() + fix.slice(1);
     return fix;
@@ -16458,7 +16529,9 @@ window.WISP_WIDGET_CONTENT = (function () {
       rule.re.lastIndex = 0; let m;
       while ((m = rule.re.exec(text))) {
         const s = m.index, e = s + m[0].length;
-        const fix = typeof rule.fix === "function" ? rule.fix(m) : (rule.caps ? gcApplyCase(m[0], rule.fix) : rule.fix);
+        let fix = typeof rule.fix === "function" ? rule.fix(m) : (rule.caps ? gcApplyCase(m[0], rule.fix) : rule.fix);
+        // A shouted line or a title stays shouted: KING OF -> KIND OF.
+        if (fix != null && m[0].length > 1 && m[0] === m[0].toUpperCase() && /[A-Z]/.test(m[0])) fix = fix.toUpperCase();
         if (fix != null && fix !== m[0] && !gcState.ignoredRules.has(m[0].toLowerCase()))
           raw.push({ s, e, orig: m[0], fix, kind: "grammar" });
         if (m.index === rule.re.lastIndex) rule.re.lastIndex++;
