@@ -2195,7 +2195,7 @@ mark.hl--purple { background: rgba(190, 130, 255, 0.42); }
 
 /* Hub widgets: admin-placed blocks (note, countdown, links, poll) on a hub page. */
 .hub-widgets { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; margin-top: 22px; }
-.hubw { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); padding: 18px 20px; }
+.hubw { position: relative; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); padding: 18px 20px; }
 .hubw__title { font: 600 15px var(--font-display); color: var(--ink); margin-bottom: 10px; }
 .hubw__body { font-size: 14.5px; color: var(--ink2); line-height: 1.65; }
 .hubw__body > :first-child { margin-top: 0; }
@@ -2285,6 +2285,28 @@ mark.hl--purple { background: rgba(190, 130, 255, 0.42); }
 .hubw__faq-a { font-size: 13.5px; color: var(--ink2); line-height: 1.6; margin-top: 6px; }
 .hubw__faq-a > :first-child { margin-top: 0; }
 .hubw__faq-a > :last-child { margin-bottom: 0; }
+
+/* Inline admin controls: the panel's add and delete actions, on the pages.
+   They only render for a signed-in admin; the database enforces the rest. */
+.shelf__tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hub-hero__side { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.adm-mini {
+  -webkit-appearance: none; appearance: none;
+  width: 31px; height: 31px; padding: 0; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); border-radius: 9px;
+  background: var(--card); color: var(--ink2); cursor: pointer;
+  transition: color .15s ease, border-color .15s ease, background .15s ease, opacity .15s ease;
+}
+.adm-mini:hover { color: var(--rose-ink); border-color: var(--rose); background: var(--rose-wash); }
+.adm-mini--del:hover { color: #a2444f; border-color: rgba(162, 68, 79, .55); }
+.adm-mini--lg { width: 40px; height: 40px; border-radius: 11px; }
+.adm-mini--float { position: absolute; top: 10px; right: 10px; opacity: .45; z-index: 2; }
+.hubw:hover .adm-mini--float, .adm-mini--float:focus-visible { opacity: 1; }
+@media (pointer: coarse) {
+  .adm-mini { width: 36px; height: 36px; }
+  .adm-mini--float { opacity: .8; }
+}
 
 /* Clickable pills (type / fandom) that open a collection page. */
 button.pill--link { -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer;

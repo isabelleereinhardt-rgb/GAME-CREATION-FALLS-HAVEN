@@ -1857,6 +1857,16 @@
   }
   function icon(id, size = 16) { return `<svg width="${size}" height="${size}" aria-hidden="true"><use href="#i-${id}"></use></svg>`; }
 
+  /* ---- Inline admin controls ----------------------------------------------
+     The admin panel stays as it is; these put the same add and delete actions
+     right on the pages for a signed-in admin, so routine changes don't need
+     the panel at all. The database is the real gate: every call these buttons
+     make only succeeds for an account with the admin flag. */
+  function adminNow() { return isLive() && !!WispDB.signedIn && !!WispDB.isAdmin; }
+  function admDelBtn(attr, id, label, extra) {
+    return `<button class="adm-mini adm-mini--del${extra ? " " + extra : ""}" ${attr}="${esc(id)}" data-label="${esc(label)}" title="Admin: delete" aria-label="Admin: delete ${esc(label)}">${icon("trash", 15)}</button>`;
+  }
+
   // A cover shows the first meaningful letter of the title, skipping a leading
   // filler word: "The Salt and the Season" becomes S, not T.
   const COVER_STOPWORDS = new Set(["the", "a", "an", "and", "or", "of", "to", "in", "on"]);
@@ -2622,6 +2632,7 @@
               <button class="btn btn--quiet" data-share="${w.id}">${icon("share",16)} Share</button>
               <button class="btn btn--quiet" data-download="${w.id}">${icon("download",16)} Download</button>
               <button class="btn btn--quiet" data-work-overflow="${w.id}" aria-label="More options">${icon("more",16)}</button>
+              ${w._db && adminNow() ? admDelBtn("data-adm-work-del", w.id, w.title || "Untitled", "adm-mini--lg") : ""}
             </div>
             ${w.hideStats ? "" : `<div class="card__stats" style="border:0;max-width:420px;padding:0">
               <span class="stat stat--heart">${icon("heart",15)}${w.hearts} hearts</span>
@@ -5795,9 +5806,12 @@
         <div class="shelf">
           <div class="shelf__head">
             <span class="shelf__title">Events and challenges</span>
-            <div class="event-sort" role="group" aria-label="Sort events">
-              <button class="event-sort__btn${eventSort === "soonest" ? " is-on" : ""}" data-event-sort="soonest" aria-pressed="${eventSort === "soonest"}">Soonest</button>
-              <button class="event-sort__btn${eventSort === "latest" ? " is-on" : ""}" data-event-sort="latest" aria-pressed="${eventSort === "latest"}">Latest</button>
+            <div class="shelf__tools">
+              ${adminNow() ? `<button class="btn btn--ghost btn--sm" data-adm-add-event>${icon("plusring", 14)} New event</button>` : ""}
+              <div class="event-sort" role="group" aria-label="Sort events">
+                <button class="event-sort__btn${eventSort === "soonest" ? " is-on" : ""}" data-event-sort="soonest" aria-pressed="${eventSort === "soonest"}">Soonest</button>
+                <button class="event-sort__btn${eventSort === "latest" ? " is-on" : ""}" data-event-sort="latest" aria-pressed="${eventSort === "latest"}">Latest</button>
+              </div>
             </div>
           </div>
           <p class="muted event-sort__note">Only events you have joined show up on Home. Showing ${eventSort === "soonest" ? "nearest dates first" : "most recently added first"}.</p>
@@ -5835,7 +5849,7 @@
                   <p class="soft" style="font-size:14px;margin:6px 0 0;line-height:1.6">${esc(e.note)}</p>
                   ${countdown}
                 </div>
-                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${action}</div>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${action}${live && adminNow() ? admDelBtn("data-adm-event-del", e.id, e.title) : ""}</div>
               </div>`;
             }).join("");
             return rows || `<p class="muted" style="font-size:14px;padding:14px 2px;line-height:1.6">No events running right now. New collections and challenges will appear here when they open.</p>`;
@@ -5872,14 +5886,14 @@
                   ${x.note ? `<p class="soft" style="font-size:14px;margin:6px 0 0;line-height:1.6">${esc(x.note)}</p>` : ""}
                   ${countdown}
                 </div>
-                <button class="btn btn--ghost btn--sm" data-exchange-open="${x.id}">${cta}</button>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn btn--ghost btn--sm" data-exchange-open="${x.id}">${cta}</button>${adminNow() ? admDelBtn("data-adm-ex-del", x.id, x.title) : ""}</div>
               </div>`;
             }).join("");
           })()}
         </div>` : ""}
 
         ${isLive() ? `<div class="shelf">
-          <div class="shelf__head"><span class="shelf__title">Contests</span>${WispDB.isAdmin ? `<button class="btn btn--ghost btn--sm" data-contest-new>${icon("plus", 14)} New contest</button>` : ""}</div>
+          <div class="shelf__head"><span class="shelf__title">Contests</span>${WispDB.isAdmin ? `<button class="btn btn--ghost btn--sm" data-contest-new>${icon("plusring", 14)} New contest</button>` : ""}</div>
           <p class="muted event-sort__note">Enter your own works, then everyone gets one vote. When a contest closes, the top three win the first, second, and third place badges; bigger fields also award Top Five and Top Ten.</p>
           ${(() => {
             const list = (LIVE.contests || []).slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -5898,14 +5912,14 @@
                   ${c.description ? `<p class="soft" style="font-size:14px;margin:6px 0 0;line-height:1.6">${esc(c.description)}</p>` : ""}
                   ${countdown}
                 </div>
-                <button class="btn btn--ghost btn--sm" data-contest-open="${c.id}">${closed ? "Results" : "View and vote"}</button>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn btn--ghost btn--sm" data-contest-open="${c.id}">${closed ? "Results" : "View and vote"}</button>${adminNow() ? admDelBtn("data-adm-contest-del", c.id, c.title) : ""}</div>
               </div>`;
             }).join("");
           })()}
         </div>` : ""}
 
         <div class="shelf">
-          <div class="shelf__head"><span class="shelf__title">Hubs</span></div>
+          <div class="shelf__head"><span class="shelf__title">Hubs</span>${adminNow() ? `<button class="btn btn--ghost btn--sm" data-adm-add-hub>${icon("plusring", 14)} New hub</button>` : ""}</div>
           ${(() => {
             const cards = (isLive() ? LIVE.hubs : W.HUBS).map(h => {
               const live = isLive();
@@ -5921,7 +5935,7 @@
                 <div class="hub__name"><span style="color:var(--rose)">${icon(h.icon,16)}</span>${esc(h.name)}</div>
                 <div class="muted" style="font-size:12px;margin:3px 0 8px">${meta}</div>
                 <p class="soft" style="font-size:13.5px;margin:0;line-height:1.55">${esc(h.note)}</p>
-                <div class="hub__foot">${btn}${live ? `<span class="hub__see">See works ${icon("chev",12)}</span>` : ""}</div>
+                <div class="hub__foot"><div style="display:flex;gap:8px;align-items:center">${btn}${live && adminNow() ? admDelBtn("data-adm-hub-del", h.id, h.name) : ""}</div>${live ? `<span class="hub__see">See works ${icon("chev",12)}</span>` : ""}</div>
               </div>`;
             }).join("");
             return cards
@@ -6428,7 +6442,7 @@
         ? `<div class="hubw__faq">${items.map(it => `<details><summary>${esc(it.q)}</summary><div class="hubw__faq-a">${mdToHtmlBlocks(it.a || "").join("")}</div></details>`).join("")}</div>`
         : `<p class="muted" style="font-size:13px;margin:0">No questions yet.</p>`;
     }
-    return `<section class="hubw hubw--${esc(w.kind)}">${title}${body}</section>`;
+    return `<section class="hubw hubw--${esc(w.kind)}">${adminNow() ? admDelBtn("data-adm-widget-del", w.id, w.title || WIDGET_KINDS[w.kind] || w.kind, "adm-mini--float") : ""}${title}${body}</section>`;
   }
   function pollWidgetHTML(w, state) {
     const cfg = w.config || {};
@@ -6491,7 +6505,10 @@
             <p class="section-lead" style="margin:0 0 10px">${esc(hub.note || "")}</p>
             <div class="muted" style="font-size:13px">${countLabel}</div>
           </div>
-          <button class="btn ${following ? "btn--quiet" : "btn--primary"}" data-hub-follow="${hub.id}" aria-pressed="${following}">${following ? "Following" : "Follow"}</button>
+          <div class="hub-hero__side">
+            <button class="btn ${following ? "btn--quiet" : "btn--primary"}" data-hub-follow="${hub.id}" aria-pressed="${following}">${following ? "Following" : "Follow"}</button>
+            ${adminNow() ? `<button class="adm-mini" data-adm-widget-add title="Admin: add a widget" aria-label="Admin: add a widget to this hub">${icon("plusring", 15)}</button>${admDelBtn("data-adm-hub-del", hub.id, hub.name)}` : ""}
+          </div>
         </div>
 
         ${widgetRail}
@@ -9275,6 +9292,13 @@
     const ctNew = e.target.closest("[data-contest-new]");
     if (ctNew) { openCreateContest(); return; }
 
+    // Inline admin controls: the same actions as the panel, right on the pages.
+    const admDel = e.target.closest("[data-adm-event-del],[data-adm-ex-del],[data-adm-contest-del],[data-adm-hub-del],[data-adm-work-del],[data-adm-widget-del]");
+    if (admDel) { handleAdmDelete(admDel); return; }
+    if (e.target.closest("[data-adm-add-event]")) { openAddEventInline(); return; }
+    if (e.target.closest("[data-adm-add-hub]")) { openAddHubInline(); return; }
+    if (e.target.closest("[data-adm-widget-add]")) { openAddWidgetInline(); return; }
+
     const hopen = e.target.closest("[data-hub-open]");
     if (hopen && !e.target.closest("[data-hub-follow]")) { navigate("hub/" + hopen.dataset.hubOpen); return; }
     const hbf = e.target.closest("[data-hub-follow]");
@@ -10646,6 +10670,125 @@
       let payload; try { payload = readWidgetKind("wedit", w.kind); } catch (e) { toast(e.message); return; }
       try { await WispDB.updateWidget(w.id, { title: payload.title, config: payload.config }); toast("Widget updated."); openHubWidgets(hub); }
       catch (e) { toast((e && e.message) || "Could not update the widget."); }
+    });
+  }
+
+  /* ---- Inline admin: add and delete without opening the panel -------------
+     Every delete confirms first, then the page reloads its rows from the
+     database, so the change is what everyone sees from then on. */
+  function handleAdmDelete(btn) {
+    if (!adminNow()) return;
+    const d = btn.dataset, label = d.label || "this";
+    const kinds = [
+      ["admEventDel", "event", (id) => WispDB.deleteEvent(id), () => loadCommunity(), ""],
+      ["admExDel", "exchange", (id) => WispDB.deleteExchange(id), () => loadCommunity(), " Its sign-ups and matches go too."],
+      ["admContestDel", "contest", (id) => WispDB.deleteContest(id), () => loadCommunity(), " Its entries and votes go too."],
+      ["admHubDel", "hub", (id) => WispDB.deleteHub(id), () => { if (/^#\/hub\//.test(location.hash)) navigate("community"); else loadCommunity(); }, " Its widgets go too."],
+      ["admWorkDel", "work", (id) => WispDB.adminDeleteWork(id), () => navigate("browse"), " Its chapters go too."],
+      ["admWidgetDel", "widget", (id) => WispDB.deleteWidget(id), () => { const hp = LIVE.hubPage; if (hp) loadHubPage(hp.detail.hub.id); }, ""]
+    ];
+    for (const [key, noun, del, after, extra] of kinds) {
+      const id = d[key]; if (!id) continue;
+      confirmDialog({ title: `Delete this ${noun}?`, body: `&ldquo;${esc(label)}&rdquo; will be removed for everyone.${extra} This cannot be undone.`, confirmText: `Delete ${noun}`, danger: true },
+        async () => {
+          try { await del(id); toast(noun[0].toUpperCase() + noun.slice(1) + " deleted."); after(); }
+          catch (e) { toast((e && e.message) || "Could not delete."); }
+        });
+      return;
+    }
+  }
+
+  async function openAddEventInline() {
+    if (!adminNow()) return;
+    let cats = (LIVE.cats && LIVE.cats.event) || null;
+    if (!cats) { try { cats = await WispDB.listCategories("event"); } catch (e) { cats = []; } }
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <h2 style="font-size:20px">New event</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <div class="field"><label>Title</label><input type="text" id="iae-title" placeholder="Event title"></div>
+      <div class="field"><label>Kind</label>${kindSelectHTML("iae-kind", cats, "")}</div>
+      <div class="field"><label>Note</label><textarea id="iae-note" rows="2" placeholder="Short note (optional)"></textarea></div>
+      <div class="field"><label>Start date and time (Eastern Time), optional. Readers see a live countdown to it.</label>${datePickerHTML("iae")}${durationHTML("iae", 1, 0, 0)}<p class="muted" id="iae-echo" style="font-size:12px;margin:6px 0 0"></p></div>
+      <div class="modal-actions">
+        <button class="btn btn--quiet" data-modal-cancel>Cancel</button>
+        <button class="btn btn--primary" id="iae-save">Add event</button>
+      </div>`, "New event");
+    const echo = () => {
+      const el = $("#iae-echo"); if (!el) return; const raw = readDatePicker("iae");
+      if (!raw) { el.textContent = "No date set; no countdown."; return; }
+      const f = eventTimeFields(raw, ...durValues("iae"));
+      el.textContent = "Starts " + fmtEasternStamp(f.starts_at) + (f.ends_at ? ", ends " + fmtEasternStamp(f.ends_at) : "");
+    };
+    initDatePicker("iae", "", echo);
+    ["iae-dd", "iae-hh", "iae-mm"].forEach(id => { const el = $("#" + id); el && el.addEventListener("input", echo); });
+    echo();
+    $("#iae-save").addEventListener("click", async () => {
+      const title = $("#iae-title").value.trim();
+      if (!title) { toast("Give the event a title."); return; }
+      const fields = Object.assign({ title, kind: $("#iae-kind").value.trim(), note: $("#iae-note").value.trim(), sort: 100 },
+        eventTimeFields(readDatePicker("iae"), ...durValues("iae")));
+      try { await WispDB.createEvent(fields); toast("Event added."); closeModal(); loadCommunity(); }
+      catch (e) { toast((e && e.message) || "Could not add the event."); }
+    });
+  }
+
+  async function openAddHubInline() {
+    if (!adminNow()) return;
+    let cats = (LIVE.cats && LIVE.cats.hub) || null;
+    if (!cats) { try { cats = await WispDB.listCategories("hub"); } catch (e) { cats = []; } }
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <h2 style="font-size:20px">New hub</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <div class="field"><label>Name</label><input type="text" id="iah-name" placeholder="Hub name"></div>
+      <div class="field"><label>Kind</label>${kindSelectHTML("iah-kind", cats, "")}</div>
+      <div class="field"><label>Note</label><textarea id="iah-note" rows="2" placeholder="Short note (optional)"></textarea></div>
+      <div class="field"><label>Icon (tag or book)</label><input type="text" id="iah-icon" placeholder="tag"></div>
+      <div class="modal-actions">
+        <button class="btn btn--quiet" data-modal-cancel>Cancel</button>
+        <button class="btn btn--primary" id="iah-save">Add hub</button>
+      </div>`, "New hub");
+    $("#iah-save").addEventListener("click", async () => {
+      const name = $("#iah-name").value.trim();
+      if (!name) { toast("Give the hub a name."); return; }
+      try { await WispDB.createHub({ name, kind: $("#iah-kind").value.trim(), note: $("#iah-note").value.trim(), icon: ($("#iah-icon").value.trim() || "tag"), sort: 100 }); toast("Hub added."); closeModal(); loadCommunity(); }
+      catch (e) { toast((e && e.message) || "Could not add the hub."); }
+    });
+  }
+
+  function openAddWidgetInline() {
+    const hp = LIVE.hubPage;
+    if (!adminNow() || !hp) return;
+    const hub = hp.detail.hub;
+    const kindOpts = Object.keys(WIDGET_KINDS).map(k => `<option value="${k}">${WIDGET_KINDS[k]}</option>`).join("");
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <h2 style="font-size:20px">Add a widget</h2>
+        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
+      </div>
+      <p class="muted" style="font-size:12.5px;margin:0 0 12px">It shows on the ${esc(hub.name)} page for everyone.</p>
+      <div class="field"><label>Kind</label><select id="iaw-kind" class="admin-select">${kindOpts}</select></div>
+      <div id="iaw-form">${widgetKindForm("iaw", "note", null)}</div>
+      <div class="modal-actions">
+        <button class="btn btn--quiet" data-modal-cancel>Cancel</button>
+        <button class="btn btn--primary" id="iaw-save">Add widget</button>
+      </div>`, "Add a widget");
+    const kindSel = $("#iaw-kind");
+    const rebuild = () => {
+      $("#iaw-form").innerHTML = widgetKindForm("iaw", kindSel.value, null);
+      if (kindSel.value === "countdown") initDatePicker("iaw", "", function () {});
+      if (kindSel.value === "image") wireWidgetImageUpload("iaw");
+    };
+    kindSel.addEventListener("change", rebuild);
+    $("#iaw-save").addEventListener("click", async () => {
+      let payload; try { payload = readWidgetKind("iaw", kindSel.value); } catch (e) { toast(e.message); return; }
+      try {
+        await WispDB.createWidget({ hub_id: hub.id, kind: kindSel.value, title: payload.title, config: payload.config, position: (hp.widgets || []).length });
+        toast("Widget added."); closeModal(); loadHubPage(hub.id);
+      } catch (e) { toast((e && e.message) || "Could not add the widget."); }
     });
   }
 
