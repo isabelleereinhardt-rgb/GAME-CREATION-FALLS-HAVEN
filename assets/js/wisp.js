@@ -45,7 +45,7 @@
 
   /* ---- settings and persistence (stands in for server-side sync) --------- */
   const DEFAULTS = { theme:"cream", accent:"default", face:"humanist", size:19, measure:66,
-                     dyslexia:false, motion:false, justify:false, margins:true, view:"gallery", adultOK:false, introSeen:false, comicMode:"strip",
+                     dyslexia:false, motion:false, justify:false, margins:true, view:"gallery", adultOK:false, introSeen:false, comicMode:"strip", comicDir:"ltr", comicFit:"width",
                      typography: typographyDefaults() };
   let settings = load();
   function load() {
@@ -1792,6 +1792,7 @@
   let dictation = null;         // active SpeechRecognition session, when dictating
   let comicIndex = 0;           // current page in the comic reader's single-page mode
   let comicKeyHandler = null;   // keydown handler for comic paging, removed between renders
+  let comicScrollHandler = null; // strip-mode page tracker {el, fn}, removed between renders
   let pendingSeries = null; // series name to prefill when starting a new book in a series
   let guestBrowsing = false; // set when a visitor chooses to look around without an account
   let lastAuthUid;           // last signed-in user id, so we re-render only on real identity changes
@@ -2574,13 +2575,16 @@
         </div>`).join("");
       rows = (releasedRows + lockedRows) || `<p class="muted" style="padding:14px 4px">No chapters published yet.</p>`;
     } else {
-      const chapters = Math.min(w.chapters, 8);
+      // Comics list every chapter and each row opens that chapter; prose demo
+      // works keep the short sample list into the flagship reader.
+      const isDemoComic = w.format === "comic";
+      const chapters = isDemoComic ? w.chapters : Math.min(w.chapters, 8);
       rows = Array.from({ length: chapters }, (_, i) => {
         const n = i + 1;
-        return `<button class="chapter-row" data-read="${w.id}">
+        return `<button class="chapter-row" data-read="${w.id}${isDemoComic ? "/" + n : ""}">
           <span class="chapter-row__n">${n}</span>
-          <span class="chapter-row__title">${esc(chapterFullLabel(n, n === 1 ? "The First Cold Morning" : ""))}</span>
-          <span class="chapter-row__when">posted ${["3mo","2mo","6w","1mo","3w","2w","1w","9h"][i] || ""}</span>
+          <span class="chapter-row__title">${esc(chapterFullLabel(n, !isDemoComic && n === 1 ? "The First Cold Morning" : ""))}</span>
+          <span class="chapter-row__when">posted ${["3mo","2mo","6w","1mo","3w","2w","1w","9h"][i % 8] || ""}</span>
         </button>`;
       }).join("");
     }
@@ -2629,11 +2633,21 @@
         </div>
 
         <h2 class="shelf__title" style="margin-bottom:14px">Chapters</h2>
+        ${(w._db ? (LIVE.chapters[w.id] || []).length : w.chapters) > 8 ? `<input class="chapter-find" id="chapterFind" type="search" placeholder="Find a chapter" aria-label="Find a chapter">` : ""}
         <div class="chapter-list">${rows}</div>
       </div>`;
     startCountdowns();
     mountRating(w);
     reconcileCommentTotal(w);
+    // Long chapter lists get a finder, the way the manga sites do it: type a
+    // number or part of a title and the list narrows as you go.
+    const find = $("#chapterFind");
+    if (find) find.addEventListener("input", () => {
+      const q = find.value.trim().toLowerCase();
+      $$("#screen-work .chapter-row").forEach(r => {
+        r.style.display = !q || r.textContent.toLowerCase().includes(q) ? "" : "none";
+      });
+    });
   }
 
   // The stat pill shows the maintained comments_count by default; confirm it
@@ -2773,10 +2787,104 @@
     </div>`;
   }
 
+  /* ---- Demo comics --------------------------------------------------------
+     The bundled comics read like the real thing: generated webtoon pages
+     (inline SVG, so the demo needs no image files and works offline), full
+     chapter navigation, and the same reader wiring as live comics. Each work
+     keeps its own palette and each chapter varies the panels, so paging and
+     chapter turns are visibly real. */
+  const DEMO_COMIC_PAL = {
+    understudy: ["#2b2340", "#c9a0dc", "#f2e6f7", "#8d6cab"],
+    veil:       ["#202a2e", "#9fb8ad", "#eaf0ec", "#5d7a6f"]
+  };
+  function demoComicPages(w, chapterNo, count) {
+    const p = DEMO_COMIC_PAL[w.id] || ["#26222e", "#b7a7c9", "#efe9f4", "#7d6f91"];
+    const initial = (w.title || "W")[0].toUpperCase();
+    const out = [];
+    for (let i = 0; i < count; i++) {
+      const h1 = 300 + ((i * 97 + chapterNo * 53) % 220);
+      const h2 = 250 + ((i * 61 + chapterNo * 31) % 200);
+      const y2 = 60 + h1 + 24, y3 = y2 + h2 + 24;
+      const h3 = 1120 - y3;
+      const cx = 140 + ((i * 131 + chapterNo * 47) % 480);
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1180" viewBox="0 0 800 1180">` +
+        `<rect width="800" height="1180" fill="${p[2]}"/>` +
+        `<rect x="46" y="60" width="708" height="${h1}" rx="16" fill="${p[0]}"/>` +
+        `<circle cx="${cx}" cy="${60 + h1 / 2}" r="${54 + ((i * 37) % 44)}" fill="${p[1]}" opacity=".9"/>` +
+        `<rect x="46" y="${y2}" width="${430 + ((i * 83) % 240)}" height="${h2}" rx="16" fill="${p[3]}"/>` +
+        `<rect x="46" y="${y3}" width="708" height="${Math.max(120, h3)}" rx="16" fill="${p[0]}" opacity=".92"/>` +
+        `<text x="86" y="${y3 + 74}" font-family="Georgia,serif" font-size="46" fill="${p[2]}" opacity=".9">${initial}</text>` +
+        `<text x="754" y="1150" text-anchor="end" font-family="Arial,sans-serif" font-size="24" letter-spacing="6" fill="${p[3]}">CH ${chapterNo} · PAGE ${i + 1}</text>` +
+      `</svg>`;
+      out.push("data:image/svg+xml;utf8," + encodeURIComponent(svg));
+    }
+    return out;
+  }
+  // The comic reader's control strips, shared by the demo and live renders.
+  function comicBarHTML(mode) {
+    const dir = settings.comicDir || "ltr", fit = settings.comicFit || "width";
+    return `<div class="comic-bar">
+      <div class="seg seg--sm" role="group" aria-label="Reading mode">
+        <button data-comic-mode="strip" class="${mode === "strip" ? "is-on" : ""}" aria-pressed="${mode === "strip"}">Long strip</button>
+        <button data-comic-mode="single" class="${mode === "single" ? "is-on" : ""}" aria-pressed="${mode === "single"}">Single page</button>
+      </div>
+      <div class="seg seg--sm" role="group" aria-label="Reading direction">
+        <button data-comic-dir="ltr" class="${dir === "ltr" ? "is-on" : ""}" aria-pressed="${dir === "ltr"}" title="Webtoons and western comics">L&#8594;R</button>
+        <button data-comic-dir="rtl" class="${dir === "rtl" ? "is-on" : ""}" aria-pressed="${dir === "rtl"}" title="Manga page order">R&#8592;L</button>
+      </div>
+      <div class="seg seg--sm" role="group" aria-label="Page fit">
+        <button data-comic-fit="width" class="${fit === "width" ? "is-on" : ""}" aria-pressed="${fit === "width"}">Fit width</button>
+        <button data-comic-fit="screen" class="${fit === "screen" ? "is-on" : ""}" aria-pressed="${fit === "screen"}">Fit screen</button>
+      </div>
+    </div>`;
+  }
+  function comicPagerHTML(count, mode) {
+    return `<div class="comic-pager" id="comicPager" style="${mode === "single" ? "" : "display:none"}">
+      <button class="btn btn--quiet btn--sm" data-comic-prev>${icon("chev",13).replace("<svg", "<svg style='transform:rotate(180deg)'")} Prev</button>
+      <input type="range" id="comicSlider" min="1" max="${count}" step="1" value="1" aria-label="Jump to a page">
+      <span class="comic-pager__count" id="comicCount">Page 1 / ${count}</span>
+      <button class="btn btn--quiet btn--sm" data-comic-next>Next ${icon("chev",13)}</button>
+    </div>`;
+  }
+  function renderDemoComic(w, chapterNum) {
+    const total = w.chapters || 1;
+    const chNo = Math.max(1, Math.min(total, +chapterNum || 1));
+    const srcs = demoComicPages(w, chNo, 8 + (chNo % 3));
+    const comicMode = settings.comicMode || "strip";
+    comicIndex = 0;
+    markVisited(w.id);
+    const prev = chNo > 1 ? chNo - 1 : null, next = chNo < total ? chNo + 1 : null;
+    $("#screen-reading").innerHTML = `
+      <div class="reader reader--comic">
+        <div class="reader__progress" id="readProgress"><i></i><span class="reader__pct" aria-hidden="true">0%</span></div>
+        <div class="reader__wrap" id="readerWrap">
+          <div class="reader__crumbs"><a href="#/work/${w.id}">${esc(w.title)}</a> ${icon("chev",12)} <span>Chapter ${chNo} of ${total}</span></div>
+          <h1 class="reader__title">${esc(w.title)}</h1>
+          <div class="reader__by">by <a href="#/profile">${esc(w.author)}</a></div>
+          <div class="reader__chapter">Chapter ${chNo}</div>
+          ${comicBarHTML(comicMode)}
+          <div class="prose" id="prose" data-comic="on" data-comic-mode="${comicMode}" data-comic-fit="${settings.comicFit || "width"}" data-comic-work="${esc(w.id)}" data-chno="${chNo}">
+            ${srcs.map((src, i) => `<div class="para para--page${i === 0 ? " is-current" : ""}"><img class="comic-page-img" src="${src}" alt="Page ${i + 1}" loading="lazy" decoding="async"></div>`).join("")}
+          </div>
+          ${comicPagerHTML(srcs.length, comicMode)}
+          <div class="chapter-nav">
+            ${prev ? `<button class="btn btn--quiet btn--sm" data-read="${w.id}/${prev}">&lsaquo; Previous</button>` : "<span></span>"}
+            <button class="btn--link" data-work="${w.id}">Chapter index</button>
+            ${next ? `<button class="btn btn--primary btn--sm" data-read="${w.id}/${next}">Next chapter &rsaquo;</button>` : "<span></span>"}
+          </div>
+        </div>
+        ${readerToolsHTML()}
+      </div>`;
+    wireComicReader(srcs.length);
+    mountReaderTools();
+  }
+
   function renderReading(reqId, chapterNum) {
     openThreads.clear();               // the DOM is rebuilt below; open-state must reset
     const liveWork = LIVE.byId[reqId];
     if (liveWork && liveWork._db) { renderLiveReading(liveWork, LIVE.chapters[reqId] || [], chapterNum); return; }
+    const demoComic = W.byId[reqId];
+    if (demoComic && demoComic.format === "comic") { renderDemoComic(demoComic, chapterNum); return; }
     const c = W.CHAPTER;
     // Restore any demo comments kept on this device, so they survive a reload.
     (loadLocalComments("demo") || []).forEach(r => {
@@ -3568,20 +3676,11 @@
           <h1 class="reader__title">${esc(w.title)}</h1>
           <div class="reader__by">by <a href="#/${w.authorId ? "user/" + (w.authorHandle || w.authorId) : "work/" + w.id}">${esc(w.author)}</a></div>
           ${ch ? `<div class="reader__chapter">${esc(chapterHeading(ch.number, ch.title))}</div>${ch.title && !chTitleStandsAlone(ch.title) ? `<div class="reader__chapter-title">${esc(ch.title)}</div>` : ""}` : ""}
-          ${isComic && paras.length ? `<div class="comic-bar">
-            <div class="seg seg--sm" role="group" aria-label="Reading mode">
-              <button data-comic-mode="strip" class="${comicMode === "strip" ? "is-on" : ""}" aria-pressed="${comicMode === "strip"}">Long strip</button>
-              <button data-comic-mode="single" class="${comicMode === "single" ? "is-on" : ""}" aria-pressed="${comicMode === "single"}">Single page</button>
-            </div>
-          </div>` : ""}
-          <div class="prose" id="prose" data-comic="${isComic ? "on" : "off"}" data-comic-mode="${isComic ? comicMode : "strip"}" data-justify="${settings.justify ? "on" : "off"}" data-hyphen="${settings.justify ? "on" : "off"}">
+          ${isComic && paras.length ? comicBarHTML(comicMode) : ""}
+          <div class="prose" id="prose" data-comic="${isComic ? "on" : "off"}" data-comic-mode="${isComic ? comicMode : "strip"}" data-comic-fit="${settings.comicFit || "width"}" data-comic-work="${esc(w.id)}" data-chno="${ch ? ch.number : 1}" data-justify="${settings.justify ? "on" : "off"}" data-hyphen="${settings.justify ? "on" : "off"}">
             ${proseHTML}
           </div>
-          ${isComic && paras.length ? `<div class="comic-pager" id="comicPager" style="${comicMode === "single" ? "" : "display:none"}">
-            <button class="btn btn--quiet btn--sm" data-comic-prev>${icon("chev",13).replace("<svg", "<svg style='transform:rotate(180deg)'")} Prev</button>
-            <span class="comic-pager__count" id="comicCount">Page 1 / ${paras.length}</span>
-            <button class="btn btn--quiet btn--sm" data-comic-next>Next ${icon("chev",13)}</button>
-          </div>` : ""}
+          ${isComic && paras.length ? comicPagerHTML(paras.length, comicMode) : ""}
           ${readable.length > 1 ? `<div class="chapter-nav">
             ${prev ? `<button class="btn btn--quiet btn--sm" data-read="${w.id}/${prev.number}">&lsaquo; Previous</button>` : "<span></span>"}
             <button class="btn--link" data-work="${w.id}">Chapter index</button>
@@ -3607,22 +3706,47 @@
     if (WispDB.signedIn && ch) WispDB.saveProgress(w.id, ch.number, 0);
   }
 
-  // The comic reader: long-strip by default, or single-page with a counter,
-  // arrow keys, and click-to-turn. The mode is remembered on the device.
+  // The comic reader, built the way the manga sites do it: long-strip or
+  // single-page, tap zones and arrow keys that honor the reading direction
+  // (manga turns right to left), a jump slider, page fit, the next pages
+  // loading before they're asked for, the last page remembered per work, and
+  // Next on the final page rolling straight into the next chapter.
   function wireComicReader(count) {
     const prose = $("#prose");
     if (!prose || prose.dataset.comic !== "on") return;
-    const pager = $("#comicPager"), countEl = $("#comicCount");
+    const pager = $("#comicPager"), countEl = $("#comicCount"), slider = $("#comicSlider");
+    const posKey = "wisp.comic." + (prose.dataset.comicWork || "demo");
+    const chNo = +prose.dataset.chno || 1;
     const pages = () => $$("#prose .para--page");
-    const setCurrent = (i) => {
+    const rtl = () => (settings.comicDir || "ltr") === "rtl";
+    const savePos = () => { try { localStorage.setItem(posKey, JSON.stringify({ n: chNo, p: comicIndex })); } catch (e) {} };
+    // The current page and the two after it load eagerly; everything further
+    // stays lazy, so a fifty-page chapter never downloads all at once.
+    const warm = () => {
+      for (let k = 0; k <= 2; k++) {
+        const pg = pages()[comicIndex + k]; if (!pg) break;
+        const im = pg.querySelector("img"); if (im && im.loading !== "eager") im.loading = "eager";
+      }
+    };
+    const nextChapterBtn = () => document.querySelector("#screen-reading .chapter-nav [data-read].btn--primary");
+    const setCurrent = (i, quiet) => {
+      if (i >= count) {
+        // past the last page: roll into the next chapter when there is one
+        const nx = nextChapterBtn();
+        if (nx && !quiet) { try { localStorage.removeItem(posKey); } catch (e) {} nx.click(); return; }
+      }
       comicIndex = Math.max(0, Math.min(count - 1, i));
       pages().forEach((p, idx) => p.classList.toggle("is-current", idx === comicIndex));
       if (countEl) countEl.textContent = `Page ${comicIndex + 1} / ${count}`;
+      if (slider) slider.value = String(comicIndex + 1);
       if (prose.dataset.comicMode === "single") {
         const cur = pages()[comicIndex];
-        if (cur) cur.scrollIntoView({ block: "start", behavior: "auto" });
+        if (cur && !quiet) cur.scrollIntoView({ block: "start", behavior: "auto" });
+        warm();
       }
+      savePos();
     };
+    const step = (fwd) => setCurrent(comicIndex + (fwd ? 1 : -1));
     const setMode = (mode) => {
       settings.comicMode = mode; save();
       prose.dataset.comicMode = mode;
@@ -3630,31 +3754,78 @@
         const on = b.dataset.comicMode === mode; b.classList.toggle("is-on", on); b.setAttribute("aria-pressed", String(on));
       });
       if (pager) pager.style.display = mode === "single" ? "" : "none";
-      if (mode === "single") setCurrent(comicIndex);
+      if (mode === "single") setCurrent(comicIndex, true);
     };
     $$("#screen-reading .comic-bar [data-comic-mode]").forEach(b => b.addEventListener("click", () => setMode(b.dataset.comicMode)));
+    // Reading direction and page fit, remembered like the mode.
+    $$("#screen-reading .comic-bar [data-comic-dir]").forEach(b => b.addEventListener("click", () => {
+      settings.comicDir = b.dataset.comicDir; save();
+      $$("#screen-reading .comic-bar [data-comic-dir]").forEach(x => {
+        const on = x.dataset.comicDir === settings.comicDir; x.classList.toggle("is-on", on); x.setAttribute("aria-pressed", String(on));
+      });
+      toast(settings.comicDir === "rtl" ? "Manga order: tap left or press the left arrow for the next page." : "Reading left to right.");
+    }));
+    $$("#screen-reading .comic-bar [data-comic-fit]").forEach(b => b.addEventListener("click", () => {
+      settings.comicFit = b.dataset.comicFit; save();
+      prose.dataset.comicFit = settings.comicFit;
+      $$("#screen-reading .comic-bar [data-comic-fit]").forEach(x => {
+        const on = x.dataset.comicFit === settings.comicFit; x.classList.toggle("is-on", on); x.setAttribute("aria-pressed", String(on));
+      });
+    }));
     if (pager) {
       const p = pager.querySelector("[data-comic-prev]"), n = pager.querySelector("[data-comic-next]");
-      if (p) p.addEventListener("click", () => setCurrent(comicIndex - 1));
-      if (n) n.addEventListener("click", () => setCurrent(comicIndex + 1));
+      if (p) p.addEventListener("click", () => step(false));
+      if (n) n.addEventListener("click", () => step(true));
+      if (slider) slider.addEventListener("input", () => setCurrent(+slider.value - 1, true));
     }
     // Tap the right or left half of the current page to turn, in single mode.
+    // In manga order the sides swap: the left half moves the story forward.
     prose.addEventListener("click", (e) => {
       if (prose.dataset.comicMode !== "single") return;
       if (e.target.closest(".para__marker") || e.target.closest(".thread")) return;
       const img = e.target.closest(".comic-page-img"); if (!img) return;
       const r = img.getBoundingClientRect();
-      setCurrent(comicIndex + ((e.clientX - r.left) > r.width / 2 ? 1 : -1));
+      const rightHalf = (e.clientX - r.left) > r.width / 2;
+      step(rtl() ? !rightHalf : rightHalf);
     });
     // Arrow keys, only while reading a comic in single-page mode.
     if (comicKeyHandler) document.removeEventListener("keydown", comicKeyHandler);
     comicKeyHandler = (e) => {
       if (currentScreen !== "reading" || prose.dataset.comicMode !== "single") return;
-      if (e.key === "ArrowRight") { e.preventDefault(); setCurrent(comicIndex + 1); }
-      else if (e.key === "ArrowLeft") { e.preventDefault(); setCurrent(comicIndex - 1); }
+      if (e.key === "ArrowRight") { e.preventDefault(); step(!rtl()); }
+      else if (e.key === "ArrowLeft") { e.preventDefault(); step(rtl()); }
     };
     document.addEventListener("keydown", comicKeyHandler);
+    // In the long strip, the page under the reader's eyes is tracked from the
+    // scroll, so the counter stays honest and the spot survives a reload. The
+    // listener rides the window in the capture phase, so it hears the scroll
+    // whichever element actually does the scrolling (the app shell grows into
+    // its own scroller once the pages give it height).
+    if (comicScrollHandler) { window.removeEventListener("scroll", comicScrollHandler, true); comicScrollHandler = null; }
+    {
+      let raf = null;
+      comicScrollHandler = () => {
+        if (prose.dataset.comicMode !== "strip" || currentScreen !== "reading" || !prose.isConnected) return;
+        if (raf) return;
+        raf = requestAnimationFrame(() => {
+          raf = null;
+          const ps = pages(); let idx = 0;
+          for (let i = 0; i < ps.length; i++) { if (ps[i].getBoundingClientRect().top <= 120) idx = i; else break; }
+          if (idx !== comicIndex) { comicIndex = idx; if (countEl) countEl.textContent = `Page ${comicIndex + 1} / ${count}`; if (slider) slider.value = String(comicIndex + 1); savePos(); }
+        });
+      };
+      window.addEventListener("scroll", comicScrollHandler, { passive: true, capture: true });
+    }
+    // Come back to a comic and it opens where it was left, like any manga
+    // site worth its salt. The spot is read BEFORE the first render pass can
+    // write page one over it.
+    let saved = null; try { saved = JSON.parse(localStorage.getItem(posKey) || "null"); } catch (e) {}
     setMode(settings.comicMode || "strip");
+    if (saved && saved.n === chNo && saved.p > 0 && saved.p < count) {
+      if (prose.dataset.comicMode === "single") setCurrent(saved.p, true);
+      else setTimeout(() => { const t = pages()[saved.p]; if (t) t.scrollIntoView({ block: "start" }); }, 90);
+      if (saved.p > 1) toast("Picking up at page " + (saved.p + 1) + ".");
+    }
   }
 
   // Wrap a reader's text selection in highlight marks. A selection that spans
@@ -8930,8 +9101,8 @@
     if (screen === "reading") {
       if (live) { loadReading(arg || "", arg2); return; }
       const id = arg || "amber"; const w = W.byId[id];
-      if (needsGate(w)) { showGate(w, () => renderReading(id)); return; }
-      renderReading(id);
+      if (needsGate(w)) { showGate(w, () => renderReading(id, arg2)); return; }
+      renderReading(id, arg2);
     }
     else if (screen === "work") { live ? loadWork(arg || "") : renderWork(arg); }
     else if (screen === "browse") {
@@ -12275,12 +12446,14 @@
       applyFormat("link");
     });
     // In the reader, the left and right arrows turn chapters, the way every
-    // e-reader does. Ignored while typing anywhere.
+    // e-reader does. Ignored while typing anywhere, and in comics, where the
+    // arrows belong to the pages (chapters turn from the last page instead).
     document.addEventListener("keydown", (e) => {
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
       const t = e.target;
       if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+      if (document.querySelector('#prose[data-comic="on"]')) return;
       const screen = $("#screen-reading");
       if (!screen || screen.hidden) return;
       const nav = screen.querySelector(".chapter-nav");

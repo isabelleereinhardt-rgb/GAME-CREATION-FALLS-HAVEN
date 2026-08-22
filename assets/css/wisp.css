@@ -1423,7 +1423,20 @@ mark.hl--purple { background: rgba(190, 130, 255, 0.42); }
 .para--page { margin: 0; }
 .prose[data-comic-mode="single"] .para--page { display: none; }
 .prose[data-comic-mode="single"] .para--page.is-current { display: block; }
-.comic-bar { display: flex; justify-content: center; margin: 4px 0 18px; }
+.comic-bar { display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 18px; }
+/* Fit screen: in single-page mode the page shrinks to sit whole in the
+   viewport, the way a manga reader turns pages without scrolling. */
+.prose[data-comic-mode="single"][data-comic-fit="screen"] .comic-page-img {
+  max-height: calc(100vh - 230px); width: auto; max-width: 100%; margin: 0 auto;
+}
+.comic-pager #comicSlider { flex: 1 1 120px; max-width: 260px; accent-color: var(--rose); }
+/* Find-a-chapter box above long chapter lists. */
+.chapter-find {
+  width: 100%; margin: 6px 0 10px; padding: 9px 12px;
+  border: 1px solid var(--line); border-radius: 9px;
+  background: var(--card); color: var(--ink); font: 14.5px var(--font-text); outline: none;
+}
+.chapter-find:focus { border-color: var(--rose); }
 .seg--sm { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
 .seg--sm button { border: 0; background: var(--surface); color: var(--ink2); font: 13px var(--font-text); padding: 6px 14px; cursor: pointer; }
 .seg--sm button.is-on { background: var(--rose); color: #fff; }
