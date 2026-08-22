@@ -5048,7 +5048,10 @@
   }
   function wireBodyZone() {
     if (editorFormat !== "comic") return;
-    const addPage = (url) => { if (url) { editorPages.push(url); refreshBodyZone(); } };
+    // Every page change is a real edit: mark the desk dirty so the autosave
+    // runs and the save flag tells the truth. Pages used to change without
+    // this, so the flag kept saying "Saved" while a refresh lost them all.
+    const addPage = (url) => { if (url) { editorPages.push(url); refreshBodyZone(); markEditorDirty(); } };
     const fileInput = $("#we-page-file");
     if (fileInput) fileInput.addEventListener("change", async () => {
       const file = fileInput.files && fileInput.files[0];
@@ -5065,9 +5068,9 @@
       if (!/^https?:\/\//i.test(url)) { toast("Page addresses need to start with https://"); return; }
       addPage(url);
     });
-    $$("#we-body-zone [data-page-del]").forEach(b => b.addEventListener("click", () => { editorPages.splice(+b.dataset.pageDel, 1); refreshBodyZone(); }));
-    $$("#we-body-zone [data-page-up]").forEach(b => b.addEventListener("click", () => { const i = +b.dataset.pageUp; if (i > 0) { [editorPages[i - 1], editorPages[i]] = [editorPages[i], editorPages[i - 1]]; refreshBodyZone(); } }));
-    $$("#we-body-zone [data-page-down]").forEach(b => b.addEventListener("click", () => { const i = +b.dataset.pageDown; if (i < editorPages.length - 1) { [editorPages[i + 1], editorPages[i]] = [editorPages[i], editorPages[i + 1]]; refreshBodyZone(); } }));
+    $$("#we-body-zone [data-page-del]").forEach(b => b.addEventListener("click", () => { editorPages.splice(+b.dataset.pageDel, 1); refreshBodyZone(); markEditorDirty(); }));
+    $$("#we-body-zone [data-page-up]").forEach(b => b.addEventListener("click", () => { const i = +b.dataset.pageUp; if (i > 0) { [editorPages[i - 1], editorPages[i]] = [editorPages[i], editorPages[i - 1]]; refreshBodyZone(); markEditorDirty(); } }));
+    $$("#we-body-zone [data-page-down]").forEach(b => b.addEventListener("click", () => { const i = +b.dataset.pageDown; if (i < editorPages.length - 1) { [editorPages[i + 1], editorPages[i]] = [editorPages[i], editorPages[i + 1]]; refreshBodyZone(); markEditorDirty(); } }));
   }
 
   /* Wattpad-style chapter reordering: drag a row by its grip. Pointer events so
@@ -9203,6 +9206,7 @@
         editorFormat = next;
         $$("#screen-write [data-wformat]").forEach(b => { const on = b === wf; b.classList.toggle("is-on", on); b.setAttribute("aria-pressed", String(on)); });
         refreshBodyZone();
+        markEditorDirty();   // the format is part of the work; changing it must reach the save
       }
       return;
     }
@@ -12039,8 +12043,17 @@
   // localStorage and comes back when the editor next opens.
   const LOCAL_DRAFT_KEY = "wisp.draft.local";
   function saveLocalDraft() {
-    if (editorFormat === "comic") return;
     const val = (id) => { const e = $(id); return e ? e.value : ""; };
+    if (editorFormat === "comic") {
+      // A comic draft is its page list; it deserves the same device-side net
+      // as prose (this used to skip comics entirely while the flag claimed
+      // the draft was kept).
+      try {
+        if (!editorPages.length && !val("#we-title").trim()) { localStorage.removeItem(LOCAL_DRAFT_KEY); return; }
+        localStorage.setItem(LOCAL_DRAFT_KEY, JSON.stringify({ format: "comic", title: val("#we-title"), chTitle: val("#we-chtitle"), pages: editorPages.slice(), at: Date.now() }));
+      } catch (e) {}
+      return;
+    }
     const ed = $("#we-body"); if (!ed) return;
     const body = editorHtmlToMd(ed);
     try {
@@ -12052,6 +12065,21 @@
   function restoreLocalDraft() {
     let d = null;
     try { d = JSON.parse(localStorage.getItem(LOCAL_DRAFT_KEY) || "null"); } catch (e) {}
+    if (d && d.format === "comic") {
+      // A kept comic draft comes back onto a fresh desk: the format flips to
+      // comic and the page list returns. Real content is never clobbered.
+      if (!Array.isArray(d.pages) || !d.pages.length || editorPages.length) return;
+      editorFormat = "comic";
+      editorPages = d.pages.slice();
+      $$("#screen-write [data-wformat]").forEach(b => { const on = b.dataset.wformat === "comic"; b.classList.toggle("is-on", on); b.setAttribute("aria-pressed", String(on)); });
+      const tEl2 = $("#we-title"), cEl2 = $("#we-chtitle");
+      if (tEl2 && !tEl2.value.trim()) tEl2.value = d.title || "";
+      if (cEl2 && !cEl2.value.trim()) cEl2.value = d.chTitle || "";
+      refreshBodyZone();
+      setSaveFlag("local");
+      toast("Restored your unsaved comic draft from this device.");
+      return;
+    }
     if (!d || !(d.body || "").trim()) return;
     const ed = $("#we-body");
     if (!ed || (ed.textContent || "").trim()) return;   // never clobber real content
@@ -12170,9 +12198,13 @@
         if (liveEditor.chapter) {
           liveEditor.chapter.title = chapterTitle;
           liveEditor.chapter.published = chapterPublished;
+          // The cached body follows the save too: switching chapters in the
+          // editor and back re-reads this cache, and a comic's page list must
+          // not snap back to what it was before the save.
+          liveEditor.chapter.body = body;
           // keep the record in allChapters in step so the panel shows the new title
           const inList = (liveEditor.allChapters || []).find(c => c.id === liveEditor.chapter.id);
-          if (inList) { inList.title = chapterTitle; inList.published = chapterPublished; }
+          if (inList) { inList.title = chapterTitle; inList.published = chapterPublished; inList.body = body; }
           if (!silent) refreshChaptersPanel();
         }
         if (!silent) toast(kind === "schedule" ? "Scheduled. It releases " + fmtEasternStamp(scheduled_for) + "."
