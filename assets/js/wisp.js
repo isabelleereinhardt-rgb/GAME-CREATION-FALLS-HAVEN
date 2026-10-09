@@ -7089,7 +7089,7 @@
           </div>
           <div style="display:flex;flex-direction:column;gap:8px">
             <button class="btn btn--quiet btn--sm" id="themeBtn2">${icon("gear",15)} Customize theme</button>
-            <button class="btn btn--quiet btn--sm" data-toast="Arrange your profile theme, pinned works, and widgets here.">Edit profile</button>
+            <button class="btn btn--quiet btn--sm" data-toast="Arrange your profile theme and pinned works here.">Edit profile</button>
           </div>
         </div>
 
@@ -7105,7 +7105,7 @@
 
         <div class="editorial">
           <div class="eyebrow rose" style="margin-bottom:6px">Your profile</div>
-          <p class="soft" style="font-size:14px;margin:0;line-height:1.7">Style your profile with the same theme system as the rest of the site: accent, fonts, background, pinned works, and widgets. Your theme only changes your own view.</p>
+          <p class="soft" style="font-size:14px;margin:0;line-height:1.7">Style your profile with the same theme system as the rest of the site: accent, fonts, background, and pinned works. Your theme only changes your own view.</p>
         </div>
       </div>`;
     $("#themeBtn2") && $("#themeBtn2").addEventListener("click", openTheme);

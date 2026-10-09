@@ -48,7 +48,9 @@ Supabase's free tier.
     migration files in order as they are added.
 11. Keep going through every numbered file in
     [`supabase/migrations/`](supabase/migrations/), in order: each one adds a
-    feature the site already knows how to use. Two recent ones worth calling
+    feature the site already knows how to use, or is harmless to run if the
+    feature has since been retired (`022_profile_widgets.sql` adds a `widgets`
+    column the site no longer reads or writes). Two recent ones worth calling
     out: `031_contest_top_awards.sql` lets bigger contests hand out the Top
     Five and Top Ten badges, and `032_user_state.sql` is what makes settings,
     muted tags, blocked authors, and the personal spelling dictionary follow
