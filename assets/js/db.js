@@ -675,10 +675,11 @@ window.WispDB = (function () {
     emit();
     return data;
   }
-  // The installable widget station, stored on the profile so it follows a reader
-  // across devices. Reads come free with the profile row (select *). Writes fail
-  // softly if the `widgets` column has not been migrated yet, so the app keeps
-  // working on localStorage alone until the migration is run.
+  // The reading companion's look and habits, stored on the profile so Lucky follows
+  // a reader across devices. The column is still named `widgets` from the old
+  // personal widget station; keeping the name means no migration. Reads come free
+  // with the profile row (select *). Writes fail softly if the column has not
+  // been migrated yet, so the app keeps working on localStorage alone.
   function getWidgets() { return profile ? profile.widgets : null; }
   async function saveWidgets(obj) {
     if (!user || !client) return false;
@@ -1655,18 +1656,6 @@ window.WispDB = (function () {
     const { data } = await client.from("reading_progress").select("work_id, chapter_number, percent, updated_at").eq("user_id", user.id).order("updated_at", { ascending: false }).limit(1);
     return (data && data[0]) || null;
   }
-  // Honest reading stats from your own progress rows (one per work opened):
-  // how many works you have open, how many you touched this week, and how many
-  // you are partway through. No word counts are stored, so none are invented.
-  async function readingStats() {
-    if (!user) return null;
-    const { data } = await client.from("reading_progress").select("work_id, chapter_number, percent, updated_at").eq("user_id", user.id);
-    const rows = data || [];
-    const weekAgo = Date.now() - 7 * 86400000;
-    const thisWeek = rows.filter(r => new Date(r.updated_at).getTime() >= weekAgo).length;
-    const inProgress = rows.filter(r => (r.percent || 0) < 95).length;
-    return { total: rows.length, thisWeek, inProgress };
-  }
 
   // Per-line emoji reactions, grouped by paragraph index for a chapter.
   async function getReactions(chapterId) {
@@ -1733,7 +1722,7 @@ window.WispDB = (function () {
     listCategories, createCategory, deleteCategory,
     getWorksByIds, myBookmarks, myHistory, clearHistory,
     myLists, createList, deleteList, listContents, addToList, removeFromList,
-    myHighlights, saveHighlight, deleteHighlight, submitReport, saveProgress, latestProgress, readingStats,
+    myHighlights, saveHighlight, deleteHighlight, submitReport, saveProgress, latestProgress,
     getUserState, saveUserState,
     get stateTableMissing() { return stateTableMissing; },
     toCard: toUi, fmtCount, relTime

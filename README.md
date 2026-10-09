@@ -44,11 +44,11 @@ browser also works.
 ## What is here
 
 ```
-index.html            The app shell: header, three-column layout, screen mounts,
+index.html            The app shell: header, two-column layout, screen mounts,
                       theme drawer, mobile sheet, icon sprite.
 assets/css/wisp.css   The whole design system: theme tokens, components, every
                       screen, responsive collapse, reduced-motion and print.
-assets/js/data.js     The demo dataset: works, activity, widgets, community,
+assets/js/data.js     The demo dataset: works, activity, community,
                       library, and the reading-page chapter with seeded threads.
 assets/js/wisp.js     The app: hash router, screen rendering, the reading-page
                       conversation, the theming engine, and persistence.

@@ -190,14 +190,6 @@ window.WISP = (function () {
     ]
   };
 
-  /* Widget station content. */
-  const WIDGETS = {
-    luckyPool: ["The Salt and the Season","A Study in Amber","Marrow & Bloom","Nine Tenths of the Law","The Frost Between Us","Low Orbit, Long Goodbye"],
-    staffPick: { title:"The Tenant of Room 9", author:"cormorant", cover:"room9" },
-    tag: { name:"slow burn", newCount:4, week:23 },
-    week: { works:3, words:"41,000" }
-  };
-
   /* Editorial / staff picks list. */
   const STAFF = [
     { work:"marrow", note:"A short, strange book about a greenhouse that grows what people have lost." },
@@ -280,5 +272,5 @@ window.WISP = (function () {
     joined:"Joined 2024"
   };
 
-  return { COVERS, WORKS, byId, ACTIVITY, FOLLOWING, CHAPTER, WIDGETS, STAFF, HUBS, EVENTS, LIBRARY, WRITER, PROFILE };
+  return { COVERS, WORKS, byId, ACTIVITY, FOLLOWING, CHAPTER, STAFF, HUBS, EVENTS, LIBRARY, WRITER, PROFILE };
 })();

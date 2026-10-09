@@ -415,7 +415,7 @@
     document.body.classList.toggle("companion-hide", hide);
   }
 
-  /* ---------- one-off stroll (used by the widget button) ---------- */
+  /* ---------- one-off stroll ---------- */
   function stroll() {
     var wasWalking = state.walks;
     injectCSS(); mount();

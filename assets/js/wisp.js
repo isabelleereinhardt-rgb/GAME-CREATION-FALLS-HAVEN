@@ -1781,7 +1781,7 @@
      demo behaves exactly as before. */
   const LIVE = { works: [], byId: {}, chapters: {}, comments: {}, reactions: {}, upcoming: {}, series: [], events: [], myEvents: new Set(),
                  lib: { bookmarks: null, history: null, lists: null, things: null }, viewingList: null, resume: null, followingWorks: [], notifications: null,
-                 hubs: [], myHubs: new Set(), hubCounts: {}, readingStats: null, hubPage: null, seriesPage: null };
+                 hubs: [], myHubs: new Set(), hubCounts: {}, hubPage: null, seriesPage: null };
   let liveEditor = null;   // { work, chapter } when editing a real work, else null
   let editorCover = null;  // uploaded cover URL for the current editor session
   let coverCleared = false; // true when the author removed an existing cover
@@ -2001,7 +2001,6 @@
         const [evs, mine] = await Promise.all([WispDB.listEvents().catch(() => []), WispDB.myEventIds().catch(() => new Set())]);
         const nowE = Date.now();
         LIVE.joinedEvents = (evs || []).filter(e => mine.has(e.id) && !eventExpired(e, nowE));
-        loadReadingStats(true);   // refresh the week widget with anything read since
       }
     } catch (e) { console.error("[wisp] home load failed:", e); LIVE.works = LIVE.works || []; }
     renderHomeLive();
@@ -2906,8 +2905,6 @@
     const flagship = (!reqId || reqId === "amber");
     const w = W.byId[reqId] || W.byId.amber;
     markVisited(flagship ? "amber" : w.id);
-    notifyReadActivity((flagship ? "amber" : w.id) + ":" + (chapterNum || 1));
-    startReadSession(wordCountOf((W.CHAPTER && W.CHAPTER.paragraphs ? W.CHAPTER.paragraphs.join(" ") : "")));
 
     if (!flagship) {
       // Honest preview for non-flagship works: full reader chrome, a short opening,
@@ -3643,7 +3640,6 @@
   // comments; the seeded reaction demo stays on the sample chapter.
   function renderLiveReading(w, chapters, chapterNum) {
     markVisited(w.id);
-    notifyReadActivity(w.id + ":" + (chapterNum || 1));
     if (w.loggedInOnly && !WispDB.signedIn) {
       $("#screen-reading").innerHTML = `<div class="reader"><div class="reader__wrap" style="text-align:center;padding:60px 20px">
         <h1 class="reader__title">${esc(w.title)}</h1>
@@ -3655,7 +3651,6 @@
     const commentsOn = w.commentsEnabled !== false;
     const readable = releasedChapters(chapters);
     const ch = (chapterNum && readable.find(c => c.number === +chapterNum)) || readable[0] || chapters[0] || null;
-    startReadSession(ch ? wordCountOf(ch.body) : 0);   // learn the reader's pace quietly
     const idx = ch ? readable.findIndex(c => c.number === ch.number) : -1;
     const prev = idx > 0 ? readable[idx - 1] : null;
     const next = idx >= 0 && idx < readable.length - 1 ? readable[idx + 1] : null;
@@ -7278,128 +7273,6 @@
     setTimeout(() => { document.addEventListener("click", notifOutside, true); document.addEventListener("keydown", notifEsc); }, 0);
   }
 
-  let luckyIdx = 0;
-  function baseWidgetHTML() {
-    if (isLive()) {
-      return `
-        <div class="widget">
-          <div class="widget__label" style="margin-bottom:10px">Lucky</div>
-          <p class="muted" style="font-size:12.5px;margin:6px 0 12px">Once there are works to draw from, this picks a random one for you.</p>
-          <button class="btn btn--ghost btn--full" data-nav="browse">${icon("shuffle",15)} Browse works</button>
-        </div>
-        <div class="widget">
-          <div class="widget__label">Your week</div>
-          ${readingStatsHTML()}
-        </div>`;
-    }
-    const wd = W.WIDGETS;
-    return `
-      <div class="widget">
-        <div class="widget__label" style="margin-bottom:10px">Lucky</div>
-        <div class="widget__title lucky-title" style="min-height:44px">${esc(wd.luckyPool[luckyIdx % wd.luckyPool.length])}</div>
-        <p class="muted" style="font-size:12.5px;margin:6px 0 12px">A random work from the tags you follow.</p>
-        <button class="btn btn--ghost btn--full" data-lucky>${icon("shuffle",15)} Surprise me</button>
-      </div>
-
-      <div class="widget">
-        <div class="widget__label">Staff picks</div>
-        <button class="mini-work" data-work="room9" style="background:none;border:0;text-align:left;cursor:pointer;width:100%">
-          <span class="mini-cover">${cover("room9", wd.staffPick.title)}</span>
-          <span><span class="mini-work__title">${esc(wd.staffPick.title)}</span><span class="mini-work__by">by ${esc(wd.staffPick.author)}</span></span>
-        </button>
-        <p class="muted" style="font-size:12.5px;line-height:1.5;margin-top:12px">Chosen by the Wisp editors. <a href="#/community">See who picks &rsaquo;</a></p>
-      </div>
-
-      <div class="widget">
-        <div class="widget__label">A tag you follow</div>
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <span style="display:inline-flex;align-items:center;gap:7px;font:18px var(--font-display);color:var(--ink)"><span style="color:var(--rose)">${icon("tag",15)}</span>${esc(wd.tag.name)}</span>
-          <span style="font-size:12.5px;color:var(--rose-ink);background:var(--rose-wash);border-radius:999px;padding:3px 9px">${wd.tag.newCount} new</span>
-        </div>
-        <p class="muted" style="font-size:12.5px;margin:10px 0 0">${wd.tag.week} works this week. <a href="#/browse">Open tag &rsaquo;</a></p>
-      </div>
-
-      <div class="widget">
-        <div class="widget__label">This week</div>
-        <div style="font:17px/1.35 var(--font-display);color:var(--ink)">You read ${wd.week.works} works,<br>${wd.week.words} words.</div>
-      </div>`;
-  }
-  function widgetHTML() { return baseWidgetHTML() + installedWidgetsHTML(); }
-  function renderWidgets() {
-    const m = $("#widgetMount"); if (m) { m.innerHTML = widgetHTML(); wireMiniWidgets(m); }
-    // Keep the open mobile widget sheet in lockstep, so a tap updates what the
-    // reader is actually looking at on a phone — not just the hidden desktop rail.
-    const sheetBody = $("#railSheetBody");
-    if (sheetBody && $("#railSheet") && $("#railSheet").classList.contains("is-open") && /Widgets/.test(sheetBody.textContent || "")) {
-      sheetBody.innerHTML = `<h2 class="rail__title" style="margin-bottom:16px">Widgets</h2>${widgetHTML()}`;
-      wireMiniWidgets(sheetBody);
-    }
-  }
-  // Refresh a SINGLE widget's card in place, instead of rebuilding the whole
-  // panel. Rebuilding re-ran every widget's render(), which re-randomised every
-  // spinner (a new quote, prompt, fortune) and made the whole station visibly
-  // "reconfigure" whenever a reader toggled petals or logged a streak. This
-  // updates only the card that changed, across both the desktop rail and an open
-  // mobile sheet. Widgets that own an interval (pomodoro, word sprint) keep using
-  // renderWidgets(), which clears and re-arms timers wholesale.
-  function mwRefresh(id) {
-    const def = MINI_WIDGETS.find(w => w.id === id); if (!def) return;
-    const sel = '.mini-widget[data-mw="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]';
-    document.querySelectorAll(sel).forEach(card => {
-      const body = card.querySelector(".mw-body"); if (!body) return;
-      body.innerHTML = def.render();
-      if (def.wire) { try { def.wire(body); } catch (e) {} }
-    });
-  }
-
-  /* ---- Installable mini-widgets: quality-of-life, synced to your account ---- */
-  // A shelf of small widgets a reader can add to their widget station: timers,
-  // spinners, ambient fun. The station is held in memory, mirrored to localStorage
-  // for instant paint and guests, and (when signed in) synced to the account so it
-  // follows the reader across devices. It degrades to localStorage-only if the
-  // profiles.widgets column has not been migrated yet.
-  const MW = { installed: [], state: {} };
-  (function mwInitLocal() {
-    try { MW.installed = JSON.parse(localStorage.getItem("wisp.widgets.installed") || "[]"); } catch (e) { MW.installed = []; }
-    try { MW.state = JSON.parse(localStorage.getItem("wisp.widgets.state") || "{}"); } catch (e) { MW.state = {}; }
-    if (!Array.isArray(MW.installed)) MW.installed = [];
-    if (!MW.state || typeof MW.state !== "object") MW.state = {};
-  })();
-  function mwPersistLocal() {
-    try { localStorage.setItem("wisp.widgets.installed", JSON.stringify(MW.installed)); } catch (e) {}
-    try { localStorage.setItem("wisp.widgets.state", JSON.stringify(MW.state)); } catch (e) {}
-  }
-  let mwRemoteTimer = null;
-  // Only the station's own member may upload it. The guard runs again when
-  // the debounce fires, because on a phone the sign-in sync can still be in
-  // flight when a widget is tapped: without the re-check, the previous
-  // member's sticky notes upload into the new member's account, and from
-  // then on every device faithfully syncs the leak.
-  function mwMayPush() {
-    if (!(window.WispDB && WispDB.enabled && WispDB.signedIn && WispDB.saveWidgets && WispDB.profile)) return false;
-    let owner = null; try { owner = localStorage.getItem("wisp.widgets.owner"); } catch (e) {}
-    return owner === WispDB.profile.id;
-  }
-  function mwPersistRemote() {
-    if (!mwMayPush()) return;
-    if (mwRemoteTimer) clearTimeout(mwRemoteTimer);
-    mwRemoteTimer = setTimeout(() => {
-      mwRemoteTimer = null;
-      if (!mwMayPush()) return;
-      const payload = { installed: MW.installed, state: MW.state };
-      if (window.WispCompanion && WispCompanion.getPrefs) payload.companion = WispCompanion.getPrefs();
-      try { WispDB.saveWidgets(payload); } catch (e) {}
-    }, 700);
-  }
-  function mwPersist() { mwPersistLocal(); mwPersistRemote(); }
-  function mwLoad() { return MW.installed.slice(); }
-  function mwSave(ids) { MW.installed = Array.isArray(ids) ? ids.slice() : []; mwPersist(); }
-  function mwState(id) { return MW.state[id] || {}; }
-  function mwSetState(id, patch) { MW.state[id] = Object.assign({}, MW.state[id], patch); mwPersist(); return MW.state[id]; }
-
-  // On sign-in, pull the account's saved station. The account wins across devices;
-  // if it has none yet, seed it from whatever is already on this device.
-  let mwSyncedFor = null;
   /* ---- cross-device account state ----------------------------------------
      What Wattpad and AO3 members expect: sign in on the phone and the site is
      the way the laptop left it. Works, drafts, highlights, and progress
@@ -7552,9 +7425,9 @@
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;
     if (!statePulledAt || Date.now() - statePulledAt < 60000) return;
-    stateSyncedFor = null; mwSyncedFor = null;
+    stateSyncedFor = null; companionSyncedFor = null;
     try { syncStateFromAccount(); } catch (e) {}
-    try { mwSyncFromAccount(); } catch (e) {}   // the widget station freshens too
+    try { companionSyncFromAccount(); } catch (e) {}   // Lucky's look freshens too
   });
   // Coming back online after a dead spot: catch up with the account.
   window.addEventListener("online", () => {
@@ -7563,620 +7436,72 @@
     try { syncStateFromAccount(); } catch (e) {}
   });
   try { window.__wispSync = { push: schedulePushState, pull: syncStateFromAccount, reset: function () { stateSyncedFor = null; }, freshLogin: function () { stateFreshLogin = true; }, stamp: localStateStamp }; } catch (e) {}   // console debugging handle
-  function mwSyncFromAccount() {
-    if (!(window.WispDB && WispDB.enabled && WispDB.signedIn && WispDB.profile)) { mwSyncedFor = null; return; }
+  /* ---- the reading companion, across devices ------------------------------
+     Lucky's look and habits (name, coat, accessory, how often he strolls) live
+     in localStorage on this device, and ride on the profile's `widgets` jsonb
+     column so a signed-in reader meets the same cat on every device. The
+     column keeps its old name: it needs no migration, and nothing else is
+     stored in it any more.
+     ---------------------------------------------------------------------- */
+  let companionSyncedFor = null, companionRemoteTimer = null;
+  // Only the account the device's cat belongs to may upload him. The guard
+  // runs again when the debounce fires, because on a phone the sign-in sync
+  // can still be in flight when the reader changes something: without the
+  // re-check, the previous member's cat would upload into the new member's
+  // account, and from then on every device would faithfully sync the mix-up.
+  function companionMayPush() {
+    if (!(window.WispDB && WispDB.enabled && WispDB.signedIn && WispDB.saveWidgets && WispDB.profile)) return false;
+    let owner = null; try { owner = localStorage.getItem("wisp.widgets.owner"); } catch (e) {}
+    return owner === WispDB.profile.id;
+  }
+  function companionPersistRemote() {
+    if (!companionMayPush()) return;
+    if (companionRemoteTimer) clearTimeout(companionRemoteTimer);
+    companionRemoteTimer = setTimeout(() => {
+      companionRemoteTimer = null;
+      if (!companionMayPush()) return;
+      if (!(window.WispCompanion && WispCompanion.getPrefs)) return;
+      try { WispDB.saveWidgets({ companion: WispCompanion.getPrefs() }); } catch (e) {}
+    }, 700);
+  }
+  // On sign-in, pull the account's saved cat. The account wins across devices;
+  // if it has none saved yet, seed it from whatever is on this device.
+  function companionSyncFromAccount() {
+    if (!(window.WispDB && WispDB.enabled && WispDB.signedIn && WispDB.profile)) { companionSyncedFor = null; return; }
     const pid = WispDB.profile.id;
-    if (mwSyncedFor === pid) return;
-    mwSyncedFor = pid;
-    // Whose widgets does this DEVICE currently hold? A different account
-    // signing in must never inherit them (sticky notes are someone's notes),
-    // and must never upload them to its own account.
+    if (companionSyncedFor === pid) return;
+    companionSyncedFor = pid;
+    // Whose cat does this DEVICE currently hold? A different account signing
+    // in must never inherit him (his name included), nor upload him as its own.
     let owner = null; try { owner = localStorage.getItem("wisp.widgets.owner"); } catch (e) {}
     const foreign = owner && owner !== pid;
     const remote = WispDB.getWidgets ? WispDB.getWidgets() : null;
-    // An account that has EVER saved a station is authoritative, even when the
-    // saved station is empty: widgets removed on the laptop must not be
-    // resurrected by a phone's stale local copy. Only an account with no
-    // saved blob at all can be seeded from the device.
-    const hasBlob = !!(remote && typeof remote === "object");
-    const hasWidgetKeys = hasBlob && (("installed" in remote) || ("state" in remote));
-    const hasCompanion = hasBlob && remote.companion && typeof remote.companion === "object";
-    if (hasWidgetKeys) {
-      MW.installed = Array.isArray(remote.installed) ? remote.installed.slice() : [];
-      MW.state = (remote.state && typeof remote.state === "object") ? remote.state : {};
-      mwPersistLocal();
-      applyAmbientWidgetState();
-      renderWidgetsEverywhere();
-    } else if (foreign) {
-      // A different member on a used device, with nothing saved of their own:
-      // they start with a fresh station, not the previous member's.
-      MW.installed = []; MW.state = {};
-      mwPersistLocal();
-      applyAmbientWidgetState();
-      renderWidgetsEverywhere();
-    }
-    // The reading companion (Lucky) rides in the same synced blob. A
-    // different member with no saved cat of their own gets the shelf cat,
-    // never the previous member's (their name for him included).
+    const hasCompanion = !!(remote && typeof remote === "object" && remote.companion && typeof remote.companion === "object");
     if (hasCompanion && window.WispCompanion && WispCompanion.applyPrefs) WispCompanion.applyPrefs(remote.companion);
     else if (foreign && window.WispCompanion && WispCompanion.resetPrefs) WispCompanion.resetPrefs();
     // This account now owns whatever the device shows; stamp that BEFORE any
     // push so the upload guard has the truth.
     try { localStorage.setItem("wisp.widgets.owner", pid); } catch (e) {}
-    // First sign-in from this device, account never saved a station: keep
-    // what was built here (a guest station survives creating the account).
-    if (!hasWidgetKeys && !hasCompanion && !foreign) mwPersistRemote();
+    // First sign-in from this device, nothing saved on the account: keep the
+    // cat built here (a guest's cat survives creating the account).
+    if (!hasCompanion && !foreign) companionPersistRemote();
   }
-  // Signing out takes the station off the screen: sticky notes are someone's
-  // notes, and whoever is at this device next starts from the shelf, not from
-  // them. The owner marker stays, so the same member signing back in is not a
-  // stranger, and the pull brings their station straight back.
-  function mwHandleSignOut() {
-    if (mwRemoteTimer) { clearTimeout(mwRemoteTimer); mwRemoteTimer = null; }   // a push scheduled while signed in dies with the session
-    MW.installed = []; MW.state = {};
-    mwPersistLocal();
-    mwSyncedFor = null;
-    try { applyAmbientWidgetState(); renderWidgetsEverywhere(); } catch (e) {}
-    // The cat's identity is account state too: back to the shelf cat.
+  // Signing out puts the shelf cat back: his identity is account state, so
+  // whoever is at this device next does not meet the previous member's cat.
+  // The owner marker stays, so the same member signing back in is not a
+  // stranger, and the pull brings their cat straight back.
+  function companionHandleSignOut() {
+    if (companionRemoteTimer) { clearTimeout(companionRemoteTimer); companionRemoteTimer = null; }   // a push scheduled while signed in dies with the session
+    companionSyncedFor = null;
     try { if (window.WispCompanion && WispCompanion.resetPrefs) WispCompanion.resetPrefs(); } catch (e) {}
   }
-  try { window.__wispMW = { sync: mwSyncFromAccount, reset: function () { mwSyncedFor = null; }, signOut: mwHandleSignOut }; } catch (e) {}   // console debugging handle
-  // Reflect ambient toggles (petals, focus mode) after a cross-device sync.
-  function applyAmbientWidgetState() {
-    const installed = new Set(MW.installed);
-    togglePetals(installed.has("petals") && !!(MW.state.petals && MW.state.petals.on));
-    document.body.classList.toggle("focus-mode", installed.has("focus") && !!(MW.state.focus && MW.state.focus.on));
-    armWaterReminders();
-  }
 
-  // ---- Water goal + hourly reminders ---------------------------------------
-  // Readers set a daily glasses goal and, if they ask for it, Wisp nudges them
-  // about once an hour during waking hours until they reach it. Nudges use the
-  // browser's notifications when granted, and fall back to an in-app toast so a
-  // reader with notifications off still gets the reminder while the tab is open.
-  function waterGoal(s) { const g = s && +s.goal; return g >= 1 && g <= 20 ? g : 8; }
-  function requestNotifyPermission() {
-    return new Promise(resolve => {
-      try {
-        if (!("Notification" in window)) return resolve("unsupported");
-        if (Notification.permission !== "default") return resolve(Notification.permission);
-        const p = Notification.requestPermission(res => resolve(res || Notification.permission));
-        if (p && p.then) p.then(res => resolve(res)).catch(() => resolve(Notification.permission));
-      } catch (e) { resolve("denied"); }
-    });
-  }
-  function waterNotify() {
-    const s = mwState("water"); const today = todayKey();
-    const n = s.day === today ? (s.n || 0) : 0;
-    const goal = waterGoal(s);
-    const left = Math.max(0, goal - n);
-    const body = left <= 1 ? "One more glass to reach today's goal." : left + " more glasses to reach today's goal.";
-    let shown = false;
-    try {
-      if (("Notification" in window) && Notification.permission === "granted") {
-        const nt = new Notification("Time for a glass of water", { body: body, tag: "wisp-water", renotify: true });
-        nt.onclick = function () { try { window.focus(); } catch (e) {} nt.close(); };
-        shown = true;
-      }
-    } catch (e) {}
-    if (!shown && document.getElementById("toast")) toast("Time for a glass of water. " + body);
-  }
-  let waterTimer = null;
-  function waterReminderTick() {
-    if (!MW.installed || MW.installed.indexOf("water") < 0) return;
-    const s = mwState("water");
-    if (!s.remind) return;
-    const today = todayKey();
-    if (s.metDay === today) return;                        // already hit the goal today (glasses may be cleared)
-    const n = s.day === today ? (s.n || 0) : 0;
-    if (n >= waterGoal(s)) return;                         // met for today, rest easy
-    const hour = new Date().getHours();
-    if (hour < 8 || hour >= 22) return;                    // no overnight pings
-    const last = +s.last || 0;
-    if (Date.now() - last < 60 * 60 * 1000) return;        // at most one an hour
-    mwSetState("water", { last: Date.now() });
-    waterNotify();
-  }
-  function armWaterReminders() {
-    if (waterTimer) return;
-    // Check every few minutes; the tick itself throttles to one nudge an hour.
-    waterTimer = setInterval(waterReminderTick, 4 * 60 * 1000);
-    setTimeout(waterReminderTick, 12000);                  // a first check shortly after load
-  }
-  // A small handle so the reminder logic can be exercised by tests.
-  window.WispWater = { tick: waterReminderTick, notify: waterNotify, goal: waterGoal };
-
-  // A few tracking widgets fill themselves in from real reading, so the reader
-  // never has to tap +1. Called when a chapter opens in the reader; each chapter
-  // counts once per day, and the streak logs itself the first time you read today.
-  function notifyReadActivity(chapterKey) {
-    const installed = new Set(mwLoad());
-    if (!installed.has("chapters-today") && !installed.has("streak")) return;
-    const today = todayKey();
-    let changed = false;
-    if (installed.has("chapters-today")) {
-      const s = mwState("chapters-today");
-      const seen = (s.day === today && Array.isArray(s.seen)) ? s.seen.slice() : [];
-      const base = (s.day === today ? (s.n || 0) : 0);
-      if (chapterKey && seen.indexOf(chapterKey) < 0) {
-        seen.push(chapterKey);
-        mwSetState("chapters-today", { n: base + 1, day: today, seen }); changed = true;
-      } else if (s.day !== today) {
-        mwSetState("chapters-today", { n: 0, day: today, seen: [] }); changed = true;
-      }
-    }
-    if (installed.has("streak")) {
-      const s = mwState("streak");
-      if (s.last !== today) {
-        const y = new Date(Date.now() - 86400000); const yk = y.getFullYear() + "-" + (y.getMonth() + 1) + "-" + y.getDate();
-        const nc = (s.last === yk ? (s.count || 0) + 1 : 1);
-        mwSetState("streak", { count: nc, last: today }); changed = true;
-      }
-    }
-    if (changed) { mwRefresh("streak"); mwRefresh("chapters-today"); }
-  }
-
-  // Reading pace, learned quietly. A read session opens when a chapter opens and
-  // closes when the reader leaves it; if it lasted a sensible span, the words
-  // divided by the minutes feed a rolling average, so the pace widget fills in on
-  // its own with no typing. Idle tabs and skims are filtered out by the bounds.
-  let readSession = null;
-  function wordCountOf(text) { return String(text || "").trim().split(/\s+/).filter(Boolean).length; }
-  function startReadSession(words) {
-    finalizeReadSession();
-    if (words > 40 && mwLoad().indexOf("wpm") >= 0) readSession = { start: Date.now(), words: words };
-  }
-  function finalizeReadSession() {
-    if (!readSession) return;
-    const mins = (Date.now() - readSession.start) / 60000;
-    const words = readSession.words; readSession = null;
-    if (mins < 0.4 || mins > 40) return;                 // too brief to trust, or an idle tab
-    const wpm = Math.round(words / mins);
-    if (wpm < 60 || wpm > 1000) return;                  // outside a believable human range
-    if (mwLoad().indexOf("wpm") < 0) return;
-    const s = mwState("wpm");
-    const n = Math.min(s.n || 0, 19);                    // rolling window of the last ~20 reads
-    const avg = s.avg ? Math.round((s.avg * n + wpm) / (n + 1)) : wpm;
-    mwSetState("wpm", { avg: avg, n: (s.n || 0) + 1 });
-    mwRefresh("wpm");
-  }
-  const todayKey = () => { const d = new Date(); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); };
-  const rand = (arr) => arr[Math.floor(Math.random() * arr.length)];
-  const fmtDur = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
-
-  // The content widgets draw from the large banks in widget-content.js when it
-  // has loaded, so a reader does not see the same line for months. The short
-  // inline sets below are kept as a fallback if that file is absent.
-  const _WC = (window.WISP_WIDGET_CONTENT && typeof window.WISP_WIDGET_CONTENT === "object") ? window.WISP_WIDGET_CONTENT : {};
-  const MW_QUOTES = (_WC.quotes && _WC.quotes.length) ? _WC.quotes : [
-    "Write drunk on the story; edit sober on the page.", "A word after a word after a word is power.",
-    "You can always edit a bad page. You can't edit a blank one.", "Start where you are. Use what you have.",
-    "The first draft is you telling yourself the story.", "Fill your paper with the breathings of your heart.",
-    "There is no greater agony than an untold story inside you.", "Write the book you want to read.",
-    "Almost all good writing begins with terrible first efforts.", "Read a thousand books, and your words will flow."
-  ];
-  const MW_PROMPTS = (_WC.prompts && _WC.prompts.length) ? _WC.prompts : [
-    "Two strangers share the last seat on the last train.", "A letter arrives twenty years late.",
-    "The lighthouse keeper writes to no one, every night.", "Your character finds a door that wasn't there yesterday.",
-    "A rivalry softens over a shared umbrella.", "The town forgets one person a little more each day.",
-    "A god retires and takes a job at a coffee shop.", "The map is accurate, except for one island.",
-    "They swap lives for a week and neither wants to swap back.", "The heirloom clock runs backward when someone lies."
-  ];
-  const MW_FORTUNES = (_WC.fortunes && _WC.fortunes.length) ? _WC.fortunes : [
-    "A plot twist is coming; lean into it.", "The chapter you fear is the one worth writing.",
-    "Someone will reread your words tonight.", "A comment will make your whole week.",
-    "Rest is part of the craft. Take the afternoon.", "Your next idea is closer than you think.",
-    "Kindness returns to you in kudos.", "The muse favours the writer who shows up."
-  ];
-  const MW_EIGHTBALL = [
-    "It is certain.", "Without a doubt.", "Yes, definitely.", "Signs point to yes.", "Ask again later.",
-    "Better not tell you now.", "Cannot predict now.", "Don't count on it.", "My reply is no.", "Very doubtful."
-  ];
-  const MW_AFFIRM = (_WC.affirmations && _WC.affirmations.length) ? _WC.affirmations : [
-    "Your voice is worth hearing.", "You are allowed to write badly today.", "Small progress is still progress.",
-    "Your story matters to someone.", "You are a writer because you write.", "Finished beats perfect.",
-    "One paragraph is a victory.", "You are exactly the right person to tell this."
-  ];
-  const MW_FACTS = (_WC.facts && _WC.facts.length) ? _WC.facts : [
-    "The longest novel ever published runs over 1.2 million words.", "The word 'fangirl' entered dictionaries in 2016.",
-    "Fanfiction predates the internet by centuries.", "Reading fiction measurably boosts empathy.",
-    "The average adult reads about 240 words a minute.", "'Serendipity' was coined by a novelist in 1754.",
-    "Shakespeare invented over 1,700 words we still use.", "A 'wisp' is a small twist of something, like a story."
-  ];
-
-  // A compact spinner widget: a display line and a button that picks a new item.
-  function pickerWidget(id, name, icon, blurb, items, btn) {
-    return { id, name, icon, blurb, render() {
-        return `<p class="mw-out" data-mw-out>${esc(rand(items))}</p>
-          <button class="btn btn--ghost btn--full btn--sm" data-mw-roll>${esc(btn)}</button>`;
-      }, wire(el) {
-        const out = el.querySelector("[data-mw-out]"), b = el.querySelector("[data-mw-roll]");
-        b && b.addEventListener("click", () => { out.textContent = rand(items); out.classList.remove("mw-pop"); void out.offsetWidth; out.classList.add("mw-pop"); });
-      } };
-  }
-
-  // A real die face: pips for a d6, the rolled number on a polygon for a d20.
-  function dieFaceSVG(sides, v) {
-    if (sides === 6) {
-      const P = { 1: [[10, 10]], 2: [[5, 5], [15, 15]], 3: [[5, 5], [10, 10], [15, 15]],
-        4: [[5, 5], [15, 5], [5, 15], [15, 15]], 5: [[5, 5], [15, 5], [10, 10], [5, 15], [15, 15]],
-        6: [[5, 5], [15, 5], [5, 10], [15, 10], [5, 15], [15, 15]] };
-      const pips = (P[v] || P[1]).map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="2.1" fill="var(--card)"/>`).join("");
-      return `<svg viewBox="0 0 20 20" width="56" height="56" aria-label="${v}"><rect x="1" y="1" width="18" height="18" rx="4.5" fill="var(--ink)"/>${pips}</svg>`;
-    }
-    return `<svg viewBox="0 0 20 20" width="56" height="56" aria-label="${v}"><path d="M10 1.4 18.6 6.3v7.4L10 18.6 1.4 13.7V6.3z" fill="var(--ink)"/><text x="10" y="13.4" text-anchor="middle" font-size="8" font-weight="700" fill="var(--card)" font-family="var(--font-text)">${v}</text></svg>`;
-  }
-  // A small figure that stretches while the break runs.
-  function stretchFigSVG() {
-    // Arms attach at the shoulders (the top corners of the torso), NOT the
-    // centre: starting them a hair apart made their round caps overlap into a
-    // blob in the middle. Each arm's rotation pivot (mw-fig-arm transform-origin)
-    // is its inner-upper end, i.e. its shoulder, so the stretch poses still work.
-    return `<svg class="mw-fig-svg" viewBox="0 0 60 64" width="72" height="76" fill="none" aria-hidden="true">
-      <circle cx="30" cy="11" r="7" fill="var(--rose)"/>
-      <rect class="mw-fig-torso" x="25" y="18" width="10" height="20" rx="5" fill="var(--rose-ink)"/>
-      <path class="mw-fig-arm mw-fig-arm--l" d="M26 21 L13 31" stroke="var(--rose)" stroke-width="4.5" stroke-linecap="round"/>
-      <path class="mw-fig-arm mw-fig-arm--r" d="M34 21 L47 31" stroke="var(--rose)" stroke-width="4.5" stroke-linecap="round"/>
-      <path d="M28 37 L23 58" stroke="var(--rose-ink)" stroke-width="4.5" stroke-linecap="round"/>
-      <path d="M32 37 L37 58" stroke="var(--rose-ink)" stroke-width="4.5" stroke-linecap="round"/>
-    </svg>`;
-  }
-  // Backward-compatible readers for the to-do list and sticky notes, which grew
-  // richer shapes (checkable items, multiple notes) than their first versions.
-  function normalizeTodo(items) {
-    if (!Array.isArray(items)) return [];
-    return items.map(it => typeof it === "string" ? { text: it, done: false } : { text: (it && it.text) || "", done: !!(it && it.done) });
-  }
-  function normalizeStickies(s) {
-    if (s && Array.isArray(s.notes)) return s.notes.map(n => ({ text: (n && n.text) || "" }));
-    if (s && typeof s.text === "string" && s.text) return [{ text: s.text }];
-    return [{ text: "" }];
-  }
-
-  // A 7-day strip (oldest to today) for the reading-streak widget, so it reads
-  // as a consistency tracker rather than a plain daily counter. A day is filled
-  // when it falls inside the current consecutive streak ending at s.last.
-  function streakWeekStrip(s) {
-    const count = s.count || 0;
-    let lastOffset = 99;
-    if (s.last) {
-      const p = String(s.last).split("-").map(Number);
-      const last = new Date(p[0], (p[1] || 1) - 1, p[2] || 1); last.setHours(0, 0, 0, 0);
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      lastOffset = Math.round((today - last) / 86400000);
-    }
-    const WD = ["S", "M", "T", "W", "T", "F", "S"];
-    let out = "";
-    for (let k = 6; k >= 0; k--) {
-      const dt = new Date(); dt.setHours(0, 0, 0, 0); dt.setDate(dt.getDate() - k);
-      const read = count > 0 && k >= lastOffset && k <= lastOffset + count - 1;
-      out += `<span class="mw-week__day ${read ? "is-read" : ""} ${k === 0 ? "is-today" : ""}"><span class="mw-week__dot"></span><span class="mw-week__wd">${WD[dt.getDay()]}</span></span>`;
-    }
-    return out;
-  }
-
-  const MINI_WIDGETS = [
-    { id: "clock", name: "Live clock", icon: "clock", blurb: "The current time.", render() { return `<div class="mw-big" data-mw-clock>--:--</div>`; },
-      wire(el) { const t = el.querySelector("[data-mw-clock]"); const upd = () => { const d = new Date(); let h = d.getHours(); const ap = h >= 12 ? "PM" : "AM"; h = h % 12 || 12; t.textContent = h + ":" + String(d.getMinutes()).padStart(2, "0") + " " + ap; }; upd(); miniInterval(setInterval(upd, 1000)); } },
-    { id: "reading-timer", name: "Reading timer", icon: "clock", blurb: "A stopwatch for reading.",
-      render() { const s = mwState("reading-timer"); const el = (s.running ? (Date.now() - s.start + (s.acc || 0)) : (s.acc || 0)); return `<div class="mw-big" data-mw-time>${fmtDur(el)}</div><div class="mw-row"><button class="btn btn--ghost btn--sm" data-mw-toggle>${s.running ? "Pause" : "Start"}</button><button class="btn btn--quiet btn--sm" data-mw-reset>Reset</button></div>`; },
-      wire(el) { const disp = el.querySelector("[data-mw-time]"); const draw = () => { const s = mwState("reading-timer"); disp.textContent = fmtDur(s.running ? (Date.now() - s.start + (s.acc || 0)) : (s.acc || 0)); };
-        el.querySelector("[data-mw-toggle]").addEventListener("click", () => { const s = mwState("reading-timer"); if (s.running) mwSetState("reading-timer", { running: false, acc: (s.acc || 0) + (Date.now() - s.start) }); else mwSetState("reading-timer", { running: true, start: Date.now() }); renderWidgets(); });
-        el.querySelector("[data-mw-reset]").addEventListener("click", () => { mwSetState("reading-timer", { running: false, acc: 0, start: 0 }); renderWidgets(); });
-        if (mwState("reading-timer").running) miniInterval(setInterval(draw, 500)); } },
-    { id: "pomodoro", name: "Pomodoro", icon: "clock", blurb: "25 on, 5 off.",
-      render() { const s = mwState("pomodoro"); const left = s.endsAt ? s.endsAt - Date.now() : 25 * 60000; return `<div class="mw-big" data-mw-pom>${fmtDur(left > 0 ? left : 0)}</div><p class="mw-sub" data-mw-pom-ph>${s.phase === "break" ? "Break" : "Focus"}</p><div class="mw-row"><button class="btn btn--ghost btn--sm" data-mw-pom-go>${s.endsAt ? "Stop" : "Start"}</button></div>`; },
-      wire(el) { const disp = el.querySelector("[data-mw-pom]"); const ph = el.querySelector("[data-mw-pom-ph]");
-        const tick = () => { const s = mwState("pomodoro"); if (!s.endsAt) return; let left = s.endsAt - Date.now(); if (left <= 0) { const nextBreak = s.phase !== "break"; mwSetState("pomodoro", { phase: nextBreak ? "break" : "focus", endsAt: Date.now() + (nextBreak ? 5 : 25) * 60000 }); toast(nextBreak ? "Focus done. Take a 5 minute break." : "Break over. Back to it."); left = mwState("pomodoro").endsAt - Date.now(); } disp.textContent = fmtDur(left); ph.textContent = mwState("pomodoro").phase === "break" ? "Break" : "Focus"; };
-        el.querySelector("[data-mw-pom-go]").addEventListener("click", () => { const s = mwState("pomodoro"); if (s.endsAt) mwSetState("pomodoro", { endsAt: 0, phase: "focus" }); else mwSetState("pomodoro", { endsAt: Date.now() + 25 * 60000, phase: "focus" }); renderWidgets(); });
-        if (mwState("pomodoro").endsAt) miniInterval(setInterval(tick, 500)); } },
-    { id: "word-sprint", name: "Word sprint", icon: "edit", blurb: "A timed writing burst.",
-      render() { const s = mwState("word-sprint"); const left = s.endsAt ? s.endsAt - Date.now() : 0; return s.endsAt ? `<div class="mw-big" data-mw-sp>${fmtDur(left > 0 ? left : 0)}</div><div class="mw-row"><button class="btn btn--quiet btn--sm" data-mw-sp-stop>Stop</button></div>` : `<div class="mw-row" data-mw-sp-pick>${[10, 15, 20].map(m => `<button class="btn btn--ghost btn--sm" data-mw-sp="${m}">${m} min</button>`).join("")}</div>`; },
-      wire(el) { el.querySelectorAll("[data-mw-sp]").forEach(b => b.addEventListener("click", () => { mwSetState("word-sprint", { endsAt: Date.now() + (+b.dataset.mwSp) * 60000 }); renderWidgets(); }));
-        const stop = el.querySelector("[data-mw-sp-stop]"); stop && stop.addEventListener("click", () => { mwSetState("word-sprint", { endsAt: 0 }); renderWidgets(); });
-        const disp = el.querySelector("[data-mw-sp]"); if (mwState("word-sprint").endsAt) miniInterval(setInterval(() => { const s = mwState("word-sprint"); const left = s.endsAt - Date.now(); const d = el.querySelector("[data-mw-sp]"); if (left <= 0) { mwSetState("word-sprint", { endsAt: 0 }); toast("Sprint done. Great work."); renderWidgets(); return; } if (d) d.textContent = fmtDur(left); }, 500)); } },
-    { id: "streak", name: "Reading streak", icon: "check", blurb: "Days in a row.",
-      render() {
-        const s = mwState("streak"); const done = s.last === todayKey(); const n = s.count || 0;
-        // Distinct from "Chapters today" (a count of what you read today): this
-        // is about consistency over days, so it leads with the streak and a
-        // seven-day strip. The log button only shows when it will do something.
-        return `<div class="mw-streak">
-            <div class="mw-streak__top"><span class="mw-streak__n">${n}</span><span class="mw-streak__fire">🔥</span><span class="mw-streak__lbl">day${n === 1 ? "" : "s"} in a row</span></div>
-            <div class="mw-week" aria-hidden="true">${streakWeekStrip(s)}</div>
-            ${done
-              ? `<p class="mw-sub mw-done">${icon("check", 13)} Logged for today</p>`
-              : `<button class="btn btn--ghost btn--full btn--sm" data-mw-streak>I read today</button>`}
-          </div>`;
-      },
-      wire(el) { const b = el.querySelector("[data-mw-streak]"); b && b.addEventListener("click", () => { const s = mwState("streak"); const y = new Date(Date.now() - 86400000); const yk = y.getFullYear() + "-" + (y.getMonth() + 1) + "-" + y.getDate(); const cont = s.last === yk; const nc = cont ? (s.count || 0) + 1 : 1; mwSetState("streak", { count: nc, last: todayKey() }); mwRefresh("streak"); if (nc >= 3 && nc % 5 === 0) celebrate(nc + " day streak!", "Keep it going.", "🔥"); else if (!reducedMotion()) confettiBurst(); }); } },
-    { id: "countdown", name: "Countdown", icon: "clock", blurb: "Days until a date.",
-      render() { const s = mwState("countdown"); if (!s.target) return `<p class="mw-sub">No date set yet.</p><button class="btn btn--ghost btn--full btn--sm" data-mw-cd-set>Set a date</button>`; const days = Math.ceil((new Date(s.target).getTime() - Date.now()) / 86400000); return `<div class="mw-big">${days >= 0 ? days : 0}</div><p class="mw-sub">${days > 0 ? "days to " : days === 0 ? "today: " : "since "}${esc(s.label || "your date")}</p><button class="btn btn--quiet btn--full btn--sm" data-mw-cd-set>Change</button>`; },
-      wire(el) { const b = el.querySelector("[data-mw-cd-set]"); b && b.addEventListener("click", () => { const t = (window.prompt("Date (YYYY-MM-DD)", mwState("countdown").target || "") || "").trim(); if (!t) return; const label = (window.prompt("What is it? (optional)", mwState("countdown").label || "") || "").trim(); mwSetState("countdown", { target: t, label }); mwRefresh("countdown"); }); } },
-    pickerWidget("quote", "Quote of the day", "quote", "A writing quote.", MW_QUOTES, "New quote"),
-    pickerWidget("prompt", "Writing prompt", "edit", "A story prompt.", MW_PROMPTS, "New prompt"),
-    pickerWidget("fortune", "Fortune cookie", "quote", "A tiny fortune.", MW_FORTUNES, "Crack it open"),
-    pickerWidget("eightball", "Magic 8-ball", "eye", "Ask a question.", MW_EIGHTBALL, "Ask again"),
-    pickerWidget("affirmation", "Affirmation", "heart", "A kind word.", MW_AFFIRM, "Another"),
-    pickerWidget("didyouknow", "Did you know", "book", "A book fact.", MW_FACTS, "Tell me more"),
-    { id: "fandom-roulette", name: "Fandom roulette", icon: "shuffle", blurb: "A random fandom.",
-      render() { const f = rand(FANDOMS); return `<p class="mw-out" data-mw-out>${esc(f)}</p><button class="btn btn--ghost btn--full btn--sm" data-mw-roll>Spin</button>`; },
-      wire(el) { const out = el.querySelector("[data-mw-out]"); el.querySelector("[data-mw-roll]").addEventListener("click", () => { const f = rand(FANDOMS); out.textContent = f; out.classList.remove("mw-pop"); void out.offsetWidth; out.classList.add("mw-pop"); }); out.style.cursor = "pointer"; out.addEventListener("click", () => navigate("tag/" + encodeURIComponent(out.textContent))); } },
-    { id: "tag-roulette", name: "Tag roulette", icon: "tag", blurb: "A random tag.",
-      render() { const t = rand(TAG_SUGGEST); return `<p class="mw-out" data-mw-out>${esc(t)}</p><button class="btn btn--ghost btn--full btn--sm" data-mw-roll>Spin</button>`; },
-      wire(el) { const out = el.querySelector("[data-mw-out]"); el.querySelector("[data-mw-roll]").addEventListener("click", () => { const t = rand(TAG_SUGGEST); out.textContent = t; out.classList.remove("mw-pop"); void out.offsetWidth; out.classList.add("mw-pop"); }); out.style.cursor = "pointer"; out.addEventListener("click", () => navigate("tag/" + encodeURIComponent(out.textContent))); } },
-    { id: "dice", name: "Dice roller", icon: "die", blurb: "Roll a d6 or a d20.",
-      render() { return `<div class="mw-die" data-mw-dieface>${dieFaceSVG(6, 1)}</div><div class="mw-row"><button class="btn btn--ghost btn--sm" data-mw-die="6">Roll d6</button><button class="btn btn--quiet btn--sm" data-mw-die="20">Roll d20</button></div>`; },
-      wire(el) {
-        const face = el.querySelector("[data-mw-dieface]");
-        el.querySelectorAll("[data-mw-die]").forEach(b => b.addEventListener("click", () => {
-          const sides = +b.dataset.mwDie;
-          face.classList.remove("is-rolling"); void face.offsetWidth; face.classList.add("is-rolling");
-          let ticks = 0;
-          const iv = setInterval(() => { const v = 1 + Math.floor(Math.random() * sides); face.innerHTML = dieFaceSVG(sides, v); ticks++; if (ticks >= 9) { clearInterval(iv); face.classList.remove("is-rolling"); } }, 65);
-          miniInterval(iv);
-        }));
-      } },
-    { id: "coin", name: "Coin flip", icon: "shuffle", blurb: "Heads or tails.",
-      render() { return `<div class="mw-big" data-mw-out>?</div><button class="btn btn--ghost btn--full btn--sm" data-mw-roll>Flip</button>`; },
-      wire(el) { const out = el.querySelector("[data-mw-out]"); el.querySelector("[data-mw-roll]").addEventListener("click", () => { out.textContent = Math.random() < 0.5 ? "Heads" : "Tails"; out.classList.remove("mw-pop"); void out.offsetWidth; out.classList.add("mw-pop"); }); } },
-    { id: "mood", name: "Mood check", icon: "heart", blurb: "Your mood, kept for the week.",
-      render() {
-        const s = mwState("mood");
-        const set = ["😀", "🙂", "😐", "😔", "😠", "😴", "🥰", "🤔"];
-        const today = todayKey();
-        const hist = (s.history && typeof s.history === "object") ? s.history : {};
-        const todayEmoji = hist[today] || (s.day === today ? s.emoji : "");
-        // The last seven days ending today, so a reader can see the week at a glance.
-        const wdInit = ["S", "M", "T", "W", "T", "F", "S"];
-        let week = "";
-        for (let i = 6; i >= 0; i--) {
-          const d = new Date(Date.now() - i * 86400000);
-          const key = d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
-          const em = hist[key] || (key === today ? todayEmoji : "");
-          week += `<span class="mw-mood-day${key === today ? " is-today" : ""}"><span class="mw-mood-emoji${em ? "" : " is-empty"}">${em || "·"}</span><span class="mw-mood-wd">${wdInit[d.getDay()]}</span></span>`;
-        }
-        return `<div class="mw-moods">${set.map(m => `<button class="mw-mood ${todayEmoji === m ? "is-on" : ""}" data-mw-mood="${m}" aria-label="Set today's mood to ${m}">${m}</button>`).join("")}</div>` +
-          `<p class="mw-eyebrow-sm">This week</p><div class="mw-mood-week">${week}</div>`;
-      },
-      wire(el) {
-        el.querySelectorAll("[data-mw-mood]").forEach(b => b.addEventListener("click", () => {
-          const s = mwState("mood");
-          const today = todayKey();
-          const hist = Object.assign({}, (s.history && typeof s.history === "object") ? s.history : {});
-          hist[today] = b.dataset.mwMood;
-          // Keep about six weeks of history; drop anything older so it never grows.
-          const cutoff = Date.now() - 42 * 86400000;
-          Object.keys(hist).forEach(k => { const p = k.split("-"); const t = new Date(+p[0], (+p[1]) - 1, +p[2]).getTime(); if (isFinite(t) && t < cutoff) delete hist[k]; });
-          mwSetState("mood", { emoji: b.dataset.mwMood, day: today, history: hist });
-          mwRefresh("mood");
-        }));
-      } },
-    { id: "sticky", name: "Sticky notes", icon: "edit", blurb: "Notes that stick around.",
-      render() { const notes = normalizeStickies(mwState("sticky")); return `<div class="mw-stickies">${notes.map((nt, i) => `<div class="mw-sticky-card"><textarea class="mw-sticky" data-mw-sticky="${i}" placeholder="Jot something...">${esc(nt.text)}</textarea><button class="mw-sticky-del" data-mw-sticky-del="${i}" aria-label="Remove note">&times;</button></div>`).join("")}</div><button class="btn btn--ghost btn--full btn--sm" data-mw-sticky-add>${icon("plus", 13)} New note</button>`; },
-      wire(el) {
-        const notes = () => normalizeStickies(mwState("sticky"));
-        el.querySelectorAll("[data-mw-sticky]").forEach(t => { let tm = null; t.addEventListener("input", () => { clearTimeout(tm); tm = setTimeout(() => { const arr = notes(); const i = +t.dataset.mwSticky; if (arr[i]) { arr[i].text = t.value; mwSetState("sticky", { notes: arr }); } }, 300); }); });
-        const add = el.querySelector("[data-mw-sticky-add]"); if (add) add.addEventListener("click", () => { const arr = notes(); arr.push({ text: "" }); mwSetState("sticky", { notes: arr }); mwRefresh("sticky"); });
-        el.querySelectorAll("[data-mw-sticky-del]").forEach(b => b.addEventListener("click", () => { const arr = notes(); arr.splice(+b.dataset.mwStickyDel, 1); if (!arr.length) arr.push({ text: "" }); mwSetState("sticky", { notes: arr }); mwRefresh("sticky"); }));
-      } },
-    { id: "to-read", name: "To-read list", icon: "bookmark", blurb: "A checkable reading list.",
-      render() { const items = normalizeTodo(mwState("to-read").items); return `<ul class="mw-todo">${items.length ? items.map((it, i) => `<li class="${it.done ? "is-done" : ""}"><button class="mw-todo-box" data-mw-tr-toggle="${i}" aria-pressed="${it.done}" aria-label="${it.done ? "Mark not done" : "Mark done"}">${it.done ? icon("check", 12) : ""}</button><span class="mw-todo-txt">${esc(it.text)}</span><button class="mw-li-del" data-mw-tr-del="${i}" aria-label="Remove">&times;</button></li>`).join("") : '<li class="mw-todo-empty">Nothing yet. Add something to read.</li>'}</ul><form class="mw-todo-add" data-mw-tr-form><input type="text" class="mw-todo-in" data-mw-tr-in placeholder="Add a title or note" maxlength="140"><button class="btn btn--ghost btn--sm" type="submit">Add</button></form>`; },
-      wire(el) {
-        const items = () => normalizeTodo(mwState("to-read").items);
-        const form = el.querySelector("[data-mw-tr-form]"), input = el.querySelector("[data-mw-tr-in]");
-        if (form) form.addEventListener("submit", (e) => { e.preventDefault(); const v = (input.value || "").trim(); if (!v) return; const arr = items(); arr.push({ text: v, done: false }); mwSetState("to-read", { items: arr }); mwRefresh("to-read"); setTimeout(() => { const nx = document.querySelector('[data-mw="to-read"] [data-mw-tr-in]'); if (nx) nx.focus(); }, 0); });
-        el.querySelectorAll("[data-mw-tr-toggle]").forEach(b => b.addEventListener("click", () => { const arr = items(); const i = +b.dataset.mwTrToggle; if (arr[i]) { arr[i].done = !arr[i].done; mwSetState("to-read", { items: arr }); mwRefresh("to-read"); } }));
-        el.querySelectorAll("[data-mw-tr-del]").forEach(b => b.addEventListener("click", () => { const arr = items(); arr.splice(+b.dataset.mwTrDel, 1); mwSetState("to-read", { items: arr }); mwRefresh("to-read"); }));
-      } },
-    { id: "water", name: "Water nudge", icon: "check", blurb: "Track water, hourly nudges.",
-      render() {
-        const s = mwState("water"); const today = todayKey();
-        const n = s.day === today ? (s.n || 0) : 0;
-        const goal = waterGoal(s);
-        const metToday = s.metDay === today;                       // goal was reached today (glasses may be cleared)
-        const remind = !!s.remind;
-        // A row of real glasses the reader fills up. Tap one to fill to it.
-        const glasses = Array.from({ length: goal }, (_, i) =>
-          `<button class="mw-glass${i < n ? " is-full" : ""}" data-mw-fill="${i + 1}" title="${i + 1} ${i + 1 === 1 ? "glass" : "glasses"}" aria-label="Fill to ${i + 1}">${icon("water", 26)}</button>`).join("");
-        const label = metToday ? "goal met today &#127881;" : "glasses today";
-        return `
-          <div class="mw-water${metToday ? " is-met" : ""}">
-            <div class="mw-water-head"><span class="mw-water-count">${n}<span class="mw-water-of"> / ${goal}</span></span><span class="mw-water-label">${label}</span></div>
-            <div class="mw-water-glasses" role="group" aria-label="Glasses of water">${glasses}</div>
-            <div class="mw-row">
-              <button class="btn btn--ghost btn--sm" data-mw-water="1">${icon("water", 13)} Had a glass</button>
-              <button class="btn btn--quiet btn--sm" data-mw-water-clear ${n ? "" : "disabled"}>Clear</button>
-            </div>
-            <div class="mw-water-cfg">
-              <span class="mw-water-goalset">Daily goal <span class="mw-stepper"><button data-mw-water-goal="-1" aria-label="Lower goal">&minus;</button><b>${goal}</b><button data-mw-water-goal="1" aria-label="Raise goal">+</button></span></span>
-              <button class="mw-water-remind${remind ? " is-on" : ""}" data-mw-water-remind aria-pressed="${remind}">${icon(remind ? "bell" : "mute", 12)} ${remind ? "Reminders on" : "Remind me hourly"}</button>
-            </div>
-          </div>`;
-      },
-      wire(el) {
-        // Set today's count to `n`. On first reaching the goal: celebrate, mark the
-        // day met (so reminders stop), then auto-clear the glasses for a fresh
-        // round — the reader never has to undo each one.
-        const setTo = (n) => {
-          const s = mwState("water"); const today = todayKey();
-          const cur = s.day === today ? (s.n || 0) : 0;
-          const goal = waterGoal(s);
-          const nn = Math.max(0, Math.min(goal, n));
-          const justMet = nn >= goal && cur < goal;
-          mwSetState("water", { n: nn, day: today, metDay: (justMet || s.metDay === today) ? today : s.metDay });
-          if (justMet) {
-            celebrate("You hit your water goal", "That's " + goal + " glasses today. Nicely done.", "💧");
-            setTimeout(() => { const s2 = mwState("water"); if (s2.day === todayKey() && (s2.n || 0) >= waterGoal(s2)) { mwSetState("water", { n: 0, day: todayKey() }); mwRefresh("water"); } }, 2600);
-          }
-          mwRefresh("water");
-        };
-        el.querySelectorAll("[data-mw-fill]").forEach(b => b.addEventListener("click", () => {
-          const s = mwState("water"); const cur = s.day === todayKey() ? (s.n || 0) : 0;
-          const target = +b.dataset.mwFill;
-          setTo(target === cur ? cur - 1 : target);   // tap the top glass to empty it, else fill up to it
-        }));
-        el.querySelectorAll("[data-mw-water]").forEach(b => b.addEventListener("click", () => {
-          const s = mwState("water"); const cur = s.day === todayKey() ? (s.n || 0) : 0;
-          setTo(cur + (+b.dataset.mwWater));
-        }));
-        const clr = el.querySelector("[data-mw-water-clear]");
-        if (clr) clr.addEventListener("click", () => { mwSetState("water", { n: 0, day: todayKey() }); mwRefresh("water"); });
-        el.querySelectorAll("[data-mw-water-goal]").forEach(b => b.addEventListener("click", () => {
-          const s = mwState("water");
-          const goal = Math.max(1, Math.min(20, waterGoal(s) + (+b.dataset.mwWaterGoal)));
-          mwSetState("water", { goal }); mwRefresh("water");
-        }));
-        const rb = el.querySelector("[data-mw-water-remind]");
-        if (rb) rb.addEventListener("click", () => {
-          const s = mwState("water");
-          const turningOn = !s.remind;
-          // Flip the preference right away; ask for notification permission in the
-          // background so the toggle never waits on the browser prompt. In-app
-          // toast nudges still work even if the reader declines notifications.
-          mwSetState("water", { remind: turningOn, last: turningOn ? Date.now() : (s.last || 0) });
-          if (turningOn) { armWaterReminders(); requestNotifyPermission().catch(() => {}); }
-          mwRefresh("water");
-          toast(turningOn ? "I'll nudge you about once an hour until you reach your goal." : "Water reminders off.");
-        });
-      } },
-    { id: "stretch", name: "Stretch break", icon: "leaf", blurb: "A guided little stretch.",
-      render() { return `<div class="mw-stretch" data-mw-stretch><div class="mw-fig" data-mw-fig>${stretchFigSVG()}</div><p class="mw-sub" data-mw-stretch-txt>Been reading a while? Take twenty seconds.</p><button class="btn btn--ghost btn--full btn--sm" data-mw-stretch-go>Stretch with me</button></div>`; },
-      wire(el) {
-        const wrap = el.querySelector("[data-mw-stretch]"), fig = el.querySelector("[data-mw-fig]"), txt = el.querySelector("[data-mw-stretch-txt]"), go = el.querySelector("[data-mw-stretch-go]");
-        const steps = [["Reach up, tall as you can", "up", 5000], ["Ease over to the left", "left", 4000], ["and over to the right", "right", 4000], ["Roll your shoulders back", "roll", 4000], ["Look far past the screen", "gaze", 3500]];
-        go.addEventListener("click", () => {
-          if (wrap.classList.contains("is-stretching")) return;
-          wrap.classList.add("is-stretching"); go.disabled = true;
-          let i = 0;
-          const run = () => {
-            if (i >= steps.length) { wrap.classList.remove("is-stretching"); fig.removeAttribute("data-pose"); txt.textContent = "Nice. Your shoulders thank you."; go.disabled = false; return; }
-            const s = steps[i]; txt.textContent = s[0]; fig.setAttribute("data-pose", s[1]); i++;
-            const t = setTimeout(run, s[2]); miniCleanup(() => clearTimeout(t));
-          };
-          run();
-        });
-      } },
-    { id: "breathing", name: "Breathing", icon: "heart", blurb: "A 4-7-8 breathing circle.",
-      render() { return `<div class="mw-breathe" data-mw-breathe><span class="mw-breathe__dot"></span><span class="mw-breathe__txt">Tap to begin</span></div>`; },
-      wire(el) { const box = el.querySelector("[data-mw-breathe]"); const txt = box.querySelector(".mw-breathe__txt"); let on = false, ph = 0; const phases = [["Breathe in", 4000, "in"], ["Hold", 7000, "hold"], ["Breathe out", 8000, "out"]]; let tm = null; const step = () => { const [label, ms, cls] = phases[ph % 3]; txt.textContent = label; box.classList.remove("is-in", "is-hold", "is-out"); box.classList.add("is-" + cls); ph++; tm = setTimeout(step, ms); }; box.addEventListener("click", () => { on = !on; if (on) { ph = 0; step(); } else { clearTimeout(tm); box.classList.remove("is-in", "is-hold", "is-out"); txt.textContent = "Tap to begin"; } }); miniCleanup(() => clearTimeout(tm)); } },
-    { id: "cat", name: "Lucky the cat", icon: "paw", blurb: "A cat who strolls the page.",
-      render() { const sum = (window.WispCompanion && WispCompanion.summary) ? WispCompanion.summary() : "Your reading companion."; return `<p class="mw-sub" data-mw-cat-sum>${esc(sum)}</p><div class="mw-row"><button class="btn btn--ghost btn--sm" data-mw-cat-customize>Customize</button><button class="btn btn--quiet btn--sm" data-mw-cat-stroll>Take a stroll</button></div>`; },
-      wire(el) {
-        const cz = el.querySelector("[data-mw-cat-customize]"); if (cz) cz.addEventListener("click", () => { if (window.WispCompanion) WispCompanion.openSettings(); });
-        const st = el.querySelector("[data-mw-cat-stroll]"); if (st) st.addEventListener("click", () => { if (window.WispCompanion) WispCompanion.stroll(); });
-      } },
-    { id: "confetti", name: "Confetti", icon: "party", blurb: "A burst of confetti.",
-      render() { return `<p class="mw-sub">Finished a chapter? Give yourself a moment.</p><button class="btn btn--ghost btn--full btn--sm" data-mw-conf>Celebrate</button>`; },
-      wire(el) { el.querySelector("[data-mw-conf]").addEventListener("click", confettiBurst); } },
-    { id: "petals", name: "Falling petals", icon: "leaf", blurb: "Petals drifting down.",
-      render() { const on = !!mwState("petals").on; return `<p class="mw-sub">A quiet, drifting backdrop.</p><button class="btn ${on ? "btn--primary" : "btn--ghost"} btn--full btn--sm" data-mw-petals>${on ? "Turn off" : "Turn on"}</button>`; },
-      wire(el) { el.querySelector("[data-mw-petals]").addEventListener("click", () => { const on = !mwState("petals").on; mwSetState("petals", { on }); togglePetals(on); mwRefresh("petals"); }); } },
-    { id: "focus", name: "Focus mode", icon: "book", blurb: "Everything but the page, dimmed.",
-      render() { const on = !!mwState("focus").on; return `<p class="mw-sub">Quiets everything but the page.</p><button class="btn ${on ? "btn--primary" : "btn--ghost"} btn--full btn--sm" data-mw-focus>${on ? "Turn off" : "Turn on"}</button>`; },
-      wire(el) { el.querySelector("[data-mw-focus]").addEventListener("click", () => { const on = !mwState("focus").on; mwSetState("focus", { on }); document.body.classList.toggle("focus-mode", on); mwRefresh("focus"); }); } },
-    { id: "accent", name: "Accent shuffler", icon: "palette", blurb: "A new accent color.",
-      render() { return `<p class="mw-sub">Current accent: <b>${esc(settings.accent || "default")}</b></p><button class="btn btn--ghost btn--full btn--sm" data-mw-accent>Shuffle</button>`; },
-      wire(el) { el.querySelector("[data-mw-accent]").addEventListener("click", () => { const ids = ACCENTS.map(a => a.id).filter(x => x !== settings.accent); settings.accent = rand(ids); applySettings(); mwRefresh("accent"); }); } },
-    { id: "wpm", name: "Reading pace", icon: "clock", blurb: "Learned as you read.",
-      render() { const s = mwState("wpm"); return s.avg ? `<div class="mw-big">${s.avg}</div><p class="mw-sub">words per minute${s.n ? " · from " + s.n + " " + (s.n === 1 ? "read" : "reads") : ""}</p>` : `<p class="mw-sub">Read a chapter or two and I'll learn your pace on my own. No typing.</p>`; },
-      wire() {} },
-    { id: "chapters-today", name: "Chapters today", icon: "book", blurb: "Counts as you read.",
-      render() {
-        const s = mwState("chapters-today");
-        const n = s.day === todayKey() ? (s.n || 0) : 0;
-        return n
-          ? `<div class="mw-big">${n}</div><p class="mw-sub">${n === 1 ? "chapter" : "chapters"} read today · counted for you</p>`
-          : `<p class="mw-sub">Open a chapter and it counts here on its own. No tapping needed.</p>`;
-      },
-      wire() {} },
-    { id: "gratitude", name: "Gratitude line", icon: "heart", blurb: "One good thing today.",
-      render() { const s = mwState("gratitude"); return s.day === todayKey() && s.text ? `<p class="mw-out">${esc(s.text)}</p><button class="btn btn--quiet btn--full btn--sm" data-mw-grat>Change</button>` : `<button class="btn btn--ghost btn--full btn--sm" data-mw-grat>Add one good thing</button>`; },
-      wire(el) { el.querySelector("[data-mw-grat]").addEventListener("click", () => { const v = (window.prompt("One good thing today") || "").trim(); if (!v) return; mwSetState("gratitude", { text: v, day: todayKey() }); mwRefresh("gratitude"); }); } },
-    { id: "spinner", name: "Yes or no", icon: "shuffle", blurb: "Yes, no, or maybe.",
-      render() { return `<div class="mw-big" data-mw-out>?</div><button class="btn btn--ghost btn--full btn--sm" data-mw-roll>Decide</button>`; },
-      wire(el) { const out = el.querySelector("[data-mw-out]"); el.querySelector("[data-mw-roll]").addEventListener("click", () => { out.textContent = rand(["Yes", "No", "Maybe", "Later", "Go for it", "Not now"]); out.classList.remove("mw-pop"); void out.offsetWidth; out.classList.add("mw-pop"); }); } }
-  ];
-
-  // Timer/interval bookkeeping so re-renders never leak or double up.
-  let miniIntervals = [], miniCleanups = [];
-  function miniInterval(id) { miniIntervals.push(id); }
-  function miniCleanup(fn) { miniCleanups.push(fn); }
-  function clearMiniTimers() { miniIntervals.forEach(clearInterval); miniIntervals = []; miniCleanups.forEach(fn => { try { fn(); } catch (e) {} }); miniCleanups = []; }
-
-  function installedWidgetsHTML() {
-    const ids = mwLoad();
-    const cards = ids.map(id => {
-      const def = MINI_WIDGETS.find(w => w.id === id); if (!def) return "";
-      return `<div class="widget mini-widget" data-mw="${esc(id)}">
-        <div class="widget__label mw-head"><span>${icon(def.icon || "book", 13)} ${esc(def.name)}</span><button class="mw-remove" data-mw-remove="${esc(id)}" aria-label="Remove ${esc(def.name)}">&times;</button></div>
-        <div class="mw-body">${def.render()}</div>
-      </div>`;
-    }).join("");
-    return cards + `<button class="widget mw-add" data-mw-open>${icon("plus", 15)} Add widgets</button>`;
-  }
-  function wireMiniWidgets(root) {
-    clearMiniTimers();
-    const scope = root || document;
-    scope.querySelectorAll(".mini-widget").forEach(card => {
-      const id = card.dataset.mw; const def = MINI_WIDGETS.find(w => w.id === id);
-      const body = card.querySelector(".mw-body");
-      if (def && def.wire && body) { try { def.wire(body); } catch (e) {} }
-    });
-    scope.querySelectorAll("[data-mw-remove]").forEach(b => b.addEventListener("click", (e) => { e.stopPropagation(); const id = b.dataset.mwRemove; mwSave(mwLoad().filter(x => x !== id)); renderWidgetsEverywhere(); }));
-    scope.querySelectorAll("[data-mw-open]").forEach(b => b.addEventListener("click", openWidgetPicker));
-  }
-  // Both the desktop rail and the open mobile sheet reflect an install change.
-  // renderWidgets now refreshes both surfaces, so this is a thin alias kept for
-  // the install/remove call sites.
-  function renderWidgetsEverywhere() { renderWidgets(); }
-  function openWidgetPicker() {
-    const installed = new Set(mwLoad());
-    const rows = MINI_WIDGETS.map(def => `<button class="mw-pick-row ${installed.has(def.id) ? "is-in" : ""}" data-mw-pick="${esc(def.id)}">
-      <span class="mw-pick-ic">${icon(def.icon || "book", 16)}</span>
-      <span class="mw-pick-txt"><span class="mw-pick-name">${esc(def.name)}</span><span class="mw-pick-blurb">${esc(def.blurb)}</span></span>
-      <span class="mw-pick-act">${installed.has(def.id) ? icon("check", 15) + " Added" : icon("plus", 15) + " Add"}</span>
-    </button>`).join("");
-    openModal(`
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-        <h2 style="font-size:20px">Add widgets</h2>
-        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
-      </div>
-      <p class="muted" style="font-size:13px;margin:0 0 14px">Little extras for your widget station. Signed in, they follow you across devices. Tap to add or remove.</p>
-      <div class="mw-pick-list">${rows}</div>
-      <div class="modal-actions" style="margin-top:16px"><button class="btn btn--primary" data-modal-cancel>Done</button></div>`, "Add widgets");
-    $$("#modalCard [data-mw-pick]").forEach(b => b.addEventListener("click", () => {
-      const id = b.dataset.mwPick; const ids = mwLoad();
-      if (ids.includes(id)) { mwSave(ids.filter(x => x !== id)); if (id === "petals") togglePetals(false); if (id === "focus") document.body.classList.remove("focus-mode"); }
-      else mwSave(ids.concat([id]));
-      const nowIn = mwLoad().includes(id);
-      b.classList.toggle("is-in", nowIn);
-      b.querySelector(".mw-pick-act").innerHTML = nowIn ? icon("check", 15) + " Added" : icon("plus", 15) + " Add";
-      renderWidgetsEverywhere();
-    }));
-  }
-
-  // ---- page-level effects for the fun widgets ----
-  // These fun effects are driven by the Web Animations API rather than CSS
+  // ---- page-level effects ----
+  // These effects are driven by the Web Animations API rather than CSS
   // @keyframes on purpose: iOS Low Power Mode (and the OS Reduce Motion setting)
   // set prefers-reduced-motion, and the global reduced-motion CSS rule collapses
-  // every animation to ~0ms. A reader who deliberately taps "Here, kitty" or turns
-  // petals on should still see them, so we animate in JS, which that rule can't reach.
-  function catWalk() {
-    const c = document.createElement("div"); c.className = "mw-catrun"; c.textContent = "🐈";
-    document.body.appendChild(c);
-    const done = () => { if (c.parentNode) c.remove(); };
-    try {
-      const a = c.animate([
-        { left: "-60px", transform: "translateY(0)" },
-        { transform: "translateY(-6px)", offset: 0.49 },
-        { transform: "translateY(0)", offset: 0.5 },
-        { left: "106%", transform: "translateY(0)" }
-      ], { duration: 8000, easing: "linear", fill: "forwards" });
-      a.addEventListener("finish", done);
-    } catch (e) { c.style.left = "50%"; }   // no WAA: at least show the cat briefly
-    setTimeout(done, 9000);
-  }
+  // every animation to ~0ms. A celebration the reader has just earned should
+  // still show, so we animate in JS, which that rule can't reach.
   // A celebratory burst from the center of the screen: pieces shoot outward in all
   // directions, then fall away. (Center, not raining from the top edge.)
   function confettiBurst() {
@@ -8268,66 +7593,6 @@
     svg.classList.remove(cls); void svg.offsetWidth; svg.classList.add(cls);
     setTimeout(function () { svg.classList.remove(cls); }, 720);
   }
-  let petalTimer = null;
-  function togglePetals(on) {
-    let layer = $("#mwPetals");
-    if (!on) { if (petalTimer) { clearInterval(petalTimer); petalTimer = null; } if (layer) layer.remove(); return; }
-    if (!layer) { layer = document.createElement("div"); layer.id = "mwPetals"; layer.className = "mw-petals"; document.body.appendChild(layer); }
-    if (petalTimer) return;
-    petalTimer = setInterval(() => {
-      if (!document.getElementById("mwPetals")) { clearInterval(petalTimer); petalTimer = null; return; }
-      const p = document.createElement("i"); p.textContent = "🌸"; p.style.left = Math.random() * 100 + "%"; p.style.fontSize = (10 + Math.random() * 10) + "px";
-      layer.appendChild(p);
-      const dur = 6000 + Math.random() * 5000;
-      try {
-        p.animate([
-          { transform: "translateY(-26px) translateX(0) rotate(0)", opacity: 0 },
-          { opacity: 0.9, offset: 0.12 },
-          { transform: "translateY(102vh) translateX(40px) rotate(220deg)", opacity: 0.5 }
-        ], { duration: dur, easing: "linear", fill: "forwards" });
-      } catch (e) {}
-      setTimeout(() => p.remove(), dur + 500);
-    }, 900);
-  }
-  // Restore ambient effects the reader left on, once per load.
-  function restoreMiniEffects() {
-    if (mwState("petals").on) togglePetals(true);
-    if (mwState("focus").on) document.body.classList.add("focus-mode");
-  }
-
-  // The "Your week" widget, from real reading progress. Only counts we can
-  // actually derive: no invented word totals.
-  function readingStatsHTML() {
-    if (!WispDB.signedIn) {
-      return `<div style="font:15px/1.5 var(--font-read);color:var(--ink2)">Sign in, and your reading shows up here.</div>`;
-    }
-    const s = LIVE.readingStats;
-    if (s === null) {
-      return `<div style="font:15px/1.5 var(--font-read);color:var(--ink2)">Reading stats show up here as you read.</div>`;
-    }
-    if (!s.total) {
-      return `<div style="font:15px/1.5 var(--font-read);color:var(--ink2)">Open a work and your reading life starts filling in here.</div>`;
-    }
-    const max = Math.max(s.thisWeek, s.inProgress, s.total, 1);
-    const line = (n, label) => `<div class="rstat">
-      <div class="rstat__row"><span class="rstat__n">${n}</span><span class="rstat__l">${label}</span></div>
-      <span class="rstat__bar"><i style="width:${Math.max(4, Math.round(100 * n / max))}%"></i></span>
-    </div>`;
-    return `<div class="rstats">
-      ${line(s.thisWeek, s.thisWeek === 1 ? "work this week" : "works this week")}
-      ${line(s.inProgress, s.inProgress === 1 ? "work in progress" : "works in progress")}
-      ${line(s.total, s.total === 1 ? "work in your history" : "works in your history")}
-    </div>`;
-  }
-  async function loadReadingStats(force) {
-    if (!isLive() || !WispDB.signedIn) { LIVE.readingStats = null; return; }
-    if (LIVE.readingStats !== null && !force) return;
-    try { LIVE.readingStats = await WispDB.readingStats(); }
-    catch (e) { LIVE.readingStats = LIVE.readingStats || { total: 0, thisWeek: 0, inProgress: 0 }; }
-    renderWidgets();
-  }
-  // Small handle so the stats renderer can be exercised by tests.
-  window.WispStats = { html: readingStatsHTML, inject(s) { LIVE.readingStats = s; } };
 
   /* ======================================================================= */
   /*  THEME ENGINE  ·  the accessibility engine too                          */
@@ -8666,10 +7931,9 @@
       n.classList.toggle("is-active", on);
       on ? n.setAttribute("aria-current", "page") : n.removeAttribute("aria-current");
     });
-    // Reading and writing are focused surfaces: hide both rails for a calm,
-    // centered column. Browse hides the widget rail so results get room.
-    $("#railLeft").hidden  = (screen === "reading" || screen === "write");
-    $("#railRight").hidden = (screen === "reading" || screen === "write" || screen === "browse");
+    // Reading and writing are focused surfaces: hide the activity rail for a
+    // calm, centered column.
+    $("#railLeft").hidden = (screen === "reading" || screen === "write");
     $("#main").scrollTop = 0;
     $("#main").focus({ preventScroll:true });
   }
@@ -9097,7 +8361,6 @@
 
   function route() {
     flushAutosave();   // leaving the editor: write any pending draft before its DOM is torn down
-    finalizeReadSession();   // leaving a chapter: fold the elapsed read into the reading-pace average
     if (speaking) stopListen();      // leaving the page stops read-aloud
     if (autoScrollState) stopAutoScroll();   // and the auto-scroll with it
     const hash = location.hash.replace(/^#\/?/, "");
@@ -9173,12 +8436,11 @@
 
   function openSheet() { openOverlay($("#navSheet")); }
   function closeSheet() { closeOverlay($("#navSheet")); closeOverlay($("#railSheet")); }
-  function openRailSheet(kind) {
+  function openRailSheet() {
     const body = $("#railSheetBody");
-    if (kind === "activity") body.innerHTML = `<h2 class="rail__title" style="margin-bottom:4px">Activity</h2><p class="rail__note">Recent activity from the people and works you follow.</p>${activityHTML()}`;
-    else { body.innerHTML = `<h2 class="rail__title" style="margin-bottom:16px">Widgets</h2>${widgetHTML()}`; wireMiniWidgets(body); }
+    body.innerHTML = `<h2 class="rail__title" style="margin-bottom:4px">Activity</h2><p class="rail__note">Recent activity from the people and works you follow.</p>${activityHTML()}`;
     openOverlay($("#railSheet"));
-    if (kind === "activity" && isLive() && WispDB.signedIn) markNotificationsSeen();
+    if (isLive() && WispDB.signedIn) markNotificationsSeen();
   }
 
   // Keep the caret in the editor when a formatting button is pressed: without
@@ -9428,15 +8690,8 @@
 
     if (e.target.closest("#introDismiss")) { settings.introSeen = true; save(); const bar = $("#introBar"); if (bar) bar.remove(); return; }
 
-    if (e.target.closest("[data-lucky]")) {
-      luckyIdx++;
-      const t = W.WIDGETS.luckyPool[luckyIdx % W.WIDGETS.luckyPool.length];
-      $$(".lucky-title").forEach(el => el.textContent = t);
-      return;
-    }
-
     const rs = e.target.closest("[data-railsheet]");
-    if (rs) { openRailSheet(rs.dataset.railsheet); return; }
+    if (rs) { openRailSheet(); return; }
 
     const tst = e.target.closest("[data-toast]");
     if (tst) { toast(tst.dataset.toast); return; }
@@ -9559,20 +8814,18 @@
     const setMobileLabel = (t) => { if (linkM) { const svg = linkM.querySelector("svg"); linkM.textContent = t; if (svg) linkM.prepend(svg); } };
     if (!window.WispDB || !WispDB.enabled) return;             // demo mode: leave the header as-is
     updateAuthGate();
-    renderActivity(); renderWidgets();                         // rails reflect the connected state
+    renderActivity();                                          // the rail reflects the connected state
     if (WispDB.signedIn) {
       const name = (WispDB.profile && WispDB.profile.display_name) || "You";
       if (link) link.textContent = "Sign out";
       setMobileLabel("Sign out");
       if (avatar) { avatar.textContent = name[0].toUpperCase(); avatar.title = name; }
       loadNotifications();                                     // fetch the activity feed once signed in
-      loadReadingStats();                                      // and the reading stats widget
     } else {
       if (link) link.textContent = "Sign in";
       setMobileLabel("Sign in");
       if (avatar) { avatar.textContent = "?"; avatar.title = "Sign in"; }
       LIVE.notifications = null; updateNotifBadge();           // drop any feed from a previous session
-      LIVE.readingStats = null;
     }
     // The backend connects after the first paint, so a screen shown at boot can
     // be a demo render (the sample "Rowan" profile and works) even for a
@@ -12529,9 +11782,9 @@
     }, { passive: true });
   }
 
-  // Collapsible rails: a reader can hide the Activity or Widgets panel to give the
-  // page the full width, the way many apps let you tuck a sidebar away. The choice
-  // is remembered on this device.
+  // Collapsible rail: a reader can hide the Activity panel to give the page the
+  // full width, the way many apps let you tuck a sidebar away. The choice is
+  // remembered on this device.
   function railHidden(side) { try { return localStorage.getItem("wisp.rail." + side) === "hidden"; } catch (e) { return false; } }
   function setRailHidden(side, hidden) {
     try { localStorage.setItem("wisp.rail." + side, hidden ? "hidden" : "shown"); } catch (e) {}
@@ -12539,13 +11792,12 @@
   }
   function applyRailPrefs() {
     document.body.classList.toggle("hide-rail-left", railHidden("left"));
-    document.body.classList.toggle("hide-rail-right", railHidden("right"));
   }
   function wireRailToggles() {
     applyRailPrefs();
     $$("[data-rail-hide]").forEach(b => b.addEventListener("click", () => {
-      const s = b.dataset.railHide; setRailHidden(s, true);
-      toast((s === "left" ? "Activity" : "Widgets") + " hidden. Use the tab on the edge to bring it back.");
+      setRailHidden(b.dataset.railHide, true);
+      toast("Activity hidden. Use the tab on the edge to bring it back.");
     }));
     $$("[data-rail-show]").forEach(b => b.addEventListener("click", () => setRailHidden(b.dataset.railShow, false)));
   }
@@ -12556,8 +11808,9 @@
     buildDrawer();
     applySettings();
     renderActivity();
-    renderWidgets();
-    restoreMiniEffects();       // bring back ambient widgets (petals, focus) the reader left on
+    // The personal widget station is gone: clear what it left on this device,
+    // so no stale timer state or hidden-panel flag lingers in storage.
+    ["wisp.widgets.installed", "wisp.widgets.state", "wisp.rail.right"].forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
 
     // Header and chrome.
     $("#themeBtn").addEventListener("click", openTheme);
@@ -12566,7 +11819,7 @@
     $("#themeScrim").addEventListener("click", (e) => { if (e.target.id === "themeScrim") closeTheme(); });
     const doSignInOut = () => {
       if (!window.WispDB || !WispDB.enabled) { toast("Sign out isn't wired up in demo mode. Connect Supabase to enable accounts."); return; }
-      if (WispDB.signedIn) WispDB.signOut().then(() => { guestBrowsing = false; mwHandleSignOut(); toast("Signed out."); updateAuthGate(); });
+      if (WispDB.signedIn) WispDB.signOut().then(() => { guestBrowsing = false; companionHandleSignOut(); toast("Signed out."); updateAuthGate(); });
       else openAuth("in");
     };
     $("#signOutBtn").addEventListener("click", doSignInOut);
@@ -12671,9 +11924,9 @@
       // underneath and an already-signed-in reader never sees the sign-in form.
       if (WispDB.configured) renderAuthGate(true);
       WispDB.onChange(syncAuthHeader);
-      WispDB.onChange(mwSyncFromAccount);   // pull the account's widget station (and companion) across devices
+      WispDB.onChange(companionSyncFromAccount);   // pull Lucky's look across devices
       WispDB.onChange(syncStateFromAccount); // pull settings, dictionary, mutes and blocks across devices
-      document.addEventListener("wisp-companion-changed", () => mwPersistRemote());   // sync Lucky's look across devices
+      document.addEventListener("wisp-companion-changed", () => companionPersistRemote());   // sync Lucky's look across devices
       // A password-reset link lands the reader back here with a recovery
       // session: show the "set a new password" screen when that happens.
       WispDB.onRecovery(openSetNewPassword);

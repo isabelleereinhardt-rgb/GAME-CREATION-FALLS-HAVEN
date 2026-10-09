@@ -563,7 +563,7 @@ img { max-width: 100%; display: block; }
 
 .hamburger { display: none; }
 
-/* Body: three columns. */
+/* Body: the activity rail and the page. */
 .shell-body { flex: 1; min-height: 0; display: flex; }
 
 .rail {
@@ -571,7 +571,6 @@ img { max-width: 100%; display: block; }
   padding: 22px 20px 44px;
 }
 .rail-left  { width: 272px; border-right: 1px solid var(--line); }
-.rail-right { width: 322px; border-left: 1px solid var(--line); background: var(--surface); }
 
 .center {
   flex: 1; min-width: 0; overflow-y: auto; overflow-x: hidden;
@@ -599,7 +598,6 @@ img { max-width: 100%; display: block; }
 .rail__collapse:hover { background: var(--paper2); color: var(--rose-ink); border-color: var(--rose); }
 /* When a rail is hidden the center (flex:1) simply takes the freed space. */
 body.hide-rail-left  #railLeft  { display: none; }
-body.hide-rail-right #railRight { display: none; }
 /* A slim tab on the screen edge brings a hidden rail back. Only meaningful at the
    widths where that rail is shown at all, so it never appears on mobile. */
 .rail-handle {
@@ -610,9 +608,7 @@ body.hide-rail-right #railRight { display: none; }
 }
 .rail-handle:hover { color: var(--rose-ink); background: var(--paper2); }
 .rail-handle--left  { left: 0; border-left: 0; border-radius: 0 10px 10px 0; }
-.rail-handle--right { right: 0; border-right: 0; border-radius: 10px 0 0 10px; }
 @media (min-width: 1041px) { body.hide-rail-left  .rail-handle--left  { display: inline-flex; } }
-@media (min-width: 1241px) { body.hide-rail-right .rail-handle--right { display: inline-flex; } }
 .rail__group { font: 500 10.5px/1 var(--font-text); letter-spacing: .2em; text-transform: uppercase; color: var(--ink3); margin: 20px 0 10px; }
 .rail__group:first-of-type { margin-top: 6px; }
 
@@ -640,18 +636,8 @@ body.hide-rail-right #railRight { display: none; }
 .act__body .soft { color: var(--ink3); }
 
 /* ---------------------------------------------------------------------------
-   6. Widget station (right)
+   6. Small shared pieces: the dashed add button and compact work rows
    ------------------------------------------------------------------------- */
-.widget {
-  background: var(--card); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 16px; margin-bottom: 14px;
-}
-.widget__label {
-  font: 500 11px/1 var(--font-text); letter-spacing: .16em;
-  text-transform: uppercase; color: var(--ink3); margin-bottom: 12px;
-}
-.widget__title { font-family: var(--font-display); font-size: 18px; line-height: 1.25; color: var(--ink); }
-
 .btn-add {
   width: 100%; background: none; border: 1px dashed var(--line);
   border-radius: 12px; padding: 13px; color: var(--ink3);
@@ -993,16 +979,6 @@ a.list-card__title:hover { color: var(--rose-ink); }
 .saved-chip__go:hover { color: var(--rose-ink); }
 .saved-chip__x { border: 0; background: none; color: var(--ink3); cursor: pointer; padding: 0 9px 0 6px; font-size: 15px; }
 .saved-chip__x:hover { color: var(--rose); }
-
-/* Reading-stats widget ("Your week"). */
-.rstats { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
-.rstats { display: flex; flex-direction: column; gap: 12px; }
-.rstat { display: flex; flex-direction: column; gap: 5px; }
-.rstat__row { display: flex; align-items: baseline; gap: 8px; }
-.rstat__n { font: 600 22px var(--font-display); color: var(--ink); min-width: 30px; }
-.rstat__l { font-size: 13px; color: var(--ink2); }
-.rstat__bar { display: block; height: 6px; border-radius: 999px; background: var(--surface2, var(--paper2)); overflow: hidden; }
-.rstat__bar > i { display: block; height: 100%; border-radius: 999px; background: var(--rose); transition: width .5s ease; }
 
 /* Policy pages. */
 .legal-body { max-height: 60vh; overflow-y: auto; padding-right: 6px; }
@@ -1840,8 +1816,7 @@ mark.hl--purple { background: rgba(190, 130, 255, 0.42); }
 .scrim {
   position: fixed; inset: 0; background: color-mix(in srgb, var(--ink) 34%, transparent);
   /* Above the mobile sheets (z-index 50) so a dialog opened from inside a sheet
-     — e.g. the Add-widgets picker from the widget sheet — lands on top of it,
-     not hidden behind it. Still below the auth gate (60+). */
+     lands on top of it, not hidden behind it. Still below the auth gate (60+). */
   z-index: 55; display: flex; justify-content: flex-end;
   opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .2s ease, visibility .2s ease;
 }
@@ -1947,12 +1922,11 @@ mark.hl--purple { background: rgba(190, 130, 255, 0.42); }
    ------------------------------------------------------------------------- */
 .screen { display: none; }
 .screen.is-active { display: block; }
-.rail-left[hidden], .rail-right[hidden] { display: none; }
+.rail-left[hidden] { display: none; }
 
 /* ---------------------------------------------------------------------------
-   17. Responsive  ·  the three-column shell collapses content-first
+   17. Responsive  ·  the two-column shell collapses content-first
    ------------------------------------------------------------------------- */
-@media (max-width: 1240px) { .rail-right { display: none; } }
 @media (max-width: 1040px) {
   .rail-left  { display: none; }
   .browse { grid-template-columns: 1fr; }
@@ -2026,7 +2000,7 @@ mark.hl--purple { background: rgba(190, 130, 255, 0.42); }
 
 @media print {
   body { background: #fff; }
-  .header, .rail-left, .rail-right, .reader-tools, .reader__progress,
+  .header, .rail-left, .reader-tools, .reader__progress,
   .para__marker, .thread, .chapter-nav, .scrim, .sheet, .toast { display: none !important; }
   #app { height: auto; overflow: visible; }
   .center { overflow: visible; }
@@ -2375,168 +2349,11 @@ button.pill--link:hover { border-color: var(--rose); color: var(--rose-ink); bac
 .embed__source a { color: var(--link); text-decoration: none; }
 .embed__source a:hover { text-decoration: underline; }
 
-/* ---------------------------------------------------------------------------
-   Installable mini-widgets (personal widget station)
-   ------------------------------------------------------------------------- */
-.mini-widget .mw-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.mini-widget .mw-head span { display: inline-flex; align-items: center; gap: 6px; }
-.mw-remove { border: 0; background: none; color: var(--ink3); font-size: 18px; line-height: 1; cursor: pointer; padding: 0 2px; border-radius: 6px; }
-.mw-remove:hover { color: #a2444f; }
-.mw-body { margin-top: 10px; }
-.mw-big { font: 30px/1 var(--font-display); color: var(--ink); font-variant-numeric: tabular-nums; text-align: center; padding: 6px 0 2px; }
-.mw-sub { font-size: 12.5px; color: var(--ink3); margin: 6px 0 0; text-align: center; line-height: 1.5; }
-.mw-done { display: flex; align-items: center; justify-content: center; gap: 5px; color: var(--rose-ink); font-weight: 600; }
-.mw-done svg { color: var(--rose-ink); }
-.mw-out { font-size: 14px; color: var(--ink); line-height: 1.5; margin: 0 0 10px; min-height: 1.4em; }
-.mw-row { display: flex; gap: 8px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
-.mw-row .btn { flex: 1; }
-
-/* Water nudge: goal, progress, hourly reminders. */
-.mw-water-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.mw-water-count { font: 30px/1 var(--font-display); color: var(--ink); font-variant-numeric: tabular-nums; }
-.mw-water-of { font-size: 17px; color: var(--ink3); }
-.mw-water-label { font-size: 12px; color: var(--ink3); letter-spacing: .02em; }
-.mw-water.is-met .mw-water-count { color: #2a7ab0; }
-/* A row of real glasses the reader fills up; empty ones are dimmed. */
-.mw-water-glasses { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 9px; }
-.mw-glass { border: 0; background: none; padding: 2px; cursor: pointer; line-height: 0; border-radius: 8px;
-  transition: transform .12s ease; -webkit-tap-highlight-color: transparent; }
-.mw-glass svg { display: block; opacity: .32; filter: grayscale(.65); transition: opacity .16s ease, filter .16s ease, transform .16s ease; }
-.mw-glass.is-full svg { opacity: 1; filter: none; }
-.mw-glass:hover { transform: translateY(-2px); }
-.mw-glass:focus-visible { outline: none; box-shadow: 0 0 0 2px color-mix(in srgb, #3f8fc0 60%, transparent); }
-.mw-water.is-met .mw-water-count { color: #2a7ab0; }
-.mw-water-cfg { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 11px; flex-wrap: wrap; }
-.mw-water-goalset { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ink2); }
-.mw-stepper { display: inline-flex; align-items: center; gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.mw-stepper button { border: 0; background: var(--card); color: var(--ink2); width: 24px; height: 24px; font-size: 15px; line-height: 1; cursor: pointer; }
-.mw-stepper button:hover { background: color-mix(in srgb, var(--rose) 12%, var(--card)); color: var(--rose-ink); }
-.mw-stepper b { min-width: 22px; text-align: center; font: 600 13.5px var(--font-text); color: var(--ink); font-variant-numeric: tabular-nums; }
-.mw-water-remind { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--card);
-  color: var(--ink2); border-radius: 999px; padding: 5px 11px; font: 600 12px var(--font-text); cursor: pointer; transition: all .15s; }
-.mw-water-remind:hover { border-color: #58a6d6; color: #2a7ab0; }
-.mw-water-remind.is-on { border-color: #58a6d6; background: color-mix(in srgb, #58a6d6 14%, var(--card)); color: #2a7ab0; }
-.mw-pop { animation: mw-pop .3s ease; }
-@keyframes mw-pop { 0% { transform: scale(.86); opacity: .3; } 100% { transform: scale(1); opacity: 1; } }
-.mw-add { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
-  border: 1px dashed var(--line); background: none; color: var(--ink2); cursor: pointer; font: 600 13.5px var(--font-text);
-  padding: 14px; border-radius: var(--radius-s); }
-.mw-add:hover { border-color: var(--rose); color: var(--rose-ink); }
-.mw-in { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font: 13px var(--font-text); background: var(--card); color: var(--ink); }
-.mw-sticky { width: 100%; min-height: 74px; resize: vertical; border: 1px solid var(--line); border-radius: 9px; padding: 9px 10px; font: 13.5px/1.5 var(--font-text); background: color-mix(in srgb, var(--amber) 12%, var(--card)); color: var(--ink); }
-.mw-moods { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
-.mw-mood { border: 1px solid var(--line); background: var(--card); border-radius: 9px; width: 34px; height: 34px; font-size: 17px; cursor: pointer; line-height: 1; }
-.mw-mood.is-on { border-color: var(--rose); background: var(--rose-wash); }
-.mw-eyebrow-sm { font: 600 10px/1 var(--font-text); letter-spacing: .18em; text-transform: uppercase; color: var(--ink3); margin: 12px 0 7px; text-align: center; }
-.mw-mood-week { display: flex; justify-content: space-between; gap: 3px; }
-.mw-mood-day { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1; }
-.mw-mood-emoji { display: flex; align-items: center; justify-content: center; width: 100%; aspect-ratio: 1 / 1; max-width: 30px; border-radius: 8px;
-  border: 1px solid var(--line); background: var(--card); font-size: 15px; line-height: 1; }
-.mw-mood-emoji.is-empty { color: var(--ink3); background: color-mix(in srgb, var(--line) 30%, transparent); }
-.mw-mood-day.is-today .mw-mood-emoji { border-color: var(--rose); box-shadow: 0 0 0 1px var(--rose); }
-.mw-mood-wd { font: 10px var(--font-text); color: var(--ink3); }
-.mw-mood-day.is-today .mw-mood-wd { color: var(--rose-ink); font-weight: 600; }
-/* Reading streak: a consecutive-days tracker, distinct from the plain
-   "chapters today" counter. Leads with the streak number, then a seven-day
-   consistency strip so the last week reads at a glance. */
-.mw-streak__top { display: flex; align-items: baseline; justify-content: center; gap: 7px; padding: 2px 0 4px; }
-.mw-streak__n { font: 34px/1 var(--font-display); color: var(--ink); font-variant-numeric: tabular-nums; }
-.mw-streak__fire { font-size: 20px; line-height: 1; }
-.mw-streak__lbl { font-size: 12.5px; color: var(--ink3); }
-.mw-week { display: flex; justify-content: space-between; gap: 3px; margin: 8px 0 11px; }
-.mw-week__day { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; }
-.mw-week__dot { width: 100%; max-width: 22px; aspect-ratio: 1 / 1; border-radius: 999px;
-  border: 1px solid var(--line); background: color-mix(in srgb, var(--line) 26%, transparent); transition: background .16s ease, border-color .16s ease; }
-.mw-week__day.is-read .mw-week__dot { background: var(--rose); border-color: var(--rose); box-shadow: 0 1px 4px color-mix(in srgb, var(--rose) 45%, transparent); }
-.mw-week__day.is-today .mw-week__dot { border-color: var(--rose-ink); }
-.mw-week__wd { font: 10px var(--font-text); color: var(--ink3); }
-.mw-week__day.is-today .mw-week__wd { color: var(--rose-ink); font-weight: 600; }
-.mw-list { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.mw-list li { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink2); }
-.mw-li-del { border: 0; background: none; color: var(--ink3); cursor: pointer; font-size: 15px; line-height: 1; }
-.mw-li-del:hover { color: #a2444f; }
-
-/* To-read: a real checkable list with an inline entry field */
-.mw-todo { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 5px; }
-.mw-todo li { display: flex; align-items: flex-start; gap: 8px; font-size: 13.5px; color: var(--ink2); line-height: 1.4; }
-.mw-todo-empty { color: var(--ink3); font-style: italic; }
-.mw-todo-box { flex: none; width: 18px; height: 18px; margin-top: 1px; border: 1.5px solid var(--line); border-radius: 5px; background: var(--card); color: #fff; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; transition: background .14s, border-color .14s; }
-.mw-todo-box[aria-pressed="true"] { background: var(--rose); border-color: var(--rose); }
-.mw-todo-txt { flex: 1; min-width: 0; }
-.mw-todo li.is-done .mw-todo-txt { text-decoration: line-through; color: var(--ink3); }
-.mw-todo-add { display: flex; gap: 7px; }
-.mw-todo-in { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font: 13.5px var(--font-text); background: var(--card); color: var(--ink); outline: none; }
-.mw-todo-in:focus { border-color: var(--rose); }
-.mw-todo-add .btn { flex: none; }
-
-/* Sticky notes: several little cards, each its own textarea */
-.mw-stickies { display: flex; flex-direction: column; gap: 8px; margin-bottom: 9px; }
-.mw-sticky-card { position: relative; }
-.mw-sticky-card .mw-sticky { min-height: 58px; }
-.mw-sticky-del { position: absolute; top: 5px; right: 6px; border: 0; background: color-mix(in srgb, var(--card) 60%, transparent); color: var(--ink3); cursor: pointer; font-size: 15px; line-height: 1; border-radius: 5px; width: 20px; height: 20px; }
-.mw-sticky-del:hover { color: #a2444f; }
-
-/* Dice: a real die face with a roll tumble */
-.mw-die { display: flex; justify-content: center; padding: 8px 0 2px; }
-.mw-die svg { display: block; }
-.mw-die.is-rolling { animation: mw-die-roll .6s ease-in-out; }
-@keyframes mw-die-roll { 0% { transform: rotate(0) scale(1); } 25% { transform: rotate(140deg) scale(1.08); } 50% { transform: rotate(280deg) scale(.94); } 75% { transform: rotate(400deg) scale(1.05); } 100% { transform: rotate(540deg) scale(1); } }
-:root[data-motion="reduce"] .mw-die.is-rolling { animation: none; }
-
-/* Stretch break: a little figure that moves through the poses */
-.mw-stretch { display: flex; flex-direction: column; align-items: center; text-align: center; }
-.mw-fig { height: 80px; display: flex; align-items: flex-end; justify-content: center; }
-.mw-fig-svg { overflow: visible; }
-.mw-fig-arm { transform-box: fill-box; transform-origin: 100% 0; transition: transform .8s ease; }
-.mw-fig-arm--r { transform-origin: 0 0; }
-.mw-fig-torso { transform-box: fill-box; transform-origin: 50% 100%; transition: transform .8s ease; }
-.mw-fig-svg { transition: transform .8s ease; }
-.mw-stretch.is-stretching .mw-fig-svg { animation: mw-fig-breathe 2.2s ease-in-out infinite; }
-@keyframes mw-fig-breathe { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
-.mw-fig[data-pose="up"] .mw-fig-arm--l { transform: rotate(-150deg); }
-.mw-fig[data-pose="up"] .mw-fig-arm--r { transform: rotate(150deg); }
-.mw-fig[data-pose="left"] .mw-fig-svg { transform: rotate(-14deg); }
-.mw-fig[data-pose="left"] .mw-fig-arm--l { transform: rotate(-120deg); }
-.mw-fig[data-pose="right"] .mw-fig-svg { transform: rotate(14deg); }
-.mw-fig[data-pose="right"] .mw-fig-arm--r { transform: rotate(120deg); }
-.mw-fig[data-pose="roll"] .mw-fig-arm--l { transform: rotate(-40deg); }
-.mw-fig[data-pose="roll"] .mw-fig-arm--r { transform: rotate(40deg); }
-.mw-fig[data-pose="gaze"] .mw-fig-svg { transform: translateY(-2px); }
-:root[data-motion="reduce"] .mw-fig-arm, :root[data-motion="reduce"] .mw-fig-svg, :root[data-motion="reduce"] .mw-fig-torso { transition: none; }
-:root[data-motion="reduce"] .mw-stretch.is-stretching .mw-fig-svg { animation: none; }
-/* Breathing */
-.mw-breathe { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 8px 0; cursor: pointer; }
-.mw-breathe__dot { width: 46px; height: 46px; border-radius: 50%; background: var(--rose); opacity: .85; transition: transform 1s ease; }
-.mw-breathe.is-in .mw-breathe__dot { transform: scale(1.7); transition-duration: 4s; }
-.mw-breathe.is-hold .mw-breathe__dot { transform: scale(1.7); transition-duration: .2s; }
-.mw-breathe.is-out .mw-breathe__dot { transform: scale(1); transition-duration: 8s; }
-.mw-breathe__txt { font-size: 12.5px; color: var(--ink3); }
-/* Widget picker */
-.mw-pick-list { display: flex; flex-direction: column; gap: 6px; max-height: 56vh; overflow-y: auto; }
-.mw-pick-row { display: flex; align-items: center; gap: 12px; text-align: left; width: 100%; cursor: pointer;
-  border: 1px solid var(--line); background: var(--card); border-radius: 11px; padding: 11px 12px; }
-.mw-pick-row:hover { border-color: var(--rose); }
-.mw-pick-row.is-in { border-color: var(--rose); background: var(--rose-wash); }
-.mw-pick-ic { color: var(--rose-ink); display: inline-flex; }
-.mw-pick-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.mw-pick-name { font: 600 14px var(--font-text); color: var(--ink); }
-.mw-pick-blurb { font-size: 12.5px; color: var(--ink3); line-height: 1.4; }
-.mw-pick-act { font-size: 12.5px; color: var(--ink2); white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
-.mw-pick-row.is-in .mw-pick-act { color: var(--rose-ink); }
-/* Focus mode dims the side rails */
-body.focus-mode .rail-left, body.focus-mode .rail-right { opacity: .28; filter: grayscale(.4); transition: opacity .3s ease; }
-body.focus-mode .rail-left:hover, body.focus-mode .rail-right:hover { opacity: 1; filter: none; }
-/* Screen cat, confetti, and petals are animated in JS (Web Animations API) so a
-   reader who taps them still sees them under iOS Low Power / Reduce Motion, which
+/* Confetti is animated in JS (Web Animations API) so a reader who has just
+   earned a celebration still sees it under iOS Low Power / Reduce Motion, which
    the global reduced-motion CSS rule would otherwise collapse to nothing. */
-.mw-catrun { position: fixed; bottom: 14px; left: -60px; font-size: 34px; z-index: 90; pointer-events: none; }
 .mw-confetti { position: fixed; inset: 0; pointer-events: none; z-index: 120; overflow: hidden; }
 .mw-confetti i { position: absolute; top: -12px; width: 9px; height: 14px; border-radius: 2px; }
-.mw-petals { position: fixed; inset: 0; pointer-events: none; z-index: 80; overflow: hidden; }
-.mw-petals i { position: absolute; top: -26px; }
-@media (prefers-reduced-motion: reduce) {
-  .mw-breathe__dot { transition-duration: .2s !important; }
-}
 
 /* ---------------------------------------------------------------------------
    Polish: micro-interactions (press feedback, hover lift, cover zoom)
@@ -2554,7 +2371,6 @@ button.pill--link:active, .tag:active { transform: scale(.95); }
   .card:hover .card__cover .cv img { transform: scale(1.045); }
   .list-card { transition: background .15s ease, transform .15s ease; }
   .list-card:hover { transform: translateX(2px); }
-  .mw-pick-row { transition: transform .12s ease, border-color .15s ease, background .15s ease; }
 }
 /* A soft heart pop when you favourite a work. */
 @keyframes heart-pop { 0% { transform: scale(1); } 35% { transform: scale(1.35); } 100% { transform: scale(1); } }
@@ -2639,7 +2455,6 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .header { padding-top: env(safe-area-inset-top); }
 .reader-tools { bottom: max(20px, calc(env(safe-area-inset-bottom) + 8px)); }
 .toast { bottom: max(26px, calc(env(safe-area-inset-bottom) + 14px)); }
-.mw-catrun { bottom: max(14px, env(safe-area-inset-bottom)); }
 .sheet__panel {
   padding-top: max(22px, calc(env(safe-area-inset-top) + 12px));
   padding-bottom: max(22px, env(safe-area-inset-bottom));
@@ -2840,7 +2655,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   <!-- Pull-to-refresh indicator (shown while pulling down at the top) -->
   <div id="ptr" class="ptr" aria-hidden="true"><span class="ptr__ring"></span></div>
 
-  <!-- ================= BODY: THREE COLUMNS ================= -->
+  <!-- ================= BODY: ACTIVITY RAIL + PAGE ================= -->
   <div class="shell-body">
 
     <!-- LEFT: Activity feed -->
@@ -2868,20 +2683,10 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
       <section class="screen" data-screen="profile" id="screen-profile"></section>
     </main>
 
-    <!-- RIGHT: Widget station -->
-    <aside class="rail rail-right col" id="railRight" aria-label="Widget station">
-      <div class="rail__head" style="margin-bottom:16px">
-        <h2 class="rail__title">Widgets</h2>
-        <button class="rail__collapse" data-rail-hide="right" title="Hide widgets" aria-label="Hide the widget panel">&rsaquo;</button>
-      </div>
-      <div id="widgetMount"></div>
-    </aside>
-
   </div>
 
-  <!-- Reopen handles for the collapsed rails (desktop only, shown when hidden). -->
+  <!-- Reopen handle for the collapsed rail (desktop only, shown when hidden). -->
   <button class="rail-handle rail-handle--left" data-rail-show="left" aria-label="Show the activity panel" title="Show activity">&rsaquo;</button>
-  <button class="rail-handle rail-handle--right" data-rail-show="right" aria-label="Show the widget panel" title="Show widgets">&lsaquo;</button>
 </div>
 
 <!-- ================= THEME DRAWER ================= -->
@@ -2980,7 +2785,6 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     <div style="height:1px;background:var(--line);margin:14px 0"></div>
     <nav class="sheet__nav" aria-label="Panels">
       <button data-railsheet="activity"><svg width="18" height="18"><use href="#i-bell"></use></svg>Activity</button>
-      <button data-railsheet="widgets"><svg width="18" height="18"><use href="#i-plus"></use></svg>Widgets</button>
     </nav>
     <div style="height:1px;background:var(--line);margin:14px 0"></div>
     <nav class="sheet__nav" aria-label="Account">
@@ -2989,7 +2793,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   </div>
 </div>
 
-<!-- ================= RAIL SHEET (mobile Activity / Widgets) ================= -->
+<!-- ================= RAIL SHEET (mobile Activity) ================= -->
 <div class="sheet sheet--right" id="railSheet" aria-hidden="true">
   <div class="sheet__panel col" role="dialog" aria-modal="true" aria-label="Panel">
     <button class="link-btn" data-railclose style="margin-bottom:10px">&lsaquo; Close</button>
@@ -3223,14 +3027,6 @@ window.WISP = (function () {
     ]
   };
 
-  /* Widget station content. */
-  const WIDGETS = {
-    luckyPool: ["The Salt and the Season","A Study in Amber","Marrow & Bloom","Nine Tenths of the Law","The Frost Between Us","Low Orbit, Long Goodbye"],
-    staffPick: { title:"The Tenant of Room 9", author:"cormorant", cover:"room9" },
-    tag: { name:"slow burn", newCount:4, week:23 },
-    week: { works:3, words:"41,000" }
-  };
-
   /* Editorial / staff picks list. */
   const STAFF = [
     { work:"marrow", note:"A short, strange book about a greenhouse that grows what people have lost." },
@@ -3313,7 +3109,7 @@ window.WISP = (function () {
     joined:"Joined 2024"
   };
 
-  return { COVERS, WORKS, byId, ACTIVITY, FOLLOWING, CHAPTER, WIDGETS, STAFF, HUBS, EVENTS, LIBRARY, WRITER, PROFILE };
+  return { COVERS, WORKS, byId, ACTIVITY, FOLLOWING, CHAPTER, STAFF, HUBS, EVENTS, LIBRARY, WRITER, PROFILE };
 })();
 
 </script>
@@ -3995,10 +3791,11 @@ window.WispDB = (function () {
     emit();
     return data;
   }
-  // The installable widget station, stored on the profile so it follows a reader
-  // across devices. Reads come free with the profile row (select *). Writes fail
-  // softly if the `widgets` column has not been migrated yet, so the app keeps
-  // working on localStorage alone until the migration is run.
+  // The reading companion's look and habits, stored on the profile so Lucky follows
+  // a reader across devices. The column is still named `widgets` from the old
+  // personal widget station; keeping the name means no migration. Reads come free
+  // with the profile row (select *). Writes fail softly if the column has not
+  // been migrated yet, so the app keeps working on localStorage alone.
   function getWidgets() { return profile ? profile.widgets : null; }
   async function saveWidgets(obj) {
     if (!user || !client) return false;
@@ -4975,18 +4772,6 @@ window.WispDB = (function () {
     const { data } = await client.from("reading_progress").select("work_id, chapter_number, percent, updated_at").eq("user_id", user.id).order("updated_at", { ascending: false }).limit(1);
     return (data && data[0]) || null;
   }
-  // Honest reading stats from your own progress rows (one per work opened):
-  // how many works you have open, how many you touched this week, and how many
-  // you are partway through. No word counts are stored, so none are invented.
-  async function readingStats() {
-    if (!user) return null;
-    const { data } = await client.from("reading_progress").select("work_id, chapter_number, percent, updated_at").eq("user_id", user.id);
-    const rows = data || [];
-    const weekAgo = Date.now() - 7 * 86400000;
-    const thisWeek = rows.filter(r => new Date(r.updated_at).getTime() >= weekAgo).length;
-    const inProgress = rows.filter(r => (r.percent || 0) < 95).length;
-    return { total: rows.length, thisWeek, inProgress };
-  }
 
   // Per-line emoji reactions, grouped by paragraph index for a chapter.
   async function getReactions(chapterId) {
@@ -5053,7 +4838,7 @@ window.WispDB = (function () {
     listCategories, createCategory, deleteCategory,
     getWorksByIds, myBookmarks, myHistory, clearHistory,
     myLists, createList, deleteList, listContents, addToList, removeFromList,
-    myHighlights, saveHighlight, deleteHighlight, submitReport, saveProgress, latestProgress, readingStats,
+    myHighlights, saveHighlight, deleteHighlight, submitReport, saveProgress, latestProgress,
     getUserState, saveUserState,
     get stateTableMissing() { return stateTableMissing; },
     toCard: toUi, fmtCount, relTime
@@ -5224,748 +5009,6 @@ window.WISP_BADGE_IMG = {"book-gold.png":"data:image/png;base64,iVBORw0KGgoAAAAN
     inject: function () {}   // no-op; kept for API compatibility
   };
 })();
-
-</script>
-<script>
-/* ============================================================================
-   Wisp widget content banks.
-
-   Large, curated sets for the content widgets (writing prompt, fortune cookie,
-   affirmation, did-you-know, quote of the day) so a reader clicking them does
-   not see the same line again for a long time. Loaded before wisp.js, which
-   reads window.WISP_WIDGET_CONTENT and falls back to its own small sets if this
-   file is missing.
-
-   House style: no em dashes anywhere in the copy. "Did you know" entries are
-   kept to things that are genuinely, checkably true.
-   ==========================================================================*/
-window.WISP_WIDGET_CONTENT = (function () {
-  "use strict";
-
-  var prompts = [
-    "Two strangers share the last seat on the last train home.",
-    "A letter arrives twenty years late, and its sender is already gone.",
-    "The lighthouse keeper writes to no one, every single night.",
-    "Your character finds a door in their house that was not there yesterday.",
-    "A rivalry softens under one shared umbrella in a sudden downpour.",
-    "The town forgets one person a little more each day, and only a child notices.",
-    "A retired god takes a quiet job at a corner coffee shop.",
-    "The map is accurate in every detail except for one island that should not exist.",
-    "They swap lives for a week, and neither one wants to swap back.",
-    "The heirloom clock runs backward, but only when someone in the room is lying.",
-    "A locksmith is hired to open a door that has no keyhole.",
-    "Every mirror in the house shows a room that is one day ahead.",
-    "A gardener grows a plant that blooms only when read aloud to.",
-    "The new neighbor never sleeps, and the streetlights dim when they pass.",
-    "A child inherits a library where the books rewrite themselves overnight.",
-    "Two rival bakers are snowed in together with one working oven.",
-    "The last payphone in the city rings, and it is asking for you by name.",
-    "A cartographer is paid to leave one street off the map, and cannot say why.",
-    "The family recipe has one ingredient no one has ever been able to identify.",
-    "A ghost keeps tidying the apartment of the person who cannot see them.",
-    "Your character can taste other people's memories in the food they cook.",
-    "A museum guard falls a little in love with a painting that keeps changing.",
-    "The village holds a festival for a saint that history has no record of.",
-    "A translator realizes the manuscript is describing their own life.",
-    "Two astronauts on a long mission stop agreeing about what year it is.",
-    "The bookshop cat leads a customer to the one book they were meant to find.",
-    "A widow keeps paying for two seats at the theater, every Friday.",
-    "The river in town runs uphill for exactly one minute at dawn.",
-    "A locksmith's apprentice can hear what is locked inside any box.",
-    "Someone answers a want ad to be a professional listener, and learns too much.",
-    "The tide leaves a message in the sand that only appears from the cliff above.",
-    "A tailor sews a coat that makes the wearer remember a language they never spoke.",
-    "The last house on the street is always warm, no matter the season.",
-    "Two pen pals discover they have been writing to the same imaginary friend.",
-    "A weather forecaster starts dreaming the storms a day before they arrive.",
-    "The old theater reopens, and the ushers have not aged a day since it closed.",
-    "A child's imaginary friend files a formal complaint about being forgotten.",
-    "The town clock strikes thirteen, and everyone but one person keeps walking.",
-    "A beekeeper's hives spell out warnings in the patterns of their flight.",
-    "Someone inherits a hotel where every guest checked in decades ago.",
-    "A street musician plays a song that makes passersby remember a stranger fondly.",
-    "The library's oldest card catalog lists a book no one has ever written.",
-    "Two neighbors wage a slow, wordless war entirely through their front gardens.",
-    "A photographer's newest roll of film shows a city that was demolished years ago.",
-    "The ferry only comes for those who have somewhere they truly need to be.",
-    "A clockmaker builds a watch that gives its wearer one extra hour, once.",
-    "The diner at the edge of town serves whatever you were craving as a child.",
-    "A cartographer maps the routes that grief takes through a single house.",
-    "Two estranged siblings must spend one night sorting their parents' attic.",
-    "The last letter in the postbox is addressed to a house that burned down.",
-    "A boy trades his shadow for a summer, and spends autumn trying to buy it back.",
-    "The town's only traffic light turns green for a car that is never there.",
-    "A seamstress mends more than fabric, and the town has started to notice.",
-    "Someone wakes to find the ocean has moved to the end of their ordinary street.",
-    "A retired detective is asked to solve the disappearance of their own younger self.",
-    "The orchard bears a different fruit for each person who walks through it.",
-    "A night watchman befriends the statue that steps down from its plinth at three.",
-    "Two rival tour guides tell wildly different histories of the same ruined castle.",
-    "A woman finds her late mother's handwriting in a book published this year.",
-    "The village well grants wishes, but only ones the wisher has already given up on.",
-    "A courier is hired to deliver a package to a person who does not yet exist.",
-    "The snow this winter falls only on the houses of people keeping a secret.",
-    "A piano tuner hears one note in the old church organ that no key can produce.",
-    "Two strangers keep meeting in each other's dreams and comparing notes by day.",
-    "The bakery sells day-old bread that tastes of the day you buy it back.",
-    "A lonely switchboard operator connects two callers who needed each other for years.",
-    "The garden gnome has been slowly, patiently moving toward the front door.",
-    "A cartomancer draws the same card for every customer for a week straight.",
-    "Someone inherits their grandfather's habit of talking to the sea, and the sea answers.",
-    "The theater troupe performs a play that predicts each town's future by morning.",
-    "A child learns their new house was built around a much older, smaller one.",
-    "Two competing ice cream trucks call a truce during the longest heatwave in memory.",
-    "The night bus takes a route that appears on no schedule and no map.",
-    "A retired opera singer teaches the shy new tenant to be brave, one scale at a time.",
-    "The corner shop sells a newspaper dated for tomorrow, but only ever the bad news.",
-    "A woman follows the smell of her grandmother's cooking to a house she has never seen.",
-    "Two rivals are trapped in an elevator with the promotion they are both chasing.",
-    "The tide pool holds a reflection of a sky that is not the one overhead.",
-    "A locksmith is called to a lighthouse where the door has locked from the inside.",
-    "Someone starts receiving postcards from the future self they chose not to become.",
-    "The apple tree in the yard drops a single golden apple on the worst day of the year.",
-    "A quiet accountant discovers they can balance more than books, and it frightens them.",
-    "Two children build a raft to reach the island that only they can see.",
-    "The town's beloved bell ringer goes missing, and the bells keep ringing anyway.",
-    "A florist can tell how a marriage is going by the flowers the husband buys.",
-    "The last video store in the country rents films that were never actually made.",
-    "A grieving father teaches his daughter to sail using his own father's stories.",
-    "The elevator in the old hotel occasionally stops at a floor that was never built.",
-    "Two neighbors discover their apartments share a wall that whispers back.",
-    "A watchmaker's daughter can stop time, but only for as long as she holds her breath.",
-    "The traveling circus leaves one performer behind in every town, on purpose.",
-    "A librarian shelves a returned book that no one alive remembers borrowing.",
-    "The fog rolls in and, for one hour, the dead run their old errands as if nothing changed.",
-    "A boy trades letters with the previous owner of his secondhand bicycle.",
-    "The café regular who always sits alone is saving the seat for someone specific.",
-    "A cartographer is asked to chart the exact borders of a family's silence.",
-    "The seaside town holds a funeral for the lighthouse it is finally decommissioning.",
-    "Two rival chess players in the park have not spoken in years, only moved.",
-    "A tailor stitches a wedding dress that shows the bride every future she might choose.",
-    "The town's oldest resident remembers a river that no living map has ever recorded.",
-    "A night nurse befriends the one patient who is always awake at the same strange hour.",
-    "The attic trunk is full of letters, all in your handwriting, none that you wrote.",
-    "A street sweeper finds the same lost glove on the same corner every single morning.",
-    "Two estranged friends are named in the will of a person neither of them knew.",
-    "The town falls silent for one minute each noon, and no one can say when it started.",
-    "A retired magician performs one last trick that he does not know how to end.",
-    "The greenhouse keeps one season ahead of the world outside its glass.",
-    "A boy who collects lost things finds a key that fits a door in every house but his own.",
-    "The bakery's back room holds an oven that has not gone cold in a hundred years.",
-    "Two rival poets are commissioned to write the same town's epitaph.",
-    "A woman rents the apartment where she grew up and finds her childhood exactly as she left it.",
-    "The ferryman keeps a ledger of every passenger, and one name has crossed a thousand times.",
-    "A clock repairer is handed a watch that counts down instead of up.",
-    "The garden party goes on long after the guests should have gone home, and no one leaves.",
-    "A cartographer draws a map of a city from a language they are still learning to read.",
-    "Two children swap a secret so large that keeping it changes the weather.",
-    "The old cinema screens a film of your own life, one reel behind.",
-    "A lonely lighthouse and a passing ship keep a decades-long conversation in flashes of light.",
-    "The town's last telephone operator refuses to retire until one specific call comes in.",
-    "A gardener plants a hedge maze and gets lost in a turn that should not be there.",
-    "Two rival historians argue over a battle that neither can prove ever happened.",
-    "The seamstress lets out a hem and finds a note sewn into the lining from years ago.",
-    "A boy inherits a compass that points not north but toward whatever he has lost.",
-    "The village bakery closes for one day a year, and no one will say which day or why.",
-    "A retired sea captain teaches a landlocked town to read the weather like water.",
-    "Two neighbors keep leaving each other groceries neither of them ordered.",
-    "The museum acquires a portrait, and the woman in it starts appearing in the town.",
-    "A child's paper boat comes back up the storm drain with a message inside.",
-    "The last house before the highway keeps a light on for travelers who never stop.",
-    "A florist arranges a bouquet for a funeral and recognizes every flower from her own garden.",
-    "Two rival clockmakers are hired to build the same town square its final clock.",
-    "The tide brings in a message in a bottle that answers a question you asked yesterday.",
-    "A quiet librarian is the only one who can hear the books arguing after closing.",
-    "The town holds a lost-and-found day, and someone comes to claim a person.",
-    "A boy learns to whistle the exact song that calls his lost dog home from anywhere.",
-    "The old hotel's guestbook is signed, decades in advance, in familiar handwriting.",
-    "Two strangers agree to meet in ten years at a café that may not exist by then.",
-    "A watchmaker's shop appears on the street only on the days you truly need more time.",
-    "The lighthouse beam sweeps the town and, for a heartbeat, shows everyone as they will be.",
-    "A grieving woman keeps her late husband's garden exactly as he left it, and it keeps growing.",
-    "Two rival street artists paint over each other nightly until the wall tells a single story.",
-    "The village receives one letter every winter, and this year it is finally addressed to a child.",
-    "A retired teacher tutors the ghost of the student she could not reach.",
-    "The corner bookshop keeps a shelf for books that have not been written yet.",
-    "A boy finds a stray key and spends a summer looking for the lock it aches to open.",
-    "The town's oldest tree is scheduled to be cut down, and it has started dropping notes.",
-    "Two competing weather vanes on the same street always point in opposite directions.",
-    "A seamstress is asked to mend a flag that has flown over a country no one remembers.",
-    "The night market only appears to those who have somewhere they are afraid to go home to.",
-    "A lonely radio host takes a call from a listener broadcasting from many years ago.",
-    "The garden's last rose refuses to fall, and the whole town waits to see what it means.",
-    "Two rival lighthouse keepers on opposite shores fall in love in Morse code.",
-    "A child inherits a jar of buttons, and each one belonged to a story no one finished telling.",
-    "The ferry to the mainland only runs when someone truly forgives someone else.",
-    "A retired locksmith is asked to lock away a memory so it can finally be safe.",
-    "The town clock has been five minutes fast for a century, and the reason is a kindness.",
-    "Two neighbors realize their gardens, seen from above, spell out a message to a plane overhead.",
-    "A boy trades his winter for a stranger's summer and learns why the stranger wanted out of it.",
-    "The last lamplighter in the city keeps lighting one lamp on a street that no longer exists.",
-    "A woman finds her grandmother's diary, and the last entry is dated tomorrow.",
-    "Two rival tea houses across the alley have been steeping the same argument for generations.",
-    "The village holds its breath the night the migrating birds are due, because one year they did not come.",
-    "A clock tower keeper realizes the town runs on his winding, and he is getting old.",
-    "The photograph develops slowly over a week, revealing a face that was not there when it was taken.",
-    "A boy keeps a lighthouse for a summer and learns what the light is really for.",
-    "Two estranged sisters inherit a house that will only unlock if they enter it together.",
-    "The bakery's bread rises differently depending on who kneads the dough, and today a stranger did.",
-    "A retired conductor hears the whole town's day as a symphony he can almost finish.",
-    "The tide leaves behind objects from shipwrecks that have not happened yet.",
-    "A quiet clerk at the returns desk takes back things that cannot be returned, like time.",
-    "Two rival cartographers are sent to map the same wilderness and come back with different countries.",
-    "The town's founder left a final instruction to be opened only when the last of the family dies.",
-    "A boy's kite catches on the church steeple and, cut loose, carries off a wish he needed back.",
-    "The greenhouse orchid blooms once a decade, and its keeper has waited nine years to say goodbye.",
-    "Two neighbors share a wall, a grudge, and, it turns out, a heartbeat.",
-    "A woman moves into a lighthouse and inherits its keeper's long, patient argument with the sea.",
-    "The town's lost children all return on the same foggy evening, exactly as they left.",
-    "A retired ferryman is asked for one last crossing to a shore that is not on any chart.",
-    "The bell in the tower cracked years ago and has been ringing the wrong note ever since, and everyone prefers it.",
-    "A boy finds his father's old coat and, in the pocket, the beginning of a letter to him.",
-    "Two rival innkeepers on a lonely road compete for one traveler who arrives every hundred years.",
-    "The village fountain runs dry, and the town discovers what everyone had been wishing for.",
-    "A seamstress unpicks a wedding dress and finds an older wedding sewn inside it.",
-    "The last train of the night carries passengers who all got on at stations that have closed.",
-    "A grieving boy teaches his grandfather's parrot to say the things he never got to.",
-    "Two rival astronomers name the same new star and spend their lives arguing whose it is.",
-    "The town holds a market where you can sell a memory, and someone comes to buy back their own.",
-    "A retired baker leaves the recipe for the town's favorite loaf to whoever finds the bakery unlocked.",
-    "The lighthouse goes dark for one night a year, and that is the night the town keeps its own promises.",
-    "A child follows a trail of buttons through the snow to a door in the side of a hill.",
-    "Two neighbors' clocks chime at slightly different times, and the gap between them is a whole small world.",
-    "A woman inherits a house where every room is a different season, and one door stays locked.",
-    "The town crier announces news from a day that has not arrived, and is always right.",
-    "A boy trades a marble for a stranger's story and spends his life trying to give it back."
-  ];
-
-  var fortunes = [
-    "A plot twist is coming. Lean into it.",
-    "The chapter you fear is the one worth writing.",
-    "Someone will reread your words tonight.",
-    "A kind comment is on its way to make your whole week.",
-    "Rest is part of the craft. Take the afternoon.",
-    "Your next idea is closer than you think.",
-    "Kindness you send out returns to you as kudos.",
-    "The muse favors the writer who simply shows up.",
-    "A small risk this week pays off in a big way.",
-    "The scene you keep skipping is the one holding the door.",
-    "You will finish something you were sure you never would.",
-    "A reader you have never met is quietly rooting for you.",
-    "The right word is waiting one draft away.",
-    "Trust the version of the story that keeps you up at night.",
-    "A door you thought was closed was only unlatched.",
-    "Someone remembers a line you forgot you wrote.",
-    "The best edit you make this month will be a deletion.",
-    "A long project is nearer the finish than it feels.",
-    "Say yes to the strange idea. It has been waiting.",
-    "Your quiet, steady work is building something loud.",
-    "A pause is not a stop. Breathe and begin again.",
-    "The story wants to be simpler than you are making it.",
-    "An old draft holds a gift you were not ready for before.",
-    "You are allowed to write the happy ending.",
-    "The character you like least has the most to teach you.",
-    "A single honest sentence will carry a whole chapter.",
-    "Good things gather around the writer who keeps going.",
-    "The blank page is not empty. It is patient.",
-    "Someone will quote you back to yourself one day.",
-    "The detail you almost cut is the one they will remember.",
-    "A slow week is still a week you did not quit.",
-    "Your voice is the part no one else can copy.",
-    "The scene will come easier tomorrow. Sleep on it.",
-    "A friend you have not met is reading you right now.",
-    "Follow the thread that frightens you a little.",
-    "The ending you want is allowed to be gentle.",
-    "You will look back on this draft with tenderness.",
-    "A small kindness today loops back around by Friday.",
-    "The middle is always a swamp. Keep your boots on.",
-    "Write the thing only you would think to write.",
-    "A reader is about to become your reader for life.",
-    "The revision you dread will feel like relief.",
-    "Trust the joke. If it made you smile, it will land.",
-    "Something you shelved is ready to come back down.",
-    "A quiet chapter can be the loudest one in the end.",
-    "You are further along than the doubt is telling you.",
-    "The right person will find your work at the right time.",
-    "Let the sentence be short. It has earned the rest.",
-    "A comment you leave today changes someone's whole afternoon.",
-    "The word you cannot find will arrive while you do the dishes.",
-    "Momentum loves a writer who starts before they feel ready.",
-    "A small audience that loves you beats a large one that shrugs.",
-    "The draft does not have to be brave. You already were, writing it.",
-    "You will be glad you did not give up on this one.",
-    "A story you tell yourself becomes a story someone needs.",
-    "The best line you write this week will surprise you.",
-    "Kindness is never wasted, on the page or off it.",
-    "A new reader arrives the moment you stop refreshing the page.",
-    "The scene you rushed deserves a second, slower look.",
-    "Let it be messy first. Neat is a later problem.",
-    "Your patience with a slow chapter will be repaid in full.",
-    "A wish you set down last year is quietly coming true.",
-    "The ordinary detail is the one that will feel like magic.",
-    "You will finish. Not today, maybe, but you will.",
-    "A small win this week is a foundation, not a fluke.",
-    "The story you are afraid is too much is exactly enough.",
-    "Someone needed the words you almost did not post.",
-    "Trust the ending that made your own throat tighten.",
-    "A kinder editor lives inside you than the one you have been using.",
-    "The page you skipped is not lost. It is waiting.",
-    "Your future reader is grateful you kept the odd chapter.",
-    "A long silence often ends with your best work yet.",
-    "Let the first draft be the first draft. That is its job.",
-    "A door opens for the writer who knocks gently and often.",
-    "The character will tell you what happens if you stop steering.",
-    "Something good is arriving on the far side of this hard scene.",
-    "You are the only one who can write it exactly like that.",
-    "A comment left in kindness comes back as a friend.",
-    "The rewrite is where the story finally becomes itself.",
-    "A quiet reader has been waiting all week for your update.",
-    "You will find the missing piece where you already looked.",
-    "The scene is not broken. It is simply asking for daylight.",
-    "A small daily habit is about to become a finished book.",
-    "The bravest thing on the page is the true thing.",
-    "Someone will keep your story on their shelf for years.",
-    "Let the ending breathe. It does not need to explain itself.",
-    "A reader is about to leave the comment you needed.",
-    "You did not lose the thread. You set it down. Pick it up.",
-    "The idea that will not leave you alone is the one to follow.",
-    "A gentle week of small progress is still progress.",
-    "Your work is finding the people it was always for.",
-    "The line you almost deleted is the one they will underline.",
-    "A story finished imperfectly beats a perfect one unwritten.",
-    "The good news you have been waiting for is already on its way.",
-    "You will reread this someday and be proud you kept going.",
-    "A single reader, deeply moved, is the whole point.",
-    "The muse rewards the writer who keeps the appointment.",
-    "Something you planted long ago is finally about to bloom.",
-    "Let today's page be small and honest. That is plenty.",
-    "A kind word from you is somebody's favorite part of the day.",
-    "The story knows where it is going. Follow, do not push.",
-    "Your slow, careful chapter will be the one they never forget.",
-    "A reader you inspired is, right now, starting their own story.",
-    "The next good idea is hiding in the walk you keep postponing.",
-    "You are allowed to be proud of an unfinished thing.",
-    "A long shot lands this week. Take it.",
-    "The comment section is warmer than your fear is telling you.",
-    "Trust the quiet chapter. It is doing more than it looks.",
-    "Something you were sure was too simple is exactly right.",
-    "A reader will thank you for a scene you almost cut.",
-    "You will surprise yourself with how much you have grown.",
-    "The word count matters less than the true sentence.",
-    "A small kindness circles back to you when you need it most.",
-    "The ending will find you if you keep writing toward it.",
-    "Your favorite chapter has not been written yet.",
-    "A gentle nudge from a stranger changes your whole week for the better.",
-    "The scene you fear will feel like flying once you begin.",
-    "Someone saved your story to read again on a hard day.",
-    "You are closer to the good part than you think.",
-    "Let the draft be a draft. Grace comes on the second pass.",
-    "A reader is about to fall for the character you almost erased.",
-    "The story you keep circling is the one you were meant to tell.",
-    "A quiet triumph this week is worth more than a loud one later.",
-    "The best thing you will write starts with a bad first line.",
-    "You will finish the sentence. You always do.",
-    "A kind reader remembers you long after the last page.",
-    "The muse is nearer on ordinary days than you expect.",
-    "Something you gave up on is about to give back.",
-    "Your patience with the middle will pay off at the end.",
-    "A reader is grateful, right now, that you kept writing."
-  ];
-
-  var affirmations = [
-    "Your voice is worth hearing.",
-    "You are allowed to write badly today.",
-    "Small progress is still progress.",
-    "Your story matters to someone.",
-    "You are a writer because you write.",
-    "Finished beats perfect, every time.",
-    "One paragraph is a real victory.",
-    "You are exactly the right person to tell this.",
-    "You can begin again from wherever you are.",
-    "Your work does not have to be for everyone.",
-    "You are learning even on the slow days.",
-    "The words will come. They always have.",
-    "You are allowed to rest without guilt.",
-    "Your first draft only has to exist, not shine.",
-    "You have something to say that no one else can.",
-    "You are braver than the blank page suggests.",
-    "You showed up today, and that counts.",
-    "Your pace is your own, and it is enough.",
-    "You are allowed to be proud of small things.",
-    "You do not have to earn the right to create.",
-    "Your curiosity is a gift worth following.",
-    "You are more capable than your doubt admits.",
-    "You can love a thing and still find it hard.",
-    "Your effort matters even when no one sees it.",
-    "You are allowed to change your mind about the story.",
-    "You are becoming the writer you hoped to be.",
-    "Your quiet work is building something real.",
-    "You deserve a break as much as anyone.",
-    "You are not behind. You are on your own road.",
-    "Your kindness makes this a better place to write.",
-    "You can do hard things one sentence at a time.",
-    "You are allowed to enjoy this.",
-    "Your imperfections make your voice yours.",
-    "You are worthy of the time your work takes.",
-    "You can be a beginner and still be good.",
-    "Your feelings belong on the page.",
-    "You are allowed to take up space here.",
-    "You have already come further than you remember.",
-    "Your best work is still ahead of you.",
-    "You can be gentle with yourself and still improve.",
-    "You are allowed to write just for the joy of it.",
-    "Your story is allowed to be strange.",
-    "You are doing better than you think.",
-    "You can trust yourself to figure it out.",
-    "Your presence here makes the community warmer.",
-    "You are allowed to start before you feel ready.",
-    "You are the expert on your own imagination.",
-    "Your slow days are part of the work, not a failure of it.",
-    "You can hold high hopes and low pressure at once.",
-    "You are allowed to be a work in progress.",
-    "Your honesty on the page is a kind of courage.",
-    "You can rest today and write tomorrow.",
-    "You are enough, exactly as you are right now.",
-    "Your ideas deserve to be written down.",
-    "You are allowed to outgrow your old drafts.",
-    "You bring something no algorithm ever could.",
-    "You can be tired and still be a writer.",
-    "Your comeback can start on any ordinary Tuesday.",
-    "You are allowed to keep the parts you love.",
-    "Your care for your craft is a beautiful thing.",
-    "You can make something today, however small.",
-    "You are allowed to protect your creative time.",
-    "Your work has already touched more people than you know.",
-    "You can be proud of a page no one else will read.",
-    "You are allowed to write the thing you are scared of.",
-    "Your voice grows stronger every time you use it.",
-    "You do not need permission to call yourself a writer.",
-    "You can hold your standards and your kindness together.",
-    "Your rough draft is a brave first step, not a verdict.",
-    "You are allowed to celebrate finishing anything at all.",
-    "You can begin where you are, with what you have.",
-    "Your story is safe to tell in your own way.",
-    "You are allowed to love your characters fiercely.",
-    "You can let the hard scene be hard and still write it.",
-    "Your steadiness matters more than any single burst.",
-    "You are allowed to be new at this for as long as it takes.",
-    "Your work is worth the patience it asks of you.",
-    "You can be kind to the writer you were a year ago.",
-    "You are allowed to want good things for your work.",
-    "Your effort today is a gift to your future self.",
-    "You can trust the part of you that wanted to write this.",
-    "You are allowed to keep going after a long pause.",
-    "Your small daily practice is quietly changing everything.",
-    "You can make peace with the messy middle.",
-    "You are allowed to write for one reader, even if that reader is you.",
-    "Your imagination is a place worth returning to.",
-    "You can be gentle and still be serious about your craft.",
-    "You are allowed to be delighted by your own ideas.",
-    "Your willingness to try again is your greatest strength.",
-    "You can finish this. You have finished hard things before.",
-    "You are allowed to write the world the way you wish it were.",
-    "Your quiet persistence is a form of talent.",
-    "You can set the bar at one true sentence today.",
-    "You are allowed to take the scenic route through a draft.",
-    "Your work does not owe anyone speed.",
-    "You can be proud of showing up, even empty-handed.",
-    "You are allowed to rewrite your own story.",
-    "Your creativity is not a faucet that can run dry for good.",
-    "You can hold hope for this project loosely and kindly.",
-    "You are allowed to be the hero of your own writing life.",
-    "Your next sentence is a fresh start.",
-    "You can love the work on the days it does not love you back.",
-    "You are allowed to make art that is only for you.",
-    "Your patience with yourself is never wasted.",
-    "You can do a little today and call it good.",
-    "You are allowed to believe your work will find its people.",
-    "Your voice is needed, especially the parts you doubt.",
-    "You can begin again as many times as you need to.",
-    "You are allowed to be tender with your unfinished things.",
-    "Your story is worth the time it takes to get right.",
-    "You can be a careful writer and a kind one both.",
-    "You are allowed to rest in the middle of a marathon.",
-    "Your work today does not have to be your best work ever.",
-    "You can trust that the words will meet you halfway.",
-    "You are allowed to want to be read.",
-    "Your effort is enough, even when the outcome is uncertain.",
-    "You can hold your dream gently and still walk toward it.",
-    "You are allowed to write slowly and finish anyway.",
-    "Your presence on the page is a quiet act of courage.",
-    "You can forgive the draft for not being finished yet.",
-    "You are allowed to love a hard chapter for what it taught you.",
-    "Your writing is a conversation, and someone is listening.",
-    "You can take today at your own gentle pace.",
-    "You are allowed to be proud of the writer you are becoming."
-  ];
-
-  // "Did you know" entries are kept to things that are genuinely, checkably true.
-  var facts = [
-    "Fanfiction is far older than the internet. Readers have reworked and continued their favorite stories for centuries.",
-    "Reading fiction has been linked in studies to greater empathy and social understanding.",
-    "The word 'serendipity' was coined by the writer Horace Walpole in 1754.",
-    "Shakespeare is credited with popularizing hundreds of words and phrases still in everyday English.",
-    "The novel 'Frankenstein' was written by Mary Shelley, who began it as a teenager.",
-    "The longest-running newspaper comic strips have appeared daily for the better part of a century.",
-    "A 'wisp' is a small twist or bundle of something, like a wisp of smoke or a wisp of a story.",
-    "The first known author signed by name in history is Enheduanna, a priestess who wrote poems in ancient Mesopotamia.",
-    "Braille, the reading system of raised dots, was developed by Louis Braille, who was blind from childhood.",
-    "The dot over a lowercase i or j is called a tittle.",
-    "The ampersand symbol, &, evolved from the Latin word 'et', meaning 'and'.",
-    "Silent reading was once unusual. In the ancient world, reading aloud was the norm.",
-    "The Oxford English Dictionary took decades to complete, drawing on quotations sent in by thousands of volunteers.",
-    "Emily Dickinson wrote nearly 1,800 poems, but only a handful were published in her lifetime.",
-    "The word 'novel' comes from the Italian 'novella', meaning a new little thing or piece of news.",
-    "Libraries existed in the ancient world. The Library of Alexandria was one of the most famous.",
-    "The Dewey Decimal System, used to organize library books, was created by Melvil Dewey in the 1870s.",
-    "J.R.R. Tolkien invented entire languages, including Elvish, before finishing the stories that used them.",
-    "The phrase 'once upon a time' has opened English stories for many centuries.",
-    "A palindrome reads the same forward and backward. 'Level' and 'kayak' are examples.",
-    "The longest word in many English dictionaries is a chemical name, but common long words include 'antidisestablishmentarianism'.",
-    "Agatha Christie is one of the best-selling novelists of all time, with billions of copies sold.",
-    "The comma, the period, and other punctuation marks were largely added to writing long after alphabets themselves.",
-    "The first detective story is often credited to Edgar Allan Poe, decades before Sherlock Holmes appeared.",
-    "Reading before bed can help some people relax and wind down more easily.",
-    "The word 'bookworm' originally referred to insects that damaged books, not to avid readers.",
-    "Jane Austen published her novels anonymously, credited only as 'By a Lady'.",
-    "The blank space between paragraphs and around text is called white space, and it helps readability.",
-    "The term 'cliffhanger' comes from serialized stories that left characters in literal peril between installments.",
-    "Charles Dickens published many of his novels in monthly or weekly installments, like a TV series in print.",
-    "A group of related fan works is often called a fandom, a blend of 'fan' and 'kingdom' or 'domain'.",
-    "The heart symbol used in messages has appeared in art and manuscripts for a very long time.",
-    "The word 'quiz' has a murky origin, and the popular story about it being invented on a bet is likely a myth.",
-    "The first known use of 'OMG' as an abbreviation appears in a 1917 letter to Winston Churchill.",
-    "Haiku is a Japanese poetic form traditionally built around a pattern of syllables and a seasonal reference.",
-    "The word 'alphabet' comes from alpha and beta, the first two letters of the Greek alphabet.",
-    "Many classic fairy tales were much darker in their earliest recorded versions than in modern retellings.",
-    "The typewriter changed how people wrote, and some famous authors kept using them long into the computer age.",
-    "Sherlock Holmes never actually says the exact phrase 'Elementary, my dear Watson' in the original stories.",
-    "The word 'muse' comes from the Muses of Greek myth, goddesses said to inspire the arts.",
-    "Reading speed varies widely, but many adults read prose at a few hundred words per minute.",
-    "The longest novels ever published run well over a million words.",
-    "The 'e' is the most commonly used letter in English text.",
-    "A pangram is a sentence using every letter of the alphabet, like 'the quick brown fox jumps over the lazy dog'.",
-    "Beatrix Potter was a scientist and illustrator as well as the author of beloved children's tales.",
-    "The word 'plot' can mean a story's events or a patch of ground, from the same old root of 'a small marked area'.",
-    "The first books were scrolls. The bound book, called a codex, came later and made pages easy to flip.",
-    "Public libraries let readers borrow books for free, a idea that spread widely in the 1800s and 1900s.",
-    "The phrase 'the plot thickens' appears in a play from the late 1600s.",
-    "Many writers keep notebooks by their beds because ideas often surface right before sleep.",
-    "The word 'anthology' comes from Greek words meaning 'a gathering of flowers'.",
-    "Some of the earliest surviving writing records everyday things like receipts and inventories, not epic tales.",
-    "The exclamation mark was rare in early printing and grew far more common in the modern era.",
-    "The term 'red herring', for a misleading clue, comes from the practice of using a strong-smelling fish to throw off a trail.",
-    "Poets have used rhyme for memory as much as beauty, since rhymed lines are easier to recall.",
-    "The word 'story' and the word 'history' share a common root.",
-    "A 'protagonist' is the leading character. The word comes from Greek for the 'first actor' in a drama.",
-    "The margins of medieval manuscripts sometimes contain doodles and notes from bored scribes.",
-    "The Guinness World Records book is itself one of the best-selling copyrighted books in history.",
-    "In many languages, the same word covers both 'to read' and 'to gather', hinting at reading as collecting meaning.",
-    "The phrase 'brevity is the soul of wit' comes from Shakespeare's 'Hamlet'.",
-    "A sentence can be grammatically correct and still make no sense, a fact linguists use to study meaning.",
-    "The word 'genre' comes from a French word meaning 'kind' or 'type'.",
-    "Mark Twain was an early adopter of the typewriter and may have been among the first authors to submit a typed manuscript.",
-    "The first emoticon, a sideways smiley made of punctuation, was proposed in the early 1980s.",
-    "A 'foil' character exists to highlight the traits of another by contrast.",
-    "The word 'paragraph' comes from a Greek mark once used to signal a new section of text.",
-    "Some of the oldest known love poems were written in ancient Mesopotamia thousands of years ago.",
-    "The dash, the colon, and the semicolon each took centuries to settle into their modern uses.",
-    "The word 'library' comes from the Latin 'liber', meaning book or, originally, the inner bark of a tree used to write on.",
-    "The novel 'Don Quixote' is often called one of the first modern novels.",
-    "Many authors write under pen names, a practice called using a nom de plume.",
-    "The phrase 'in a nutshell' goes back to ancient times, describing something written very small.",
-    "The blank first page or two in a printed book is sometimes there for practical binding reasons.",
-    "A 'cliché' is named after a printing term for a ready-made block of type used again and again.",
-    "The world's languages number in the thousands, and many have rich storytelling traditions never written down.",
-    "The word 'poet' comes from a Greek word meaning 'maker'.",
-    "The oldest surviving printed book with a date is a Buddhist text from the 800s.",
-    "Some words, called contronyms, are their own opposites. 'Dust' can mean to add fine particles or to remove them.",
-    "Reading to children is strongly associated with their later language development.",
-    "The typographic symbol for a paragraph is called a pilcrow.",
-    "The word 'stanza' means 'room' in Italian, as if each verse were a little room in the house of a poem.",
-    "Onomatopoeia describes words that imitate sounds, like buzz, hiss, and clang.",
-    "The first novel written on a typewriter is often said to be one of Mark Twain's, though the exact title is debated.",
-    "A 'denouement' is the unraveling of a story's threads at the end. The word means 'untying' in French.",
-    "The longest sentence in some famous novels runs for pages without a full stop.",
-    "The interrobang is a rare punctuation mark that combines a question mark and an exclamation mark.",
-    "Many alphabets are written left to right, but Arabic and Hebrew are written right to left.",
-    "The word 'metaphor' comes from Greek for 'to carry across', since it carries meaning from one thing to another.",
-    "The first known written joke is thousands of years old and, fittingly, a bit crude.",
-    "In printing, a widow is a short last line of a paragraph stranded at the top of a page.",
-    "The phrase 'purple prose' describes writing that is overly ornate.",
-    "The word 'chapter' comes from the Latin for 'head', as in the head or heading of a section.",
-    "Some of the most translated books in the world include religious texts and classic children's stories.",
-    "The 'ghost' in ghostwriting refers to a writer whose name does not appear on the work.",
-    "The word 'sarcasm' comes from a Greek word that means, quite vividly, 'to tear flesh'.",
-    "Long before printing, books were copied by hand, one at a time, often in monasteries.",
-    "The em dash, en dash, and hyphen are three different marks with three different jobs.",
-    "The word 'vocabulary' shares a root with 'vocal' and 'voice'.",
-    "A bibliophile is a lover of books. A bibliophobe fears or dislikes them.",
-    "The world's first novel is often said to be 'The Tale of Genji', written in Japan in the early 1000s by Murasaki Shikibu.",
-    "The word 'edit' comes from a Latin word meaning 'to give out' or 'to put forth'.",
-    "The blank verse Shakespeare often used has a rhythm of five beats per line, called iambic pentameter.",
-    "Some readers can comfortably hold several open books at once, a habit sometimes called book stacking.",
-    "The word 'author' comes from a Latin word meaning 'one who creates or grows something'.",
-    "A leitmotif is a recurring theme or image, a term borrowed from music into storytelling.",
-    "The dot-dot-dot of an ellipsis signals a trailing off, an omission, or a pause.",
-    "Some of the earliest fan communities formed around serialized stories and mailed their theories to each other.",
-    "The word 'satire' comes from a Latin word for a dish of mixed fruits, a medley.",
-    "A 'MacGuffin' is an object that drives the plot but matters little in itself. The term was popularized by Alfred Hitchcock.",
-    "The first crossword puzzle was published in a newspaper in 1913.",
-    "The word 'text' comes from the Latin for 'woven', as if words were threads.",
-    "Reading in more than one language is associated with cognitive flexibility.",
-    "A 'kenning' is an old poetic phrase, like calling the sea 'the whale road'.",
-    "The word 'grammar' and the word 'glamour' share a surprising common ancestor.",
-    "Some authors dictate their books aloud rather than typing them.",
-    "The word 'anecdote' originally meant something unpublished or not given out.",
-    "The oldest known libraries stored their records on clay tablets.",
-    "A 'sonnet' is a fourteen-line poem, a form used by poets for centuries.",
-    "The word 'plot twist' entered common use relatively recently, though surprises in stories are ancient.",
-    "The bound book let readers jump to any page instantly, something a scroll could not do easily.",
-    "The phrase 'the pen is mightier than the sword' comes from a play written in 1839.",
-    "The word 'inspire' comes from a Latin word meaning 'to breathe into'.",
-    "A tautogram is a text in which every word begins with the same letter.",
-    "The world reads in dozens of writing systems, from alphabets to syllabaries to characters.",
-    "The word 'draft' can mean an early version of writing or a current of air, from a shared root about pulling.",
-    "The habit of dog-earing a page to mark your place is centuries old.",
-    "A 'euphemism' softens a harsh idea with gentler words.",
-    "The word 'comedy' and the word 'tragedy' both come to us from ancient Greek theater.",
-    "Some of the most beloved children's books were rejected many times before being published.",
-    "The word 'read' in Old English could also mean 'to advise' or 'to interpret'.",
-    "The blank book waiting to be filled is sometimes the most hopeful object in the house."
-  ];
-
-  var quotes = [
-    "Write drunk on the story, edit sober on the page.",
-    "A word after a word after a word is power.",
-    "You can always edit a bad page. You cannot edit a blank one.",
-    "Start where you are. Use what you have.",
-    "The first draft is you telling yourself the story.",
-    "Fill your paper with the breathings of your heart.",
-    "There is no greater agony than an untold story inside you.",
-    "Write the book you want to read.",
-    "Almost all good writing begins with terrible first efforts.",
-    "Read a thousand books, and your words will flow.",
-    "The scariest moment is always just before you start.",
-    "A writer is someone for whom writing is harder than it is for other people, and does it anyway.",
-    "You fail only if you stop writing.",
-    "Write what should not be forgotten.",
-    "The art of writing is the art of applying the seat of the pants to the seat of the chair.",
-    "Get it down. Take chances. It may be bad, but it is the only way to do anything good.",
-    "There is no rule on how to write. Sometimes it comes easily and perfectly.",
-    "Substitute 'damn' every time you are inclined to write 'very'.",
-    "Not all those who wander are lost.",
-    "A reader lives a thousand lives before dying. The one who never reads lives only one.",
-    "The best way out is always through.",
-    "We write to taste life twice, in the moment and in retrospect.",
-    "If there is a book that you want to read but it has not been written yet, then you must write it.",
-    "Either write something worth reading or do something worth writing.",
-    "Tears are words that need to be written.",
-    "You can make anything by writing.",
-    "The pages are still blank, but there is a miraculous feeling of the words being there.",
-    "Write hard and clear about what hurts.",
-    "Start writing, no matter what. The water does not flow until the faucet is turned on.",
-    "A book is a dream that you hold in your hands.",
-    "The story is the thing, and every word must serve it.",
-    "Words are, in my not so humble opinion, our most inexhaustible source of magic.",
-    "There is no friend as loyal as a book.",
-    "The world was hers for the reading.",
-    "Books are a uniquely portable magic.",
-    "Once you learn to read, you will be forever free.",
-    "I have always imagined that paradise will be a kind of library.",
-    "A room without books is like a body without a soul.",
-    "Reading is a conversation. All books talk, but a good book listens as well.",
-    "Sleep is good, and books are better.",
-    "So many books, so little time.",
-    "The reading of all good books is like a conversation with the finest minds of past centuries.",
-    "You know you have read a good book when you turn the last page and feel a little as if you have lost a friend.",
-    "A book is a garden carried in the pocket.",
-    "Never trust anyone who has not brought a book with them.",
-    "Books fall open, you fall in.",
-    "Reading is to the mind what exercise is to the body.",
-    "When I have a little money, I buy books. If any is left, I buy food and clothes.",
-    "That is part of the beauty of all literature. You discover that your longings are universal longings.",
-    "Writing is not necessarily something to be ashamed of, but do it in private and wash your hands afterward.",
-    "The role of a writer is not to say what we can all say, but what we are unable to say.",
-    "To survive, you must tell stories.",
-    "There is no agony like bearing an untold story inside of you.",
-    "The purpose of a storyteller is not to tell you how to think, but to give you questions to think upon.",
-    "Fiction is the lie through which we tell the truth.",
-    "A good story is always more dazzling than a broken piece of truth.",
-    "Stories are compasses and architecture. We navigate by them.",
-    "The universe is made of stories, not of atoms.",
-    "We are all stories in the end. Just make it a good one.",
-    "A story has no beginning or end. Arbitrarily one chooses that moment from which to look back or forward.",
-    "The most beautiful things are those that madness prompts and reason writes.",
-    "Description begins in the imagination of the writer but should finish in that of the reader.",
-    "Fill your bowl to the brim and it will spill. Keep sharpening your knife and it will blunt.",
-    "The wastebasket is a writer's best friend.",
-    "Cut out all the exclamation marks. An exclamation mark is like laughing at your own joke.",
-    "Prose is architecture, not interior decoration.",
-    "Easy reading is damn hard writing.",
-    "The difference between the right word and the almost right word is the difference between lightning and a lightning bug.",
-    "Write with the door closed, rewrite with the door open.",
-    "If you want to be a writer, you must do two things above all others: read a lot and write a lot.",
-    "Kill your darlings, even when it breaks your egocentric little scribbler's heart.",
-    "The scariest thing is the blank page, so cover it with a bad sentence and begin.",
-    "Style is the perfection of a point of view.",
-    "Talent is helpful in writing, but guts are absolutely necessary.",
-    "The first sentence cannot be written until the final sentence is written.",
-    "Vigorous writing is concise.",
-    "Omit needless words.",
-    "The adjective is the enemy of the noun.",
-    "When you write a story, you are telling yourself the story. When you rewrite, you take out everything that is not the story.",
-    "You do not start out writing good stuff. You start out writing crap and thinking it is good stuff.",
-    "Being a writer is a very peculiar sort of a job. It is always you against a blank sheet of paper, and quite often the blank paper wins.",
-    "There is no such thing as writer's block for writers whose standards are low enough.",
-    "The road to hell is paved with adverbs.",
-    "A word is dead when it is said, some say. I say it just begins to live that day.",
-    "Poetry is when an emotion has found its thought and the thought has found words.",
-    "A poem begins as a lump in the throat, a sense of wrong, a homesickness, a lovesickness.",
-    "There is more treasure in books than in all the pirate loot on Treasure Island.",
-    "Reading brings us unknown friends.",
-    "A great book should leave you with many experiences, and slightly exhausted at the end.",
-    "Some books leave us free and some books make us free.",
-    "Good books do not give up all their secrets at once.",
-    "The books that the world calls immoral are the books that show the world its own shame.",
-    "Books are the mirrors of the soul.",
-    "A classic is a book that has never finished saying what it has to say.",
-    "One glance at a book and you hear the voice of another person, perhaps someone dead for a thousand years.",
-    "Books are the plane, the train, and the road. They are the destination and the journey. They are home.",
-    "There are worse crimes than burning books. One of them is not reading them.",
-    "The person who does not read good books has no advantage over the person who cannot read them.",
-    "Reading is escape, and the opposite of escape. It is a way to make contact with reality.",
-    "A book must be the axe for the frozen sea within us.",
-    "Writing a book is a horrible, exhausting struggle, like a long bout of some painful illness, and you would never do it if not driven by a demon you can neither resist nor understand.",
-    "Ideas are like rabbits. You get a couple and learn how to handle them, and pretty soon you have a dozen.",
-    "The freedom to make art is the freedom to fail, and then to fail better.",
-    "Do not tell me the moon is shining. Show me the glint of light on broken glass.",
-    "Only connect the prose and the passion, and both will be exalted.",
-    "It is perfectly okay to write garbage, as long as you edit brilliantly.",
-    "You must stay drunk on writing so reality cannot destroy you.",
-    "We do not write because we want to, we write because we have to.",
-    "The words are a lantern. You do not need to see the whole road, only the next few steps.",
-    "Write the story that wants to be written, not the one you think will sell.",
-    "A sentence should read as if its author, had he held a plough instead of a pen, could have drawn a furrow deep and straight.",
-    "The magic of storytelling is that it makes the invisible visible.",
-    "Every secret of a writer's soul, every experience of his life, is written large in his works.",
-    "The writer's job is not to solve the problem but to state the problem correctly.",
-    "You have to write the book that wants to be written. And if the book is too difficult for grown-ups, then you write it for children.",
-    "There is no greater agony than bearing an untold story, so tell it, badly if you must, but tell it.",
-    "Books wash the dust of everyday life off our souls.",
-    "A truly good book teaches me better than to read it. I must soon lay it down and commence living on its hint.",
-    "The unread story is not a story. It is little black marks on wood pulp. The reader, reading it, makes it live.",
-    "When you write, you lay out a line of words, and the line of words is a miner's pick, a woodcarver's gouge.",
-    "The best moments in reading are when you come across something that you had thought special and particular to you.",
-    "Writing is the painting of the voice.",
-    "You never have to change anything you got up in the middle of the night to write.",
-    "The desire to write grows with writing.",
-    "There is a great deal of hard, tedious work in writing, but there is also a great deal of joy, and the joy is the point."
-  ];
-
-  return { prompts: prompts, fortunes: fortunes, affirmations: affirmations, facts: facts, quotes: quotes };
-})();
-
 
 </script>
 <script>
@@ -7752,7 +6795,7 @@ window.WISP_WIDGET_CONTENT = (function () {
      demo behaves exactly as before. */
   const LIVE = { works: [], byId: {}, chapters: {}, comments: {}, reactions: {}, upcoming: {}, series: [], events: [], myEvents: new Set(),
                  lib: { bookmarks: null, history: null, lists: null, things: null }, viewingList: null, resume: null, followingWorks: [], notifications: null,
-                 hubs: [], myHubs: new Set(), hubCounts: {}, readingStats: null, hubPage: null, seriesPage: null };
+                 hubs: [], myHubs: new Set(), hubCounts: {}, hubPage: null, seriesPage: null };
   let liveEditor = null;   // { work, chapter } when editing a real work, else null
   let editorCover = null;  // uploaded cover URL for the current editor session
   let coverCleared = false; // true when the author removed an existing cover
@@ -7972,7 +7015,6 @@ window.WISP_WIDGET_CONTENT = (function () {
         const [evs, mine] = await Promise.all([WispDB.listEvents().catch(() => []), WispDB.myEventIds().catch(() => new Set())]);
         const nowE = Date.now();
         LIVE.joinedEvents = (evs || []).filter(e => mine.has(e.id) && !eventExpired(e, nowE));
-        loadReadingStats(true);   // refresh the week widget with anything read since
       }
     } catch (e) { console.error("[wisp] home load failed:", e); LIVE.works = LIVE.works || []; }
     renderHomeLive();
@@ -8877,8 +7919,6 @@ window.WISP_WIDGET_CONTENT = (function () {
     const flagship = (!reqId || reqId === "amber");
     const w = W.byId[reqId] || W.byId.amber;
     markVisited(flagship ? "amber" : w.id);
-    notifyReadActivity((flagship ? "amber" : w.id) + ":" + (chapterNum || 1));
-    startReadSession(wordCountOf((W.CHAPTER && W.CHAPTER.paragraphs ? W.CHAPTER.paragraphs.join(" ") : "")));
 
     if (!flagship) {
       // Honest preview for non-flagship works: full reader chrome, a short opening,
@@ -9614,7 +8654,6 @@ window.WISP_WIDGET_CONTENT = (function () {
   // comments; the seeded reaction demo stays on the sample chapter.
   function renderLiveReading(w, chapters, chapterNum) {
     markVisited(w.id);
-    notifyReadActivity(w.id + ":" + (chapterNum || 1));
     if (w.loggedInOnly && !WispDB.signedIn) {
       $("#screen-reading").innerHTML = `<div class="reader"><div class="reader__wrap" style="text-align:center;padding:60px 20px">
         <h1 class="reader__title">${esc(w.title)}</h1>
@@ -9626,7 +8665,6 @@ window.WISP_WIDGET_CONTENT = (function () {
     const commentsOn = w.commentsEnabled !== false;
     const readable = releasedChapters(chapters);
     const ch = (chapterNum && readable.find(c => c.number === +chapterNum)) || readable[0] || chapters[0] || null;
-    startReadSession(ch ? wordCountOf(ch.body) : 0);   // learn the reader's pace quietly
     const idx = ch ? readable.findIndex(c => c.number === ch.number) : -1;
     const prev = idx > 0 ? readable[idx - 1] : null;
     const next = idx >= 0 && idx < readable.length - 1 ? readable[idx + 1] : null;
@@ -13249,128 +12287,6 @@ window.WISP_WIDGET_CONTENT = (function () {
     setTimeout(() => { document.addEventListener("click", notifOutside, true); document.addEventListener("keydown", notifEsc); }, 0);
   }
 
-  let luckyIdx = 0;
-  function baseWidgetHTML() {
-    if (isLive()) {
-      return `
-        <div class="widget">
-          <div class="widget__label" style="margin-bottom:10px">Lucky</div>
-          <p class="muted" style="font-size:12.5px;margin:6px 0 12px">Once there are works to draw from, this picks a random one for you.</p>
-          <button class="btn btn--ghost btn--full" data-nav="browse">${icon("shuffle",15)} Browse works</button>
-        </div>
-        <div class="widget">
-          <div class="widget__label">Your week</div>
-          ${readingStatsHTML()}
-        </div>`;
-    }
-    const wd = W.WIDGETS;
-    return `
-      <div class="widget">
-        <div class="widget__label" style="margin-bottom:10px">Lucky</div>
-        <div class="widget__title lucky-title" style="min-height:44px">${esc(wd.luckyPool[luckyIdx % wd.luckyPool.length])}</div>
-        <p class="muted" style="font-size:12.5px;margin:6px 0 12px">A random work from the tags you follow.</p>
-        <button class="btn btn--ghost btn--full" data-lucky>${icon("shuffle",15)} Surprise me</button>
-      </div>
-
-      <div class="widget">
-        <div class="widget__label">Staff picks</div>
-        <button class="mini-work" data-work="room9" style="background:none;border:0;text-align:left;cursor:pointer;width:100%">
-          <span class="mini-cover">${cover("room9", wd.staffPick.title)}</span>
-          <span><span class="mini-work__title">${esc(wd.staffPick.title)}</span><span class="mini-work__by">by ${esc(wd.staffPick.author)}</span></span>
-        </button>
-        <p class="muted" style="font-size:12.5px;line-height:1.5;margin-top:12px">Chosen by the Wisp editors. <a href="#/community">See who picks &rsaquo;</a></p>
-      </div>
-
-      <div class="widget">
-        <div class="widget__label">A tag you follow</div>
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <span style="display:inline-flex;align-items:center;gap:7px;font:18px var(--font-display);color:var(--ink)"><span style="color:var(--rose)">${icon("tag",15)}</span>${esc(wd.tag.name)}</span>
-          <span style="font-size:12.5px;color:var(--rose-ink);background:var(--rose-wash);border-radius:999px;padding:3px 9px">${wd.tag.newCount} new</span>
-        </div>
-        <p class="muted" style="font-size:12.5px;margin:10px 0 0">${wd.tag.week} works this week. <a href="#/browse">Open tag &rsaquo;</a></p>
-      </div>
-
-      <div class="widget">
-        <div class="widget__label">This week</div>
-        <div style="font:17px/1.35 var(--font-display);color:var(--ink)">You read ${wd.week.works} works,<br>${wd.week.words} words.</div>
-      </div>`;
-  }
-  function widgetHTML() { return baseWidgetHTML() + installedWidgetsHTML(); }
-  function renderWidgets() {
-    const m = $("#widgetMount"); if (m) { m.innerHTML = widgetHTML(); wireMiniWidgets(m); }
-    // Keep the open mobile widget sheet in lockstep, so a tap updates what the
-    // reader is actually looking at on a phone — not just the hidden desktop rail.
-    const sheetBody = $("#railSheetBody");
-    if (sheetBody && $("#railSheet") && $("#railSheet").classList.contains("is-open") && /Widgets/.test(sheetBody.textContent || "")) {
-      sheetBody.innerHTML = `<h2 class="rail__title" style="margin-bottom:16px">Widgets</h2>${widgetHTML()}`;
-      wireMiniWidgets(sheetBody);
-    }
-  }
-  // Refresh a SINGLE widget's card in place, instead of rebuilding the whole
-  // panel. Rebuilding re-ran every widget's render(), which re-randomised every
-  // spinner (a new quote, prompt, fortune) and made the whole station visibly
-  // "reconfigure" whenever a reader toggled petals or logged a streak. This
-  // updates only the card that changed, across both the desktop rail and an open
-  // mobile sheet. Widgets that own an interval (pomodoro, word sprint) keep using
-  // renderWidgets(), which clears and re-arms timers wholesale.
-  function mwRefresh(id) {
-    const def = MINI_WIDGETS.find(w => w.id === id); if (!def) return;
-    const sel = '.mini-widget[data-mw="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]';
-    document.querySelectorAll(sel).forEach(card => {
-      const body = card.querySelector(".mw-body"); if (!body) return;
-      body.innerHTML = def.render();
-      if (def.wire) { try { def.wire(body); } catch (e) {} }
-    });
-  }
-
-  /* ---- Installable mini-widgets: quality-of-life, synced to your account ---- */
-  // A shelf of small widgets a reader can add to their widget station: timers,
-  // spinners, ambient fun. The station is held in memory, mirrored to localStorage
-  // for instant paint and guests, and (when signed in) synced to the account so it
-  // follows the reader across devices. It degrades to localStorage-only if the
-  // profiles.widgets column has not been migrated yet.
-  const MW = { installed: [], state: {} };
-  (function mwInitLocal() {
-    try { MW.installed = JSON.parse(localStorage.getItem("wisp.widgets.installed") || "[]"); } catch (e) { MW.installed = []; }
-    try { MW.state = JSON.parse(localStorage.getItem("wisp.widgets.state") || "{}"); } catch (e) { MW.state = {}; }
-    if (!Array.isArray(MW.installed)) MW.installed = [];
-    if (!MW.state || typeof MW.state !== "object") MW.state = {};
-  })();
-  function mwPersistLocal() {
-    try { localStorage.setItem("wisp.widgets.installed", JSON.stringify(MW.installed)); } catch (e) {}
-    try { localStorage.setItem("wisp.widgets.state", JSON.stringify(MW.state)); } catch (e) {}
-  }
-  let mwRemoteTimer = null;
-  // Only the station's own member may upload it. The guard runs again when
-  // the debounce fires, because on a phone the sign-in sync can still be in
-  // flight when a widget is tapped: without the re-check, the previous
-  // member's sticky notes upload into the new member's account, and from
-  // then on every device faithfully syncs the leak.
-  function mwMayPush() {
-    if (!(window.WispDB && WispDB.enabled && WispDB.signedIn && WispDB.saveWidgets && WispDB.profile)) return false;
-    let owner = null; try { owner = localStorage.getItem("wisp.widgets.owner"); } catch (e) {}
-    return owner === WispDB.profile.id;
-  }
-  function mwPersistRemote() {
-    if (!mwMayPush()) return;
-    if (mwRemoteTimer) clearTimeout(mwRemoteTimer);
-    mwRemoteTimer = setTimeout(() => {
-      mwRemoteTimer = null;
-      if (!mwMayPush()) return;
-      const payload = { installed: MW.installed, state: MW.state };
-      if (window.WispCompanion && WispCompanion.getPrefs) payload.companion = WispCompanion.getPrefs();
-      try { WispDB.saveWidgets(payload); } catch (e) {}
-    }, 700);
-  }
-  function mwPersist() { mwPersistLocal(); mwPersistRemote(); }
-  function mwLoad() { return MW.installed.slice(); }
-  function mwSave(ids) { MW.installed = Array.isArray(ids) ? ids.slice() : []; mwPersist(); }
-  function mwState(id) { return MW.state[id] || {}; }
-  function mwSetState(id, patch) { MW.state[id] = Object.assign({}, MW.state[id], patch); mwPersist(); return MW.state[id]; }
-
-  // On sign-in, pull the account's saved station. The account wins across devices;
-  // if it has none yet, seed it from whatever is already on this device.
-  let mwSyncedFor = null;
   /* ---- cross-device account state ----------------------------------------
      What Wattpad and AO3 members expect: sign in on the phone and the site is
      the way the laptop left it. Works, drafts, highlights, and progress
@@ -13523,9 +12439,9 @@ window.WISP_WIDGET_CONTENT = (function () {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;
     if (!statePulledAt || Date.now() - statePulledAt < 60000) return;
-    stateSyncedFor = null; mwSyncedFor = null;
+    stateSyncedFor = null; companionSyncedFor = null;
     try { syncStateFromAccount(); } catch (e) {}
-    try { mwSyncFromAccount(); } catch (e) {}   // the widget station freshens too
+    try { companionSyncFromAccount(); } catch (e) {}   // Lucky's look freshens too
   });
   // Coming back online after a dead spot: catch up with the account.
   window.addEventListener("online", () => {
@@ -13534,620 +12450,72 @@ window.WISP_WIDGET_CONTENT = (function () {
     try { syncStateFromAccount(); } catch (e) {}
   });
   try { window.__wispSync = { push: schedulePushState, pull: syncStateFromAccount, reset: function () { stateSyncedFor = null; }, freshLogin: function () { stateFreshLogin = true; }, stamp: localStateStamp }; } catch (e) {}   // console debugging handle
-  function mwSyncFromAccount() {
-    if (!(window.WispDB && WispDB.enabled && WispDB.signedIn && WispDB.profile)) { mwSyncedFor = null; return; }
+  /* ---- the reading companion, across devices ------------------------------
+     Lucky's look and habits (name, coat, accessory, how often he strolls) live
+     in localStorage on this device, and ride on the profile's `widgets` jsonb
+     column so a signed-in reader meets the same cat on every device. The
+     column keeps its old name: it needs no migration, and nothing else is
+     stored in it any more.
+     ---------------------------------------------------------------------- */
+  let companionSyncedFor = null, companionRemoteTimer = null;
+  // Only the account the device's cat belongs to may upload him. The guard
+  // runs again when the debounce fires, because on a phone the sign-in sync
+  // can still be in flight when the reader changes something: without the
+  // re-check, the previous member's cat would upload into the new member's
+  // account, and from then on every device would faithfully sync the mix-up.
+  function companionMayPush() {
+    if (!(window.WispDB && WispDB.enabled && WispDB.signedIn && WispDB.saveWidgets && WispDB.profile)) return false;
+    let owner = null; try { owner = localStorage.getItem("wisp.widgets.owner"); } catch (e) {}
+    return owner === WispDB.profile.id;
+  }
+  function companionPersistRemote() {
+    if (!companionMayPush()) return;
+    if (companionRemoteTimer) clearTimeout(companionRemoteTimer);
+    companionRemoteTimer = setTimeout(() => {
+      companionRemoteTimer = null;
+      if (!companionMayPush()) return;
+      if (!(window.WispCompanion && WispCompanion.getPrefs)) return;
+      try { WispDB.saveWidgets({ companion: WispCompanion.getPrefs() }); } catch (e) {}
+    }, 700);
+  }
+  // On sign-in, pull the account's saved cat. The account wins across devices;
+  // if it has none saved yet, seed it from whatever is on this device.
+  function companionSyncFromAccount() {
+    if (!(window.WispDB && WispDB.enabled && WispDB.signedIn && WispDB.profile)) { companionSyncedFor = null; return; }
     const pid = WispDB.profile.id;
-    if (mwSyncedFor === pid) return;
-    mwSyncedFor = pid;
-    // Whose widgets does this DEVICE currently hold? A different account
-    // signing in must never inherit them (sticky notes are someone's notes),
-    // and must never upload them to its own account.
+    if (companionSyncedFor === pid) return;
+    companionSyncedFor = pid;
+    // Whose cat does this DEVICE currently hold? A different account signing
+    // in must never inherit him (his name included), nor upload him as its own.
     let owner = null; try { owner = localStorage.getItem("wisp.widgets.owner"); } catch (e) {}
     const foreign = owner && owner !== pid;
     const remote = WispDB.getWidgets ? WispDB.getWidgets() : null;
-    // An account that has EVER saved a station is authoritative, even when the
-    // saved station is empty: widgets removed on the laptop must not be
-    // resurrected by a phone's stale local copy. Only an account with no
-    // saved blob at all can be seeded from the device.
-    const hasBlob = !!(remote && typeof remote === "object");
-    const hasWidgetKeys = hasBlob && (("installed" in remote) || ("state" in remote));
-    const hasCompanion = hasBlob && remote.companion && typeof remote.companion === "object";
-    if (hasWidgetKeys) {
-      MW.installed = Array.isArray(remote.installed) ? remote.installed.slice() : [];
-      MW.state = (remote.state && typeof remote.state === "object") ? remote.state : {};
-      mwPersistLocal();
-      applyAmbientWidgetState();
-      renderWidgetsEverywhere();
-    } else if (foreign) {
-      // A different member on a used device, with nothing saved of their own:
-      // they start with a fresh station, not the previous member's.
-      MW.installed = []; MW.state = {};
-      mwPersistLocal();
-      applyAmbientWidgetState();
-      renderWidgetsEverywhere();
-    }
-    // The reading companion (Lucky) rides in the same synced blob. A
-    // different member with no saved cat of their own gets the shelf cat,
-    // never the previous member's (their name for him included).
+    const hasCompanion = !!(remote && typeof remote === "object" && remote.companion && typeof remote.companion === "object");
     if (hasCompanion && window.WispCompanion && WispCompanion.applyPrefs) WispCompanion.applyPrefs(remote.companion);
     else if (foreign && window.WispCompanion && WispCompanion.resetPrefs) WispCompanion.resetPrefs();
     // This account now owns whatever the device shows; stamp that BEFORE any
     // push so the upload guard has the truth.
     try { localStorage.setItem("wisp.widgets.owner", pid); } catch (e) {}
-    // First sign-in from this device, account never saved a station: keep
-    // what was built here (a guest station survives creating the account).
-    if (!hasWidgetKeys && !hasCompanion && !foreign) mwPersistRemote();
+    // First sign-in from this device, nothing saved on the account: keep the
+    // cat built here (a guest's cat survives creating the account).
+    if (!hasCompanion && !foreign) companionPersistRemote();
   }
-  // Signing out takes the station off the screen: sticky notes are someone's
-  // notes, and whoever is at this device next starts from the shelf, not from
-  // them. The owner marker stays, so the same member signing back in is not a
-  // stranger, and the pull brings their station straight back.
-  function mwHandleSignOut() {
-    if (mwRemoteTimer) { clearTimeout(mwRemoteTimer); mwRemoteTimer = null; }   // a push scheduled while signed in dies with the session
-    MW.installed = []; MW.state = {};
-    mwPersistLocal();
-    mwSyncedFor = null;
-    try { applyAmbientWidgetState(); renderWidgetsEverywhere(); } catch (e) {}
-    // The cat's identity is account state too: back to the shelf cat.
+  // Signing out puts the shelf cat back: his identity is account state, so
+  // whoever is at this device next does not meet the previous member's cat.
+  // The owner marker stays, so the same member signing back in is not a
+  // stranger, and the pull brings their cat straight back.
+  function companionHandleSignOut() {
+    if (companionRemoteTimer) { clearTimeout(companionRemoteTimer); companionRemoteTimer = null; }   // a push scheduled while signed in dies with the session
+    companionSyncedFor = null;
     try { if (window.WispCompanion && WispCompanion.resetPrefs) WispCompanion.resetPrefs(); } catch (e) {}
   }
-  try { window.__wispMW = { sync: mwSyncFromAccount, reset: function () { mwSyncedFor = null; }, signOut: mwHandleSignOut }; } catch (e) {}   // console debugging handle
-  // Reflect ambient toggles (petals, focus mode) after a cross-device sync.
-  function applyAmbientWidgetState() {
-    const installed = new Set(MW.installed);
-    togglePetals(installed.has("petals") && !!(MW.state.petals && MW.state.petals.on));
-    document.body.classList.toggle("focus-mode", installed.has("focus") && !!(MW.state.focus && MW.state.focus.on));
-    armWaterReminders();
-  }
 
-  // ---- Water goal + hourly reminders ---------------------------------------
-  // Readers set a daily glasses goal and, if they ask for it, Wisp nudges them
-  // about once an hour during waking hours until they reach it. Nudges use the
-  // browser's notifications when granted, and fall back to an in-app toast so a
-  // reader with notifications off still gets the reminder while the tab is open.
-  function waterGoal(s) { const g = s && +s.goal; return g >= 1 && g <= 20 ? g : 8; }
-  function requestNotifyPermission() {
-    return new Promise(resolve => {
-      try {
-        if (!("Notification" in window)) return resolve("unsupported");
-        if (Notification.permission !== "default") return resolve(Notification.permission);
-        const p = Notification.requestPermission(res => resolve(res || Notification.permission));
-        if (p && p.then) p.then(res => resolve(res)).catch(() => resolve(Notification.permission));
-      } catch (e) { resolve("denied"); }
-    });
-  }
-  function waterNotify() {
-    const s = mwState("water"); const today = todayKey();
-    const n = s.day === today ? (s.n || 0) : 0;
-    const goal = waterGoal(s);
-    const left = Math.max(0, goal - n);
-    const body = left <= 1 ? "One more glass to reach today's goal." : left + " more glasses to reach today's goal.";
-    let shown = false;
-    try {
-      if (("Notification" in window) && Notification.permission === "granted") {
-        const nt = new Notification("Time for a glass of water", { body: body, tag: "wisp-water", renotify: true });
-        nt.onclick = function () { try { window.focus(); } catch (e) {} nt.close(); };
-        shown = true;
-      }
-    } catch (e) {}
-    if (!shown && document.getElementById("toast")) toast("Time for a glass of water. " + body);
-  }
-  let waterTimer = null;
-  function waterReminderTick() {
-    if (!MW.installed || MW.installed.indexOf("water") < 0) return;
-    const s = mwState("water");
-    if (!s.remind) return;
-    const today = todayKey();
-    if (s.metDay === today) return;                        // already hit the goal today (glasses may be cleared)
-    const n = s.day === today ? (s.n || 0) : 0;
-    if (n >= waterGoal(s)) return;                         // met for today, rest easy
-    const hour = new Date().getHours();
-    if (hour < 8 || hour >= 22) return;                    // no overnight pings
-    const last = +s.last || 0;
-    if (Date.now() - last < 60 * 60 * 1000) return;        // at most one an hour
-    mwSetState("water", { last: Date.now() });
-    waterNotify();
-  }
-  function armWaterReminders() {
-    if (waterTimer) return;
-    // Check every few minutes; the tick itself throttles to one nudge an hour.
-    waterTimer = setInterval(waterReminderTick, 4 * 60 * 1000);
-    setTimeout(waterReminderTick, 12000);                  // a first check shortly after load
-  }
-  // A small handle so the reminder logic can be exercised by tests.
-  window.WispWater = { tick: waterReminderTick, notify: waterNotify, goal: waterGoal };
-
-  // A few tracking widgets fill themselves in from real reading, so the reader
-  // never has to tap +1. Called when a chapter opens in the reader; each chapter
-  // counts once per day, and the streak logs itself the first time you read today.
-  function notifyReadActivity(chapterKey) {
-    const installed = new Set(mwLoad());
-    if (!installed.has("chapters-today") && !installed.has("streak")) return;
-    const today = todayKey();
-    let changed = false;
-    if (installed.has("chapters-today")) {
-      const s = mwState("chapters-today");
-      const seen = (s.day === today && Array.isArray(s.seen)) ? s.seen.slice() : [];
-      const base = (s.day === today ? (s.n || 0) : 0);
-      if (chapterKey && seen.indexOf(chapterKey) < 0) {
-        seen.push(chapterKey);
-        mwSetState("chapters-today", { n: base + 1, day: today, seen }); changed = true;
-      } else if (s.day !== today) {
-        mwSetState("chapters-today", { n: 0, day: today, seen: [] }); changed = true;
-      }
-    }
-    if (installed.has("streak")) {
-      const s = mwState("streak");
-      if (s.last !== today) {
-        const y = new Date(Date.now() - 86400000); const yk = y.getFullYear() + "-" + (y.getMonth() + 1) + "-" + y.getDate();
-        const nc = (s.last === yk ? (s.count || 0) + 1 : 1);
-        mwSetState("streak", { count: nc, last: today }); changed = true;
-      }
-    }
-    if (changed) { mwRefresh("streak"); mwRefresh("chapters-today"); }
-  }
-
-  // Reading pace, learned quietly. A read session opens when a chapter opens and
-  // closes when the reader leaves it; if it lasted a sensible span, the words
-  // divided by the minutes feed a rolling average, so the pace widget fills in on
-  // its own with no typing. Idle tabs and skims are filtered out by the bounds.
-  let readSession = null;
-  function wordCountOf(text) { return String(text || "").trim().split(/\s+/).filter(Boolean).length; }
-  function startReadSession(words) {
-    finalizeReadSession();
-    if (words > 40 && mwLoad().indexOf("wpm") >= 0) readSession = { start: Date.now(), words: words };
-  }
-  function finalizeReadSession() {
-    if (!readSession) return;
-    const mins = (Date.now() - readSession.start) / 60000;
-    const words = readSession.words; readSession = null;
-    if (mins < 0.4 || mins > 40) return;                 // too brief to trust, or an idle tab
-    const wpm = Math.round(words / mins);
-    if (wpm < 60 || wpm > 1000) return;                  // outside a believable human range
-    if (mwLoad().indexOf("wpm") < 0) return;
-    const s = mwState("wpm");
-    const n = Math.min(s.n || 0, 19);                    // rolling window of the last ~20 reads
-    const avg = s.avg ? Math.round((s.avg * n + wpm) / (n + 1)) : wpm;
-    mwSetState("wpm", { avg: avg, n: (s.n || 0) + 1 });
-    mwRefresh("wpm");
-  }
-  const todayKey = () => { const d = new Date(); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); };
-  const rand = (arr) => arr[Math.floor(Math.random() * arr.length)];
-  const fmtDur = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
-
-  // The content widgets draw from the large banks in widget-content.js when it
-  // has loaded, so a reader does not see the same line for months. The short
-  // inline sets below are kept as a fallback if that file is absent.
-  const _WC = (window.WISP_WIDGET_CONTENT && typeof window.WISP_WIDGET_CONTENT === "object") ? window.WISP_WIDGET_CONTENT : {};
-  const MW_QUOTES = (_WC.quotes && _WC.quotes.length) ? _WC.quotes : [
-    "Write drunk on the story; edit sober on the page.", "A word after a word after a word is power.",
-    "You can always edit a bad page. You can't edit a blank one.", "Start where you are. Use what you have.",
-    "The first draft is you telling yourself the story.", "Fill your paper with the breathings of your heart.",
-    "There is no greater agony than an untold story inside you.", "Write the book you want to read.",
-    "Almost all good writing begins with terrible first efforts.", "Read a thousand books, and your words will flow."
-  ];
-  const MW_PROMPTS = (_WC.prompts && _WC.prompts.length) ? _WC.prompts : [
-    "Two strangers share the last seat on the last train.", "A letter arrives twenty years late.",
-    "The lighthouse keeper writes to no one, every night.", "Your character finds a door that wasn't there yesterday.",
-    "A rivalry softens over a shared umbrella.", "The town forgets one person a little more each day.",
-    "A god retires and takes a job at a coffee shop.", "The map is accurate, except for one island.",
-    "They swap lives for a week and neither wants to swap back.", "The heirloom clock runs backward when someone lies."
-  ];
-  const MW_FORTUNES = (_WC.fortunes && _WC.fortunes.length) ? _WC.fortunes : [
-    "A plot twist is coming; lean into it.", "The chapter you fear is the one worth writing.",
-    "Someone will reread your words tonight.", "A comment will make your whole week.",
-    "Rest is part of the craft. Take the afternoon.", "Your next idea is closer than you think.",
-    "Kindness returns to you in kudos.", "The muse favours the writer who shows up."
-  ];
-  const MW_EIGHTBALL = [
-    "It is certain.", "Without a doubt.", "Yes, definitely.", "Signs point to yes.", "Ask again later.",
-    "Better not tell you now.", "Cannot predict now.", "Don't count on it.", "My reply is no.", "Very doubtful."
-  ];
-  const MW_AFFIRM = (_WC.affirmations && _WC.affirmations.length) ? _WC.affirmations : [
-    "Your voice is worth hearing.", "You are allowed to write badly today.", "Small progress is still progress.",
-    "Your story matters to someone.", "You are a writer because you write.", "Finished beats perfect.",
-    "One paragraph is a victory.", "You are exactly the right person to tell this."
-  ];
-  const MW_FACTS = (_WC.facts && _WC.facts.length) ? _WC.facts : [
-    "The longest novel ever published runs over 1.2 million words.", "The word 'fangirl' entered dictionaries in 2016.",
-    "Fanfiction predates the internet by centuries.", "Reading fiction measurably boosts empathy.",
-    "The average adult reads about 240 words a minute.", "'Serendipity' was coined by a novelist in 1754.",
-    "Shakespeare invented over 1,700 words we still use.", "A 'wisp' is a small twist of something, like a story."
-  ];
-
-  // A compact spinner widget: a display line and a button that picks a new item.
-  function pickerWidget(id, name, icon, blurb, items, btn) {
-    return { id, name, icon, blurb, render() {
-        return `<p class="mw-out" data-mw-out>${esc(rand(items))}</p>
-          <button class="btn btn--ghost btn--full btn--sm" data-mw-roll>${esc(btn)}</button>`;
-      }, wire(el) {
-        const out = el.querySelector("[data-mw-out]"), b = el.querySelector("[data-mw-roll]");
-        b && b.addEventListener("click", () => { out.textContent = rand(items); out.classList.remove("mw-pop"); void out.offsetWidth; out.classList.add("mw-pop"); });
-      } };
-  }
-
-  // A real die face: pips for a d6, the rolled number on a polygon for a d20.
-  function dieFaceSVG(sides, v) {
-    if (sides === 6) {
-      const P = { 1: [[10, 10]], 2: [[5, 5], [15, 15]], 3: [[5, 5], [10, 10], [15, 15]],
-        4: [[5, 5], [15, 5], [5, 15], [15, 15]], 5: [[5, 5], [15, 5], [10, 10], [5, 15], [15, 15]],
-        6: [[5, 5], [15, 5], [5, 10], [15, 10], [5, 15], [15, 15]] };
-      const pips = (P[v] || P[1]).map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="2.1" fill="var(--card)"/>`).join("");
-      return `<svg viewBox="0 0 20 20" width="56" height="56" aria-label="${v}"><rect x="1" y="1" width="18" height="18" rx="4.5" fill="var(--ink)"/>${pips}</svg>`;
-    }
-    return `<svg viewBox="0 0 20 20" width="56" height="56" aria-label="${v}"><path d="M10 1.4 18.6 6.3v7.4L10 18.6 1.4 13.7V6.3z" fill="var(--ink)"/><text x="10" y="13.4" text-anchor="middle" font-size="8" font-weight="700" fill="var(--card)" font-family="var(--font-text)">${v}</text></svg>`;
-  }
-  // A small figure that stretches while the break runs.
-  function stretchFigSVG() {
-    // Arms attach at the shoulders (the top corners of the torso), NOT the
-    // centre: starting them a hair apart made their round caps overlap into a
-    // blob in the middle. Each arm's rotation pivot (mw-fig-arm transform-origin)
-    // is its inner-upper end, i.e. its shoulder, so the stretch poses still work.
-    return `<svg class="mw-fig-svg" viewBox="0 0 60 64" width="72" height="76" fill="none" aria-hidden="true">
-      <circle cx="30" cy="11" r="7" fill="var(--rose)"/>
-      <rect class="mw-fig-torso" x="25" y="18" width="10" height="20" rx="5" fill="var(--rose-ink)"/>
-      <path class="mw-fig-arm mw-fig-arm--l" d="M26 21 L13 31" stroke="var(--rose)" stroke-width="4.5" stroke-linecap="round"/>
-      <path class="mw-fig-arm mw-fig-arm--r" d="M34 21 L47 31" stroke="var(--rose)" stroke-width="4.5" stroke-linecap="round"/>
-      <path d="M28 37 L23 58" stroke="var(--rose-ink)" stroke-width="4.5" stroke-linecap="round"/>
-      <path d="M32 37 L37 58" stroke="var(--rose-ink)" stroke-width="4.5" stroke-linecap="round"/>
-    </svg>`;
-  }
-  // Backward-compatible readers for the to-do list and sticky notes, which grew
-  // richer shapes (checkable items, multiple notes) than their first versions.
-  function normalizeTodo(items) {
-    if (!Array.isArray(items)) return [];
-    return items.map(it => typeof it === "string" ? { text: it, done: false } : { text: (it && it.text) || "", done: !!(it && it.done) });
-  }
-  function normalizeStickies(s) {
-    if (s && Array.isArray(s.notes)) return s.notes.map(n => ({ text: (n && n.text) || "" }));
-    if (s && typeof s.text === "string" && s.text) return [{ text: s.text }];
-    return [{ text: "" }];
-  }
-
-  // A 7-day strip (oldest to today) for the reading-streak widget, so it reads
-  // as a consistency tracker rather than a plain daily counter. A day is filled
-  // when it falls inside the current consecutive streak ending at s.last.
-  function streakWeekStrip(s) {
-    const count = s.count || 0;
-    let lastOffset = 99;
-    if (s.last) {
-      const p = String(s.last).split("-").map(Number);
-      const last = new Date(p[0], (p[1] || 1) - 1, p[2] || 1); last.setHours(0, 0, 0, 0);
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      lastOffset = Math.round((today - last) / 86400000);
-    }
-    const WD = ["S", "M", "T", "W", "T", "F", "S"];
-    let out = "";
-    for (let k = 6; k >= 0; k--) {
-      const dt = new Date(); dt.setHours(0, 0, 0, 0); dt.setDate(dt.getDate() - k);
-      const read = count > 0 && k >= lastOffset && k <= lastOffset + count - 1;
-      out += `<span class="mw-week__day ${read ? "is-read" : ""} ${k === 0 ? "is-today" : ""}"><span class="mw-week__dot"></span><span class="mw-week__wd">${WD[dt.getDay()]}</span></span>`;
-    }
-    return out;
-  }
-
-  const MINI_WIDGETS = [
-    { id: "clock", name: "Live clock", icon: "clock", blurb: "The current time.", render() { return `<div class="mw-big" data-mw-clock>--:--</div>`; },
-      wire(el) { const t = el.querySelector("[data-mw-clock]"); const upd = () => { const d = new Date(); let h = d.getHours(); const ap = h >= 12 ? "PM" : "AM"; h = h % 12 || 12; t.textContent = h + ":" + String(d.getMinutes()).padStart(2, "0") + " " + ap; }; upd(); miniInterval(setInterval(upd, 1000)); } },
-    { id: "reading-timer", name: "Reading timer", icon: "clock", blurb: "A stopwatch for reading.",
-      render() { const s = mwState("reading-timer"); const el = (s.running ? (Date.now() - s.start + (s.acc || 0)) : (s.acc || 0)); return `<div class="mw-big" data-mw-time>${fmtDur(el)}</div><div class="mw-row"><button class="btn btn--ghost btn--sm" data-mw-toggle>${s.running ? "Pause" : "Start"}</button><button class="btn btn--quiet btn--sm" data-mw-reset>Reset</button></div>`; },
-      wire(el) { const disp = el.querySelector("[data-mw-time]"); const draw = () => { const s = mwState("reading-timer"); disp.textContent = fmtDur(s.running ? (Date.now() - s.start + (s.acc || 0)) : (s.acc || 0)); };
-        el.querySelector("[data-mw-toggle]").addEventListener("click", () => { const s = mwState("reading-timer"); if (s.running) mwSetState("reading-timer", { running: false, acc: (s.acc || 0) + (Date.now() - s.start) }); else mwSetState("reading-timer", { running: true, start: Date.now() }); renderWidgets(); });
-        el.querySelector("[data-mw-reset]").addEventListener("click", () => { mwSetState("reading-timer", { running: false, acc: 0, start: 0 }); renderWidgets(); });
-        if (mwState("reading-timer").running) miniInterval(setInterval(draw, 500)); } },
-    { id: "pomodoro", name: "Pomodoro", icon: "clock", blurb: "25 on, 5 off.",
-      render() { const s = mwState("pomodoro"); const left = s.endsAt ? s.endsAt - Date.now() : 25 * 60000; return `<div class="mw-big" data-mw-pom>${fmtDur(left > 0 ? left : 0)}</div><p class="mw-sub" data-mw-pom-ph>${s.phase === "break" ? "Break" : "Focus"}</p><div class="mw-row"><button class="btn btn--ghost btn--sm" data-mw-pom-go>${s.endsAt ? "Stop" : "Start"}</button></div>`; },
-      wire(el) { const disp = el.querySelector("[data-mw-pom]"); const ph = el.querySelector("[data-mw-pom-ph]");
-        const tick = () => { const s = mwState("pomodoro"); if (!s.endsAt) return; let left = s.endsAt - Date.now(); if (left <= 0) { const nextBreak = s.phase !== "break"; mwSetState("pomodoro", { phase: nextBreak ? "break" : "focus", endsAt: Date.now() + (nextBreak ? 5 : 25) * 60000 }); toast(nextBreak ? "Focus done. Take a 5 minute break." : "Break over. Back to it."); left = mwState("pomodoro").endsAt - Date.now(); } disp.textContent = fmtDur(left); ph.textContent = mwState("pomodoro").phase === "break" ? "Break" : "Focus"; };
-        el.querySelector("[data-mw-pom-go]").addEventListener("click", () => { const s = mwState("pomodoro"); if (s.endsAt) mwSetState("pomodoro", { endsAt: 0, phase: "focus" }); else mwSetState("pomodoro", { endsAt: Date.now() + 25 * 60000, phase: "focus" }); renderWidgets(); });
-        if (mwState("pomodoro").endsAt) miniInterval(setInterval(tick, 500)); } },
-    { id: "word-sprint", name: "Word sprint", icon: "edit", blurb: "A timed writing burst.",
-      render() { const s = mwState("word-sprint"); const left = s.endsAt ? s.endsAt - Date.now() : 0; return s.endsAt ? `<div class="mw-big" data-mw-sp>${fmtDur(left > 0 ? left : 0)}</div><div class="mw-row"><button class="btn btn--quiet btn--sm" data-mw-sp-stop>Stop</button></div>` : `<div class="mw-row" data-mw-sp-pick>${[10, 15, 20].map(m => `<button class="btn btn--ghost btn--sm" data-mw-sp="${m}">${m} min</button>`).join("")}</div>`; },
-      wire(el) { el.querySelectorAll("[data-mw-sp]").forEach(b => b.addEventListener("click", () => { mwSetState("word-sprint", { endsAt: Date.now() + (+b.dataset.mwSp) * 60000 }); renderWidgets(); }));
-        const stop = el.querySelector("[data-mw-sp-stop]"); stop && stop.addEventListener("click", () => { mwSetState("word-sprint", { endsAt: 0 }); renderWidgets(); });
-        const disp = el.querySelector("[data-mw-sp]"); if (mwState("word-sprint").endsAt) miniInterval(setInterval(() => { const s = mwState("word-sprint"); const left = s.endsAt - Date.now(); const d = el.querySelector("[data-mw-sp]"); if (left <= 0) { mwSetState("word-sprint", { endsAt: 0 }); toast("Sprint done. Great work."); renderWidgets(); return; } if (d) d.textContent = fmtDur(left); }, 500)); } },
-    { id: "streak", name: "Reading streak", icon: "check", blurb: "Days in a row.",
-      render() {
-        const s = mwState("streak"); const done = s.last === todayKey(); const n = s.count || 0;
-        // Distinct from "Chapters today" (a count of what you read today): this
-        // is about consistency over days, so it leads with the streak and a
-        // seven-day strip. The log button only shows when it will do something.
-        return `<div class="mw-streak">
-            <div class="mw-streak__top"><span class="mw-streak__n">${n}</span><span class="mw-streak__fire">🔥</span><span class="mw-streak__lbl">day${n === 1 ? "" : "s"} in a row</span></div>
-            <div class="mw-week" aria-hidden="true">${streakWeekStrip(s)}</div>
-            ${done
-              ? `<p class="mw-sub mw-done">${icon("check", 13)} Logged for today</p>`
-              : `<button class="btn btn--ghost btn--full btn--sm" data-mw-streak>I read today</button>`}
-          </div>`;
-      },
-      wire(el) { const b = el.querySelector("[data-mw-streak]"); b && b.addEventListener("click", () => { const s = mwState("streak"); const y = new Date(Date.now() - 86400000); const yk = y.getFullYear() + "-" + (y.getMonth() + 1) + "-" + y.getDate(); const cont = s.last === yk; const nc = cont ? (s.count || 0) + 1 : 1; mwSetState("streak", { count: nc, last: todayKey() }); mwRefresh("streak"); if (nc >= 3 && nc % 5 === 0) celebrate(nc + " day streak!", "Keep it going.", "🔥"); else if (!reducedMotion()) confettiBurst(); }); } },
-    { id: "countdown", name: "Countdown", icon: "clock", blurb: "Days until a date.",
-      render() { const s = mwState("countdown"); if (!s.target) return `<p class="mw-sub">No date set yet.</p><button class="btn btn--ghost btn--full btn--sm" data-mw-cd-set>Set a date</button>`; const days = Math.ceil((new Date(s.target).getTime() - Date.now()) / 86400000); return `<div class="mw-big">${days >= 0 ? days : 0}</div><p class="mw-sub">${days > 0 ? "days to " : days === 0 ? "today: " : "since "}${esc(s.label || "your date")}</p><button class="btn btn--quiet btn--full btn--sm" data-mw-cd-set>Change</button>`; },
-      wire(el) { const b = el.querySelector("[data-mw-cd-set]"); b && b.addEventListener("click", () => { const t = (window.prompt("Date (YYYY-MM-DD)", mwState("countdown").target || "") || "").trim(); if (!t) return; const label = (window.prompt("What is it? (optional)", mwState("countdown").label || "") || "").trim(); mwSetState("countdown", { target: t, label }); mwRefresh("countdown"); }); } },
-    pickerWidget("quote", "Quote of the day", "quote", "A writing quote.", MW_QUOTES, "New quote"),
-    pickerWidget("prompt", "Writing prompt", "edit", "A story prompt.", MW_PROMPTS, "New prompt"),
-    pickerWidget("fortune", "Fortune cookie", "quote", "A tiny fortune.", MW_FORTUNES, "Crack it open"),
-    pickerWidget("eightball", "Magic 8-ball", "eye", "Ask a question.", MW_EIGHTBALL, "Ask again"),
-    pickerWidget("affirmation", "Affirmation", "heart", "A kind word.", MW_AFFIRM, "Another"),
-    pickerWidget("didyouknow", "Did you know", "book", "A book fact.", MW_FACTS, "Tell me more"),
-    { id: "fandom-roulette", name: "Fandom roulette", icon: "shuffle", blurb: "A random fandom.",
-      render() { const f = rand(FANDOMS); return `<p class="mw-out" data-mw-out>${esc(f)}</p><button class="btn btn--ghost btn--full btn--sm" data-mw-roll>Spin</button>`; },
-      wire(el) { const out = el.querySelector("[data-mw-out]"); el.querySelector("[data-mw-roll]").addEventListener("click", () => { const f = rand(FANDOMS); out.textContent = f; out.classList.remove("mw-pop"); void out.offsetWidth; out.classList.add("mw-pop"); }); out.style.cursor = "pointer"; out.addEventListener("click", () => navigate("tag/" + encodeURIComponent(out.textContent))); } },
-    { id: "tag-roulette", name: "Tag roulette", icon: "tag", blurb: "A random tag.",
-      render() { const t = rand(TAG_SUGGEST); return `<p class="mw-out" data-mw-out>${esc(t)}</p><button class="btn btn--ghost btn--full btn--sm" data-mw-roll>Spin</button>`; },
-      wire(el) { const out = el.querySelector("[data-mw-out]"); el.querySelector("[data-mw-roll]").addEventListener("click", () => { const t = rand(TAG_SUGGEST); out.textContent = t; out.classList.remove("mw-pop"); void out.offsetWidth; out.classList.add("mw-pop"); }); out.style.cursor = "pointer"; out.addEventListener("click", () => navigate("tag/" + encodeURIComponent(out.textContent))); } },
-    { id: "dice", name: "Dice roller", icon: "die", blurb: "Roll a d6 or a d20.",
-      render() { return `<div class="mw-die" data-mw-dieface>${dieFaceSVG(6, 1)}</div><div class="mw-row"><button class="btn btn--ghost btn--sm" data-mw-die="6">Roll d6</button><button class="btn btn--quiet btn--sm" data-mw-die="20">Roll d20</button></div>`; },
-      wire(el) {
-        const face = el.querySelector("[data-mw-dieface]");
-        el.querySelectorAll("[data-mw-die]").forEach(b => b.addEventListener("click", () => {
-          const sides = +b.dataset.mwDie;
-          face.classList.remove("is-rolling"); void face.offsetWidth; face.classList.add("is-rolling");
-          let ticks = 0;
-          const iv = setInterval(() => { const v = 1 + Math.floor(Math.random() * sides); face.innerHTML = dieFaceSVG(sides, v); ticks++; if (ticks >= 9) { clearInterval(iv); face.classList.remove("is-rolling"); } }, 65);
-          miniInterval(iv);
-        }));
-      } },
-    { id: "coin", name: "Coin flip", icon: "shuffle", blurb: "Heads or tails.",
-      render() { return `<div class="mw-big" data-mw-out>?</div><button class="btn btn--ghost btn--full btn--sm" data-mw-roll>Flip</button>`; },
-      wire(el) { const out = el.querySelector("[data-mw-out]"); el.querySelector("[data-mw-roll]").addEventListener("click", () => { out.textContent = Math.random() < 0.5 ? "Heads" : "Tails"; out.classList.remove("mw-pop"); void out.offsetWidth; out.classList.add("mw-pop"); }); } },
-    { id: "mood", name: "Mood check", icon: "heart", blurb: "Your mood, kept for the week.",
-      render() {
-        const s = mwState("mood");
-        const set = ["😀", "🙂", "😐", "😔", "😠", "😴", "🥰", "🤔"];
-        const today = todayKey();
-        const hist = (s.history && typeof s.history === "object") ? s.history : {};
-        const todayEmoji = hist[today] || (s.day === today ? s.emoji : "");
-        // The last seven days ending today, so a reader can see the week at a glance.
-        const wdInit = ["S", "M", "T", "W", "T", "F", "S"];
-        let week = "";
-        for (let i = 6; i >= 0; i--) {
-          const d = new Date(Date.now() - i * 86400000);
-          const key = d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
-          const em = hist[key] || (key === today ? todayEmoji : "");
-          week += `<span class="mw-mood-day${key === today ? " is-today" : ""}"><span class="mw-mood-emoji${em ? "" : " is-empty"}">${em || "·"}</span><span class="mw-mood-wd">${wdInit[d.getDay()]}</span></span>`;
-        }
-        return `<div class="mw-moods">${set.map(m => `<button class="mw-mood ${todayEmoji === m ? "is-on" : ""}" data-mw-mood="${m}" aria-label="Set today's mood to ${m}">${m}</button>`).join("")}</div>` +
-          `<p class="mw-eyebrow-sm">This week</p><div class="mw-mood-week">${week}</div>`;
-      },
-      wire(el) {
-        el.querySelectorAll("[data-mw-mood]").forEach(b => b.addEventListener("click", () => {
-          const s = mwState("mood");
-          const today = todayKey();
-          const hist = Object.assign({}, (s.history && typeof s.history === "object") ? s.history : {});
-          hist[today] = b.dataset.mwMood;
-          // Keep about six weeks of history; drop anything older so it never grows.
-          const cutoff = Date.now() - 42 * 86400000;
-          Object.keys(hist).forEach(k => { const p = k.split("-"); const t = new Date(+p[0], (+p[1]) - 1, +p[2]).getTime(); if (isFinite(t) && t < cutoff) delete hist[k]; });
-          mwSetState("mood", { emoji: b.dataset.mwMood, day: today, history: hist });
-          mwRefresh("mood");
-        }));
-      } },
-    { id: "sticky", name: "Sticky notes", icon: "edit", blurb: "Notes that stick around.",
-      render() { const notes = normalizeStickies(mwState("sticky")); return `<div class="mw-stickies">${notes.map((nt, i) => `<div class="mw-sticky-card"><textarea class="mw-sticky" data-mw-sticky="${i}" placeholder="Jot something...">${esc(nt.text)}</textarea><button class="mw-sticky-del" data-mw-sticky-del="${i}" aria-label="Remove note">&times;</button></div>`).join("")}</div><button class="btn btn--ghost btn--full btn--sm" data-mw-sticky-add>${icon("plus", 13)} New note</button>`; },
-      wire(el) {
-        const notes = () => normalizeStickies(mwState("sticky"));
-        el.querySelectorAll("[data-mw-sticky]").forEach(t => { let tm = null; t.addEventListener("input", () => { clearTimeout(tm); tm = setTimeout(() => { const arr = notes(); const i = +t.dataset.mwSticky; if (arr[i]) { arr[i].text = t.value; mwSetState("sticky", { notes: arr }); } }, 300); }); });
-        const add = el.querySelector("[data-mw-sticky-add]"); if (add) add.addEventListener("click", () => { const arr = notes(); arr.push({ text: "" }); mwSetState("sticky", { notes: arr }); mwRefresh("sticky"); });
-        el.querySelectorAll("[data-mw-sticky-del]").forEach(b => b.addEventListener("click", () => { const arr = notes(); arr.splice(+b.dataset.mwStickyDel, 1); if (!arr.length) arr.push({ text: "" }); mwSetState("sticky", { notes: arr }); mwRefresh("sticky"); }));
-      } },
-    { id: "to-read", name: "To-read list", icon: "bookmark", blurb: "A checkable reading list.",
-      render() { const items = normalizeTodo(mwState("to-read").items); return `<ul class="mw-todo">${items.length ? items.map((it, i) => `<li class="${it.done ? "is-done" : ""}"><button class="mw-todo-box" data-mw-tr-toggle="${i}" aria-pressed="${it.done}" aria-label="${it.done ? "Mark not done" : "Mark done"}">${it.done ? icon("check", 12) : ""}</button><span class="mw-todo-txt">${esc(it.text)}</span><button class="mw-li-del" data-mw-tr-del="${i}" aria-label="Remove">&times;</button></li>`).join("") : '<li class="mw-todo-empty">Nothing yet. Add something to read.</li>'}</ul><form class="mw-todo-add" data-mw-tr-form><input type="text" class="mw-todo-in" data-mw-tr-in placeholder="Add a title or note" maxlength="140"><button class="btn btn--ghost btn--sm" type="submit">Add</button></form>`; },
-      wire(el) {
-        const items = () => normalizeTodo(mwState("to-read").items);
-        const form = el.querySelector("[data-mw-tr-form]"), input = el.querySelector("[data-mw-tr-in]");
-        if (form) form.addEventListener("submit", (e) => { e.preventDefault(); const v = (input.value || "").trim(); if (!v) return; const arr = items(); arr.push({ text: v, done: false }); mwSetState("to-read", { items: arr }); mwRefresh("to-read"); setTimeout(() => { const nx = document.querySelector('[data-mw="to-read"] [data-mw-tr-in]'); if (nx) nx.focus(); }, 0); });
-        el.querySelectorAll("[data-mw-tr-toggle]").forEach(b => b.addEventListener("click", () => { const arr = items(); const i = +b.dataset.mwTrToggle; if (arr[i]) { arr[i].done = !arr[i].done; mwSetState("to-read", { items: arr }); mwRefresh("to-read"); } }));
-        el.querySelectorAll("[data-mw-tr-del]").forEach(b => b.addEventListener("click", () => { const arr = items(); arr.splice(+b.dataset.mwTrDel, 1); mwSetState("to-read", { items: arr }); mwRefresh("to-read"); }));
-      } },
-    { id: "water", name: "Water nudge", icon: "check", blurb: "Track water, hourly nudges.",
-      render() {
-        const s = mwState("water"); const today = todayKey();
-        const n = s.day === today ? (s.n || 0) : 0;
-        const goal = waterGoal(s);
-        const metToday = s.metDay === today;                       // goal was reached today (glasses may be cleared)
-        const remind = !!s.remind;
-        // A row of real glasses the reader fills up. Tap one to fill to it.
-        const glasses = Array.from({ length: goal }, (_, i) =>
-          `<button class="mw-glass${i < n ? " is-full" : ""}" data-mw-fill="${i + 1}" title="${i + 1} ${i + 1 === 1 ? "glass" : "glasses"}" aria-label="Fill to ${i + 1}">${icon("water", 26)}</button>`).join("");
-        const label = metToday ? "goal met today &#127881;" : "glasses today";
-        return `
-          <div class="mw-water${metToday ? " is-met" : ""}">
-            <div class="mw-water-head"><span class="mw-water-count">${n}<span class="mw-water-of"> / ${goal}</span></span><span class="mw-water-label">${label}</span></div>
-            <div class="mw-water-glasses" role="group" aria-label="Glasses of water">${glasses}</div>
-            <div class="mw-row">
-              <button class="btn btn--ghost btn--sm" data-mw-water="1">${icon("water", 13)} Had a glass</button>
-              <button class="btn btn--quiet btn--sm" data-mw-water-clear ${n ? "" : "disabled"}>Clear</button>
-            </div>
-            <div class="mw-water-cfg">
-              <span class="mw-water-goalset">Daily goal <span class="mw-stepper"><button data-mw-water-goal="-1" aria-label="Lower goal">&minus;</button><b>${goal}</b><button data-mw-water-goal="1" aria-label="Raise goal">+</button></span></span>
-              <button class="mw-water-remind${remind ? " is-on" : ""}" data-mw-water-remind aria-pressed="${remind}">${icon(remind ? "bell" : "mute", 12)} ${remind ? "Reminders on" : "Remind me hourly"}</button>
-            </div>
-          </div>`;
-      },
-      wire(el) {
-        // Set today's count to `n`. On first reaching the goal: celebrate, mark the
-        // day met (so reminders stop), then auto-clear the glasses for a fresh
-        // round — the reader never has to undo each one.
-        const setTo = (n) => {
-          const s = mwState("water"); const today = todayKey();
-          const cur = s.day === today ? (s.n || 0) : 0;
-          const goal = waterGoal(s);
-          const nn = Math.max(0, Math.min(goal, n));
-          const justMet = nn >= goal && cur < goal;
-          mwSetState("water", { n: nn, day: today, metDay: (justMet || s.metDay === today) ? today : s.metDay });
-          if (justMet) {
-            celebrate("You hit your water goal", "That's " + goal + " glasses today. Nicely done.", "💧");
-            setTimeout(() => { const s2 = mwState("water"); if (s2.day === todayKey() && (s2.n || 0) >= waterGoal(s2)) { mwSetState("water", { n: 0, day: todayKey() }); mwRefresh("water"); } }, 2600);
-          }
-          mwRefresh("water");
-        };
-        el.querySelectorAll("[data-mw-fill]").forEach(b => b.addEventListener("click", () => {
-          const s = mwState("water"); const cur = s.day === todayKey() ? (s.n || 0) : 0;
-          const target = +b.dataset.mwFill;
-          setTo(target === cur ? cur - 1 : target);   // tap the top glass to empty it, else fill up to it
-        }));
-        el.querySelectorAll("[data-mw-water]").forEach(b => b.addEventListener("click", () => {
-          const s = mwState("water"); const cur = s.day === todayKey() ? (s.n || 0) : 0;
-          setTo(cur + (+b.dataset.mwWater));
-        }));
-        const clr = el.querySelector("[data-mw-water-clear]");
-        if (clr) clr.addEventListener("click", () => { mwSetState("water", { n: 0, day: todayKey() }); mwRefresh("water"); });
-        el.querySelectorAll("[data-mw-water-goal]").forEach(b => b.addEventListener("click", () => {
-          const s = mwState("water");
-          const goal = Math.max(1, Math.min(20, waterGoal(s) + (+b.dataset.mwWaterGoal)));
-          mwSetState("water", { goal }); mwRefresh("water");
-        }));
-        const rb = el.querySelector("[data-mw-water-remind]");
-        if (rb) rb.addEventListener("click", () => {
-          const s = mwState("water");
-          const turningOn = !s.remind;
-          // Flip the preference right away; ask for notification permission in the
-          // background so the toggle never waits on the browser prompt. In-app
-          // toast nudges still work even if the reader declines notifications.
-          mwSetState("water", { remind: turningOn, last: turningOn ? Date.now() : (s.last || 0) });
-          if (turningOn) { armWaterReminders(); requestNotifyPermission().catch(() => {}); }
-          mwRefresh("water");
-          toast(turningOn ? "I'll nudge you about once an hour until you reach your goal." : "Water reminders off.");
-        });
-      } },
-    { id: "stretch", name: "Stretch break", icon: "leaf", blurb: "A guided little stretch.",
-      render() { return `<div class="mw-stretch" data-mw-stretch><div class="mw-fig" data-mw-fig>${stretchFigSVG()}</div><p class="mw-sub" data-mw-stretch-txt>Been reading a while? Take twenty seconds.</p><button class="btn btn--ghost btn--full btn--sm" data-mw-stretch-go>Stretch with me</button></div>`; },
-      wire(el) {
-        const wrap = el.querySelector("[data-mw-stretch]"), fig = el.querySelector("[data-mw-fig]"), txt = el.querySelector("[data-mw-stretch-txt]"), go = el.querySelector("[data-mw-stretch-go]");
-        const steps = [["Reach up, tall as you can", "up", 5000], ["Ease over to the left", "left", 4000], ["and over to the right", "right", 4000], ["Roll your shoulders back", "roll", 4000], ["Look far past the screen", "gaze", 3500]];
-        go.addEventListener("click", () => {
-          if (wrap.classList.contains("is-stretching")) return;
-          wrap.classList.add("is-stretching"); go.disabled = true;
-          let i = 0;
-          const run = () => {
-            if (i >= steps.length) { wrap.classList.remove("is-stretching"); fig.removeAttribute("data-pose"); txt.textContent = "Nice. Your shoulders thank you."; go.disabled = false; return; }
-            const s = steps[i]; txt.textContent = s[0]; fig.setAttribute("data-pose", s[1]); i++;
-            const t = setTimeout(run, s[2]); miniCleanup(() => clearTimeout(t));
-          };
-          run();
-        });
-      } },
-    { id: "breathing", name: "Breathing", icon: "heart", blurb: "A 4-7-8 breathing circle.",
-      render() { return `<div class="mw-breathe" data-mw-breathe><span class="mw-breathe__dot"></span><span class="mw-breathe__txt">Tap to begin</span></div>`; },
-      wire(el) { const box = el.querySelector("[data-mw-breathe]"); const txt = box.querySelector(".mw-breathe__txt"); let on = false, ph = 0; const phases = [["Breathe in", 4000, "in"], ["Hold", 7000, "hold"], ["Breathe out", 8000, "out"]]; let tm = null; const step = () => { const [label, ms, cls] = phases[ph % 3]; txt.textContent = label; box.classList.remove("is-in", "is-hold", "is-out"); box.classList.add("is-" + cls); ph++; tm = setTimeout(step, ms); }; box.addEventListener("click", () => { on = !on; if (on) { ph = 0; step(); } else { clearTimeout(tm); box.classList.remove("is-in", "is-hold", "is-out"); txt.textContent = "Tap to begin"; } }); miniCleanup(() => clearTimeout(tm)); } },
-    { id: "cat", name: "Lucky the cat", icon: "paw", blurb: "A cat who strolls the page.",
-      render() { const sum = (window.WispCompanion && WispCompanion.summary) ? WispCompanion.summary() : "Your reading companion."; return `<p class="mw-sub" data-mw-cat-sum>${esc(sum)}</p><div class="mw-row"><button class="btn btn--ghost btn--sm" data-mw-cat-customize>Customize</button><button class="btn btn--quiet btn--sm" data-mw-cat-stroll>Take a stroll</button></div>`; },
-      wire(el) {
-        const cz = el.querySelector("[data-mw-cat-customize]"); if (cz) cz.addEventListener("click", () => { if (window.WispCompanion) WispCompanion.openSettings(); });
-        const st = el.querySelector("[data-mw-cat-stroll]"); if (st) st.addEventListener("click", () => { if (window.WispCompanion) WispCompanion.stroll(); });
-      } },
-    { id: "confetti", name: "Confetti", icon: "party", blurb: "A burst of confetti.",
-      render() { return `<p class="mw-sub">Finished a chapter? Give yourself a moment.</p><button class="btn btn--ghost btn--full btn--sm" data-mw-conf>Celebrate</button>`; },
-      wire(el) { el.querySelector("[data-mw-conf]").addEventListener("click", confettiBurst); } },
-    { id: "petals", name: "Falling petals", icon: "leaf", blurb: "Petals drifting down.",
-      render() { const on = !!mwState("petals").on; return `<p class="mw-sub">A quiet, drifting backdrop.</p><button class="btn ${on ? "btn--primary" : "btn--ghost"} btn--full btn--sm" data-mw-petals>${on ? "Turn off" : "Turn on"}</button>`; },
-      wire(el) { el.querySelector("[data-mw-petals]").addEventListener("click", () => { const on = !mwState("petals").on; mwSetState("petals", { on }); togglePetals(on); mwRefresh("petals"); }); } },
-    { id: "focus", name: "Focus mode", icon: "book", blurb: "Everything but the page, dimmed.",
-      render() { const on = !!mwState("focus").on; return `<p class="mw-sub">Quiets everything but the page.</p><button class="btn ${on ? "btn--primary" : "btn--ghost"} btn--full btn--sm" data-mw-focus>${on ? "Turn off" : "Turn on"}</button>`; },
-      wire(el) { el.querySelector("[data-mw-focus]").addEventListener("click", () => { const on = !mwState("focus").on; mwSetState("focus", { on }); document.body.classList.toggle("focus-mode", on); mwRefresh("focus"); }); } },
-    { id: "accent", name: "Accent shuffler", icon: "palette", blurb: "A new accent color.",
-      render() { return `<p class="mw-sub">Current accent: <b>${esc(settings.accent || "default")}</b></p><button class="btn btn--ghost btn--full btn--sm" data-mw-accent>Shuffle</button>`; },
-      wire(el) { el.querySelector("[data-mw-accent]").addEventListener("click", () => { const ids = ACCENTS.map(a => a.id).filter(x => x !== settings.accent); settings.accent = rand(ids); applySettings(); mwRefresh("accent"); }); } },
-    { id: "wpm", name: "Reading pace", icon: "clock", blurb: "Learned as you read.",
-      render() { const s = mwState("wpm"); return s.avg ? `<div class="mw-big">${s.avg}</div><p class="mw-sub">words per minute${s.n ? " · from " + s.n + " " + (s.n === 1 ? "read" : "reads") : ""}</p>` : `<p class="mw-sub">Read a chapter or two and I'll learn your pace on my own. No typing.</p>`; },
-      wire() {} },
-    { id: "chapters-today", name: "Chapters today", icon: "book", blurb: "Counts as you read.",
-      render() {
-        const s = mwState("chapters-today");
-        const n = s.day === todayKey() ? (s.n || 0) : 0;
-        return n
-          ? `<div class="mw-big">${n}</div><p class="mw-sub">${n === 1 ? "chapter" : "chapters"} read today · counted for you</p>`
-          : `<p class="mw-sub">Open a chapter and it counts here on its own. No tapping needed.</p>`;
-      },
-      wire() {} },
-    { id: "gratitude", name: "Gratitude line", icon: "heart", blurb: "One good thing today.",
-      render() { const s = mwState("gratitude"); return s.day === todayKey() && s.text ? `<p class="mw-out">${esc(s.text)}</p><button class="btn btn--quiet btn--full btn--sm" data-mw-grat>Change</button>` : `<button class="btn btn--ghost btn--full btn--sm" data-mw-grat>Add one good thing</button>`; },
-      wire(el) { el.querySelector("[data-mw-grat]").addEventListener("click", () => { const v = (window.prompt("One good thing today") || "").trim(); if (!v) return; mwSetState("gratitude", { text: v, day: todayKey() }); mwRefresh("gratitude"); }); } },
-    { id: "spinner", name: "Yes or no", icon: "shuffle", blurb: "Yes, no, or maybe.",
-      render() { return `<div class="mw-big" data-mw-out>?</div><button class="btn btn--ghost btn--full btn--sm" data-mw-roll>Decide</button>`; },
-      wire(el) { const out = el.querySelector("[data-mw-out]"); el.querySelector("[data-mw-roll]").addEventListener("click", () => { out.textContent = rand(["Yes", "No", "Maybe", "Later", "Go for it", "Not now"]); out.classList.remove("mw-pop"); void out.offsetWidth; out.classList.add("mw-pop"); }); } }
-  ];
-
-  // Timer/interval bookkeeping so re-renders never leak or double up.
-  let miniIntervals = [], miniCleanups = [];
-  function miniInterval(id) { miniIntervals.push(id); }
-  function miniCleanup(fn) { miniCleanups.push(fn); }
-  function clearMiniTimers() { miniIntervals.forEach(clearInterval); miniIntervals = []; miniCleanups.forEach(fn => { try { fn(); } catch (e) {} }); miniCleanups = []; }
-
-  function installedWidgetsHTML() {
-    const ids = mwLoad();
-    const cards = ids.map(id => {
-      const def = MINI_WIDGETS.find(w => w.id === id); if (!def) return "";
-      return `<div class="widget mini-widget" data-mw="${esc(id)}">
-        <div class="widget__label mw-head"><span>${icon(def.icon || "book", 13)} ${esc(def.name)}</span><button class="mw-remove" data-mw-remove="${esc(id)}" aria-label="Remove ${esc(def.name)}">&times;</button></div>
-        <div class="mw-body">${def.render()}</div>
-      </div>`;
-    }).join("");
-    return cards + `<button class="widget mw-add" data-mw-open>${icon("plus", 15)} Add widgets</button>`;
-  }
-  function wireMiniWidgets(root) {
-    clearMiniTimers();
-    const scope = root || document;
-    scope.querySelectorAll(".mini-widget").forEach(card => {
-      const id = card.dataset.mw; const def = MINI_WIDGETS.find(w => w.id === id);
-      const body = card.querySelector(".mw-body");
-      if (def && def.wire && body) { try { def.wire(body); } catch (e) {} }
-    });
-    scope.querySelectorAll("[data-mw-remove]").forEach(b => b.addEventListener("click", (e) => { e.stopPropagation(); const id = b.dataset.mwRemove; mwSave(mwLoad().filter(x => x !== id)); renderWidgetsEverywhere(); }));
-    scope.querySelectorAll("[data-mw-open]").forEach(b => b.addEventListener("click", openWidgetPicker));
-  }
-  // Both the desktop rail and the open mobile sheet reflect an install change.
-  // renderWidgets now refreshes both surfaces, so this is a thin alias kept for
-  // the install/remove call sites.
-  function renderWidgetsEverywhere() { renderWidgets(); }
-  function openWidgetPicker() {
-    const installed = new Set(mwLoad());
-    const rows = MINI_WIDGETS.map(def => `<button class="mw-pick-row ${installed.has(def.id) ? "is-in" : ""}" data-mw-pick="${esc(def.id)}">
-      <span class="mw-pick-ic">${icon(def.icon || "book", 16)}</span>
-      <span class="mw-pick-txt"><span class="mw-pick-name">${esc(def.name)}</span><span class="mw-pick-blurb">${esc(def.blurb)}</span></span>
-      <span class="mw-pick-act">${installed.has(def.id) ? icon("check", 15) + " Added" : icon("plus", 15) + " Add"}</span>
-    </button>`).join("");
-    openModal(`
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-        <h2 style="font-size:20px">Add widgets</h2>
-        <button class="drawer__close" data-modal-cancel aria-label="Close">&times;</button>
-      </div>
-      <p class="muted" style="font-size:13px;margin:0 0 14px">Little extras for your widget station. Signed in, they follow you across devices. Tap to add or remove.</p>
-      <div class="mw-pick-list">${rows}</div>
-      <div class="modal-actions" style="margin-top:16px"><button class="btn btn--primary" data-modal-cancel>Done</button></div>`, "Add widgets");
-    $$("#modalCard [data-mw-pick]").forEach(b => b.addEventListener("click", () => {
-      const id = b.dataset.mwPick; const ids = mwLoad();
-      if (ids.includes(id)) { mwSave(ids.filter(x => x !== id)); if (id === "petals") togglePetals(false); if (id === "focus") document.body.classList.remove("focus-mode"); }
-      else mwSave(ids.concat([id]));
-      const nowIn = mwLoad().includes(id);
-      b.classList.toggle("is-in", nowIn);
-      b.querySelector(".mw-pick-act").innerHTML = nowIn ? icon("check", 15) + " Added" : icon("plus", 15) + " Add";
-      renderWidgetsEverywhere();
-    }));
-  }
-
-  // ---- page-level effects for the fun widgets ----
-  // These fun effects are driven by the Web Animations API rather than CSS
+  // ---- page-level effects ----
+  // These effects are driven by the Web Animations API rather than CSS
   // @keyframes on purpose: iOS Low Power Mode (and the OS Reduce Motion setting)
   // set prefers-reduced-motion, and the global reduced-motion CSS rule collapses
-  // every animation to ~0ms. A reader who deliberately taps "Here, kitty" or turns
-  // petals on should still see them, so we animate in JS, which that rule can't reach.
-  function catWalk() {
-    const c = document.createElement("div"); c.className = "mw-catrun"; c.textContent = "🐈";
-    document.body.appendChild(c);
-    const done = () => { if (c.parentNode) c.remove(); };
-    try {
-      const a = c.animate([
-        { left: "-60px", transform: "translateY(0)" },
-        { transform: "translateY(-6px)", offset: 0.49 },
-        { transform: "translateY(0)", offset: 0.5 },
-        { left: "106%", transform: "translateY(0)" }
-      ], { duration: 8000, easing: "linear", fill: "forwards" });
-      a.addEventListener("finish", done);
-    } catch (e) { c.style.left = "50%"; }   // no WAA: at least show the cat briefly
-    setTimeout(done, 9000);
-  }
+  // every animation to ~0ms. A celebration the reader has just earned should
+  // still show, so we animate in JS, which that rule can't reach.
   // A celebratory burst from the center of the screen: pieces shoot outward in all
   // directions, then fall away. (Center, not raining from the top edge.)
   function confettiBurst() {
@@ -14239,66 +12607,6 @@ window.WISP_WIDGET_CONTENT = (function () {
     svg.classList.remove(cls); void svg.offsetWidth; svg.classList.add(cls);
     setTimeout(function () { svg.classList.remove(cls); }, 720);
   }
-  let petalTimer = null;
-  function togglePetals(on) {
-    let layer = $("#mwPetals");
-    if (!on) { if (petalTimer) { clearInterval(petalTimer); petalTimer = null; } if (layer) layer.remove(); return; }
-    if (!layer) { layer = document.createElement("div"); layer.id = "mwPetals"; layer.className = "mw-petals"; document.body.appendChild(layer); }
-    if (petalTimer) return;
-    petalTimer = setInterval(() => {
-      if (!document.getElementById("mwPetals")) { clearInterval(petalTimer); petalTimer = null; return; }
-      const p = document.createElement("i"); p.textContent = "🌸"; p.style.left = Math.random() * 100 + "%"; p.style.fontSize = (10 + Math.random() * 10) + "px";
-      layer.appendChild(p);
-      const dur = 6000 + Math.random() * 5000;
-      try {
-        p.animate([
-          { transform: "translateY(-26px) translateX(0) rotate(0)", opacity: 0 },
-          { opacity: 0.9, offset: 0.12 },
-          { transform: "translateY(102vh) translateX(40px) rotate(220deg)", opacity: 0.5 }
-        ], { duration: dur, easing: "linear", fill: "forwards" });
-      } catch (e) {}
-      setTimeout(() => p.remove(), dur + 500);
-    }, 900);
-  }
-  // Restore ambient effects the reader left on, once per load.
-  function restoreMiniEffects() {
-    if (mwState("petals").on) togglePetals(true);
-    if (mwState("focus").on) document.body.classList.add("focus-mode");
-  }
-
-  // The "Your week" widget, from real reading progress. Only counts we can
-  // actually derive: no invented word totals.
-  function readingStatsHTML() {
-    if (!WispDB.signedIn) {
-      return `<div style="font:15px/1.5 var(--font-read);color:var(--ink2)">Sign in, and your reading shows up here.</div>`;
-    }
-    const s = LIVE.readingStats;
-    if (s === null) {
-      return `<div style="font:15px/1.5 var(--font-read);color:var(--ink2)">Reading stats show up here as you read.</div>`;
-    }
-    if (!s.total) {
-      return `<div style="font:15px/1.5 var(--font-read);color:var(--ink2)">Open a work and your reading life starts filling in here.</div>`;
-    }
-    const max = Math.max(s.thisWeek, s.inProgress, s.total, 1);
-    const line = (n, label) => `<div class="rstat">
-      <div class="rstat__row"><span class="rstat__n">${n}</span><span class="rstat__l">${label}</span></div>
-      <span class="rstat__bar"><i style="width:${Math.max(4, Math.round(100 * n / max))}%"></i></span>
-    </div>`;
-    return `<div class="rstats">
-      ${line(s.thisWeek, s.thisWeek === 1 ? "work this week" : "works this week")}
-      ${line(s.inProgress, s.inProgress === 1 ? "work in progress" : "works in progress")}
-      ${line(s.total, s.total === 1 ? "work in your history" : "works in your history")}
-    </div>`;
-  }
-  async function loadReadingStats(force) {
-    if (!isLive() || !WispDB.signedIn) { LIVE.readingStats = null; return; }
-    if (LIVE.readingStats !== null && !force) return;
-    try { LIVE.readingStats = await WispDB.readingStats(); }
-    catch (e) { LIVE.readingStats = LIVE.readingStats || { total: 0, thisWeek: 0, inProgress: 0 }; }
-    renderWidgets();
-  }
-  // Small handle so the stats renderer can be exercised by tests.
-  window.WispStats = { html: readingStatsHTML, inject(s) { LIVE.readingStats = s; } };
 
   /* ======================================================================= */
   /*  THEME ENGINE  ·  the accessibility engine too                          */
@@ -14637,10 +12945,9 @@ window.WISP_WIDGET_CONTENT = (function () {
       n.classList.toggle("is-active", on);
       on ? n.setAttribute("aria-current", "page") : n.removeAttribute("aria-current");
     });
-    // Reading and writing are focused surfaces: hide both rails for a calm,
-    // centered column. Browse hides the widget rail so results get room.
-    $("#railLeft").hidden  = (screen === "reading" || screen === "write");
-    $("#railRight").hidden = (screen === "reading" || screen === "write" || screen === "browse");
+    // Reading and writing are focused surfaces: hide the activity rail for a
+    // calm, centered column.
+    $("#railLeft").hidden = (screen === "reading" || screen === "write");
     $("#main").scrollTop = 0;
     $("#main").focus({ preventScroll:true });
   }
@@ -15068,7 +13375,6 @@ window.WISP_WIDGET_CONTENT = (function () {
 
   function route() {
     flushAutosave();   // leaving the editor: write any pending draft before its DOM is torn down
-    finalizeReadSession();   // leaving a chapter: fold the elapsed read into the reading-pace average
     if (speaking) stopListen();      // leaving the page stops read-aloud
     if (autoScrollState) stopAutoScroll();   // and the auto-scroll with it
     const hash = location.hash.replace(/^#\/?/, "");
@@ -15144,12 +13450,11 @@ window.WISP_WIDGET_CONTENT = (function () {
 
   function openSheet() { openOverlay($("#navSheet")); }
   function closeSheet() { closeOverlay($("#navSheet")); closeOverlay($("#railSheet")); }
-  function openRailSheet(kind) {
+  function openRailSheet() {
     const body = $("#railSheetBody");
-    if (kind === "activity") body.innerHTML = `<h2 class="rail__title" style="margin-bottom:4px">Activity</h2><p class="rail__note">Recent activity from the people and works you follow.</p>${activityHTML()}`;
-    else { body.innerHTML = `<h2 class="rail__title" style="margin-bottom:16px">Widgets</h2>${widgetHTML()}`; wireMiniWidgets(body); }
+    body.innerHTML = `<h2 class="rail__title" style="margin-bottom:4px">Activity</h2><p class="rail__note">Recent activity from the people and works you follow.</p>${activityHTML()}`;
     openOverlay($("#railSheet"));
-    if (kind === "activity" && isLive() && WispDB.signedIn) markNotificationsSeen();
+    if (isLive() && WispDB.signedIn) markNotificationsSeen();
   }
 
   // Keep the caret in the editor when a formatting button is pressed: without
@@ -15399,15 +13704,8 @@ window.WISP_WIDGET_CONTENT = (function () {
 
     if (e.target.closest("#introDismiss")) { settings.introSeen = true; save(); const bar = $("#introBar"); if (bar) bar.remove(); return; }
 
-    if (e.target.closest("[data-lucky]")) {
-      luckyIdx++;
-      const t = W.WIDGETS.luckyPool[luckyIdx % W.WIDGETS.luckyPool.length];
-      $$(".lucky-title").forEach(el => el.textContent = t);
-      return;
-    }
-
     const rs = e.target.closest("[data-railsheet]");
-    if (rs) { openRailSheet(rs.dataset.railsheet); return; }
+    if (rs) { openRailSheet(); return; }
 
     const tst = e.target.closest("[data-toast]");
     if (tst) { toast(tst.dataset.toast); return; }
@@ -15530,20 +13828,18 @@ window.WISP_WIDGET_CONTENT = (function () {
     const setMobileLabel = (t) => { if (linkM) { const svg = linkM.querySelector("svg"); linkM.textContent = t; if (svg) linkM.prepend(svg); } };
     if (!window.WispDB || !WispDB.enabled) return;             // demo mode: leave the header as-is
     updateAuthGate();
-    renderActivity(); renderWidgets();                         // rails reflect the connected state
+    renderActivity();                                          // the rail reflects the connected state
     if (WispDB.signedIn) {
       const name = (WispDB.profile && WispDB.profile.display_name) || "You";
       if (link) link.textContent = "Sign out";
       setMobileLabel("Sign out");
       if (avatar) { avatar.textContent = name[0].toUpperCase(); avatar.title = name; }
       loadNotifications();                                     // fetch the activity feed once signed in
-      loadReadingStats();                                      // and the reading stats widget
     } else {
       if (link) link.textContent = "Sign in";
       setMobileLabel("Sign in");
       if (avatar) { avatar.textContent = "?"; avatar.title = "Sign in"; }
       LIVE.notifications = null; updateNotifBadge();           // drop any feed from a previous session
-      LIVE.readingStats = null;
     }
     // The backend connects after the first paint, so a screen shown at boot can
     // be a demo render (the sample "Rowan" profile and works) even for a
@@ -18500,9 +16796,9 @@ window.WISP_WIDGET_CONTENT = (function () {
     }, { passive: true });
   }
 
-  // Collapsible rails: a reader can hide the Activity or Widgets panel to give the
-  // page the full width, the way many apps let you tuck a sidebar away. The choice
-  // is remembered on this device.
+  // Collapsible rail: a reader can hide the Activity panel to give the page the
+  // full width, the way many apps let you tuck a sidebar away. The choice is
+  // remembered on this device.
   function railHidden(side) { try { return localStorage.getItem("wisp.rail." + side) === "hidden"; } catch (e) { return false; } }
   function setRailHidden(side, hidden) {
     try { localStorage.setItem("wisp.rail." + side, hidden ? "hidden" : "shown"); } catch (e) {}
@@ -18510,13 +16806,12 @@ window.WISP_WIDGET_CONTENT = (function () {
   }
   function applyRailPrefs() {
     document.body.classList.toggle("hide-rail-left", railHidden("left"));
-    document.body.classList.toggle("hide-rail-right", railHidden("right"));
   }
   function wireRailToggles() {
     applyRailPrefs();
     $$("[data-rail-hide]").forEach(b => b.addEventListener("click", () => {
-      const s = b.dataset.railHide; setRailHidden(s, true);
-      toast((s === "left" ? "Activity" : "Widgets") + " hidden. Use the tab on the edge to bring it back.");
+      setRailHidden(b.dataset.railHide, true);
+      toast("Activity hidden. Use the tab on the edge to bring it back.");
     }));
     $$("[data-rail-show]").forEach(b => b.addEventListener("click", () => setRailHidden(b.dataset.railShow, false)));
   }
@@ -18527,8 +16822,9 @@ window.WISP_WIDGET_CONTENT = (function () {
     buildDrawer();
     applySettings();
     renderActivity();
-    renderWidgets();
-    restoreMiniEffects();       // bring back ambient widgets (petals, focus) the reader left on
+    // The personal widget station is gone: clear what it left on this device,
+    // so no stale timer state or hidden-panel flag lingers in storage.
+    ["wisp.widgets.installed", "wisp.widgets.state", "wisp.rail.right"].forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
 
     // Header and chrome.
     $("#themeBtn").addEventListener("click", openTheme);
@@ -18537,7 +16833,7 @@ window.WISP_WIDGET_CONTENT = (function () {
     $("#themeScrim").addEventListener("click", (e) => { if (e.target.id === "themeScrim") closeTheme(); });
     const doSignInOut = () => {
       if (!window.WispDB || !WispDB.enabled) { toast("Sign out isn't wired up in demo mode. Connect Supabase to enable accounts."); return; }
-      if (WispDB.signedIn) WispDB.signOut().then(() => { guestBrowsing = false; mwHandleSignOut(); toast("Signed out."); updateAuthGate(); });
+      if (WispDB.signedIn) WispDB.signOut().then(() => { guestBrowsing = false; companionHandleSignOut(); toast("Signed out."); updateAuthGate(); });
       else openAuth("in");
     };
     $("#signOutBtn").addEventListener("click", doSignInOut);
@@ -18642,9 +16938,9 @@ window.WISP_WIDGET_CONTENT = (function () {
       // underneath and an already-signed-in reader never sees the sign-in form.
       if (WispDB.configured) renderAuthGate(true);
       WispDB.onChange(syncAuthHeader);
-      WispDB.onChange(mwSyncFromAccount);   // pull the account's widget station (and companion) across devices
+      WispDB.onChange(companionSyncFromAccount);   // pull Lucky's look across devices
       WispDB.onChange(syncStateFromAccount); // pull settings, dictionary, mutes and blocks across devices
-      document.addEventListener("wisp-companion-changed", () => mwPersistRemote());   // sync Lucky's look across devices
+      document.addEventListener("wisp-companion-changed", () => companionPersistRemote());   // sync Lucky's look across devices
       // A password-reset link lands the reader back here with a recovery
       // session: show the "set a new password" screen when that happens.
       WispDB.onRecovery(openSetNewPassword);
@@ -19086,7 +17382,7 @@ window.WISP_WIDGET_CONTENT = (function () {
     document.body.classList.toggle("companion-hide", hide);
   }
 
-  /* ---------- one-off stroll (used by the widget button) ---------- */
+  /* ---------- one-off stroll ---------- */
   function stroll() {
     var wasWalking = state.walks;
     injectCSS(); mount();
