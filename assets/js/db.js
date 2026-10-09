@@ -675,21 +675,6 @@ window.WispDB = (function () {
     emit();
     return data;
   }
-  // The reading companion's look and habits, stored on the profile so Lucky follows
-  // a reader across devices. The column is still named `widgets` from the old
-  // personal widget station; keeping the name means no migration. Reads come free
-  // with the profile row (select *). Writes fail softly if the column has not
-  // been migrated yet, so the app keeps working on localStorage alone.
-  function getWidgets() { return profile ? profile.widgets : null; }
-  async function saveWidgets(obj) {
-    if (!user || !client) return false;
-    try {
-      const { error } = await client.from("profiles").update({ widgets: obj || {} }).eq("id", user.id);
-      if (error) { if (missingColumn(error)) return false; throw error; }
-      if (profile) profile.widgets = obj || {};
-      return true;
-    } catch (e) { if (missingColumn(e)) return false; console.warn("[wisp] saveWidgets failed:", e && e.message); return false; }
-  }
   // Badges live on the profile row as a jsonb array of badge ids. Reads come
   // free with select *. Own writes fail softly until migration 024; admin grants
   // to other profiles need the admin update policy that migration adds.
@@ -1708,7 +1693,7 @@ window.WispDB = (function () {
     mySeries, getSeries, worksInSeries, findOrCreateSeries, updateSeries, deleteSeries, countInSeries,
     toggle, myRelations, getComments, postComment, editComment, deleteComment, recordRead, rateWork, getMyRating, myRatings, getReactions, toggleReaction, uploadCover,
     toggleFollow, amFollowing, followCounts, myFollowingIds, getNotifications,
-    updateProfile, getProfile, getWidgets, saveWidgets, saveMyBadges, grantBadges, worksByAuthor,
+    updateProfile, getProfile, saveMyBadges, grantBadges, worksByAuthor,
     listProfilePosts, postProfilePost, deleteProfilePost, setProfilePostPinned,
     listEvents, myEventIds, toggleEventJoin, getEvent, eventMemberCount, listEventPosts, postToEvent, deleteEventPost,
     listHubs, myHubIds, hubMemberCounts, toggleHubMembership, hubDetail, worksInHub, worksByTag,

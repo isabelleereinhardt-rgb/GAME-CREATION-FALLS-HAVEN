@@ -7425,9 +7425,8 @@
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;
     if (!statePulledAt || Date.now() - statePulledAt < 60000) return;
-    stateSyncedFor = null; companionSyncedFor = null;
+    stateSyncedFor = null;
     try { syncStateFromAccount(); } catch (e) {}
-    try { companionSyncFromAccount(); } catch (e) {}   // Lucky's look freshens too
   });
   // Coming back online after a dead spot: catch up with the account.
   window.addEventListener("online", () => {
@@ -7436,65 +7435,6 @@
     try { syncStateFromAccount(); } catch (e) {}
   });
   try { window.__wispSync = { push: schedulePushState, pull: syncStateFromAccount, reset: function () { stateSyncedFor = null; }, freshLogin: function () { stateFreshLogin = true; }, stamp: localStateStamp }; } catch (e) {}   // console debugging handle
-  /* ---- the reading companion, across devices ------------------------------
-     Lucky's look and habits (name, coat, accessory, how often he strolls) live
-     in localStorage on this device, and ride on the profile's `widgets` jsonb
-     column so a signed-in reader meets the same cat on every device. The
-     column keeps its old name: it needs no migration, and nothing else is
-     stored in it any more.
-     ---------------------------------------------------------------------- */
-  let companionSyncedFor = null, companionRemoteTimer = null;
-  // Only the account the device's cat belongs to may upload him. The guard
-  // runs again when the debounce fires, because on a phone the sign-in sync
-  // can still be in flight when the reader changes something: without the
-  // re-check, the previous member's cat would upload into the new member's
-  // account, and from then on every device would faithfully sync the mix-up.
-  function companionMayPush() {
-    if (!(window.WispDB && WispDB.enabled && WispDB.signedIn && WispDB.saveWidgets && WispDB.profile)) return false;
-    let owner = null; try { owner = localStorage.getItem("wisp.widgets.owner"); } catch (e) {}
-    return owner === WispDB.profile.id;
-  }
-  function companionPersistRemote() {
-    if (!companionMayPush()) return;
-    if (companionRemoteTimer) clearTimeout(companionRemoteTimer);
-    companionRemoteTimer = setTimeout(() => {
-      companionRemoteTimer = null;
-      if (!companionMayPush()) return;
-      if (!(window.WispCompanion && WispCompanion.getPrefs)) return;
-      try { WispDB.saveWidgets({ companion: WispCompanion.getPrefs() }); } catch (e) {}
-    }, 700);
-  }
-  // On sign-in, pull the account's saved cat. The account wins across devices;
-  // if it has none saved yet, seed it from whatever is on this device.
-  function companionSyncFromAccount() {
-    if (!(window.WispDB && WispDB.enabled && WispDB.signedIn && WispDB.profile)) { companionSyncedFor = null; return; }
-    const pid = WispDB.profile.id;
-    if (companionSyncedFor === pid) return;
-    companionSyncedFor = pid;
-    // Whose cat does this DEVICE currently hold? A different account signing
-    // in must never inherit him (his name included), nor upload him as its own.
-    let owner = null; try { owner = localStorage.getItem("wisp.widgets.owner"); } catch (e) {}
-    const foreign = owner && owner !== pid;
-    const remote = WispDB.getWidgets ? WispDB.getWidgets() : null;
-    const hasCompanion = !!(remote && typeof remote === "object" && remote.companion && typeof remote.companion === "object");
-    if (hasCompanion && window.WispCompanion && WispCompanion.applyPrefs) WispCompanion.applyPrefs(remote.companion);
-    else if (foreign && window.WispCompanion && WispCompanion.resetPrefs) WispCompanion.resetPrefs();
-    // This account now owns whatever the device shows; stamp that BEFORE any
-    // push so the upload guard has the truth.
-    try { localStorage.setItem("wisp.widgets.owner", pid); } catch (e) {}
-    // First sign-in from this device, nothing saved on the account: keep the
-    // cat built here (a guest's cat survives creating the account).
-    if (!hasCompanion && !foreign) companionPersistRemote();
-  }
-  // Signing out puts the shelf cat back: his identity is account state, so
-  // whoever is at this device next does not meet the previous member's cat.
-  // The owner marker stays, so the same member signing back in is not a
-  // stranger, and the pull brings their cat straight back.
-  function companionHandleSignOut() {
-    if (companionRemoteTimer) { clearTimeout(companionRemoteTimer); companionRemoteTimer = null; }   // a push scheduled while signed in dies with the session
-    companionSyncedFor = null;
-    try { if (window.WispCompanion && WispCompanion.resetPrefs) WispCompanion.resetPrefs(); } catch (e) {}
-  }
 
   // ---- page-level effects ----
   // These effects are driven by the Web Animations API rather than CSS
@@ -7558,15 +7498,14 @@
     } catch (e) {}
   }
   function playChime() { playTones([{ f: 523.25, g: 0.12, d: 0.3 }, { f: 659.25, t: 0.1, g: 0.12, d: 0.3 }, { f: 783.99, t: 0.2, g: 0.12, d: 0.3 }]); }
-  // A shared handle so the companion (Lucky) and any module can play the same
-  // sounds, and so the first user gesture anywhere unlocks audio.
+  // A shared handle so any module can play the same sounds, and so the first
+  // user gesture anywhere unlocks audio.
   window.WispSound = {
     on: soundOn,
     unlock: ensureAudio,
     chime: playChime,
     heart: function () { playTones([{ f: 587.33, d: 0.16, g: 0.11, type: "triangle" }, { f: 880, t: 0.08, d: 0.22, g: 0.09, type: "triangle" }]); },
-    follow: function () { playTones([{ f: 523.25, d: 0.16, g: 0.09 }, { f: 698.46, t: 0.09, d: 0.24, g: 0.09 }]); },
-    treat: function () { playTones([{ f: 659.25, d: 0.24, g: 0.09, type: "triangle" }, { f: 880, t: 0.13, d: 0.24, g: 0.08, type: "triangle" }, { f: 92, d: 0.5, g: 0.05 }]); }
+    follow: function () { playTones([{ f: 523.25, d: 0.16, g: 0.09 }, { f: 698.46, t: 0.09, d: 0.24, g: 0.09 }]); }
   };
   ["pointerdown", "touchstart", "keydown"].forEach(function (ev) {
     window.addEventListener(ev, function once() { ensureAudio(); window.removeEventListener(ev, once); }, { once: true, passive: true });
@@ -11808,9 +11747,9 @@
     buildDrawer();
     applySettings();
     renderActivity();
-    // The personal widget station is gone: clear what it left on this device,
-    // so no stale timer state or hidden-panel flag lingers in storage.
-    ["wisp.widgets.installed", "wisp.widgets.state", "wisp.rail.right"].forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
+    // The personal widget station and the reading companion are gone: clear
+    // what they left on this device, so no stale state lingers in storage.
+    ["wisp.widgets.installed", "wisp.widgets.state", "wisp.widgets.owner", "wisp.rail.right", "wisp.companion"].forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
 
     // Header and chrome.
     $("#themeBtn").addEventListener("click", openTheme);
@@ -11819,7 +11758,7 @@
     $("#themeScrim").addEventListener("click", (e) => { if (e.target.id === "themeScrim") closeTheme(); });
     const doSignInOut = () => {
       if (!window.WispDB || !WispDB.enabled) { toast("Sign out isn't wired up in demo mode. Connect Supabase to enable accounts."); return; }
-      if (WispDB.signedIn) WispDB.signOut().then(() => { guestBrowsing = false; companionHandleSignOut(); toast("Signed out."); updateAuthGate(); });
+      if (WispDB.signedIn) WispDB.signOut().then(() => { guestBrowsing = false; toast("Signed out."); updateAuthGate(); });
       else openAuth("in");
     };
     $("#signOutBtn").addEventListener("click", doSignInOut);
@@ -11924,9 +11863,7 @@
       // underneath and an already-signed-in reader never sees the sign-in form.
       if (WispDB.configured) renderAuthGate(true);
       WispDB.onChange(syncAuthHeader);
-      WispDB.onChange(companionSyncFromAccount);   // pull Lucky's look across devices
       WispDB.onChange(syncStateFromAccount); // pull settings, dictionary, mutes and blocks across devices
-      document.addEventListener("wisp-companion-changed", () => companionPersistRemote());   // sync Lucky's look across devices
       // A password-reset link lands the reader back here with a recovery
       // session: show the "set a new password" screen when that happens.
       WispDB.onRecovery(openSetNewPassword);
